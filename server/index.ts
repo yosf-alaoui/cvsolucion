@@ -12,6 +12,7 @@ import {
   createUser,
   deleteUserById,
   deleteSession,
+  deleteUserSessions,
   getAdminSnapshot,
   getSession,
   getUserByEmail,
@@ -32,6 +33,8 @@ const __dirname = path.dirname(__filename);
 const MAGIC_LINK_MS = 1000 * 60 * 20;
 const VERIFY_LINK_MS = 1000 * 60 * 60 * 24;
 const RESET_LINK_MS = 1000 * 60 * 30;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
 function parseCookies(cookieHeader?: string) {
   const entries = (cookieHeader || "")
@@ -110,6 +113,28 @@ function isAdminEmail(email: string) {
   }
 
   return email.toLowerCase().endsWith("@cvsolucion.com");
+}
+
+function rateLimit(options: { key: string; windowMs: number; limit: number }) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const ip = getRequestIp(req) || "unknown";
+    const bucketKey = `${options.key}:${ip}`;
+    const now = Date.now();
+    const current = rateLimitStore.get(bucketKey);
+
+    if (!current || current.resetAt <= now) {
+      rateLimitStore.set(bucketKey, { count: 1, resetAt: now + options.windowMs });
+      return next();
+    }
+
+    if (current.count >= options.limit) {
+      res.setHeader("Retry-After", String(Math.ceil((current.resetAt - now) / 1000)));
+      return res.status(429).json({ error: "Too many requests. Please try again shortly." });
+    }
+
+    current.count += 1;
+    return next();
+  };
 }
 
 function requireAdmin(req: express.Request, res: express.Response) {
@@ -202,13 +227,13 @@ async function startServer() {
     return res.json({ user: serializePublicUser(auth.user), isAdmin: isAdminEmail(auth.user.email) });
   });
 
-  app.post("/api/auth/signup", async (req, res, next) => {
+  app.post("/api/auth/signup", rateLimit({ key: "signup", windowMs: 1000 * 60 * 10, limit: 10 }), async (req, res, next) => {
     try {
       const email = String(req.body?.email || "").trim();
       const password = String(req.body?.password || "");
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
 
-      if (!email || !password || password.length < 8) {
+      if (!EMAIL_REGEX.test(email) || !password || password.length < 8) {
         return res.status(400).json({ error: "Email and a password of at least 8 characters are required." });
       }
 
@@ -232,7 +257,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/auth/login", (req, res) => {
+  app.post("/api/auth/login", rateLimit({ key: "login", windowMs: 1000 * 60 * 15, limit: 20 }), (req, res) => {
     const email = String(req.body?.email || "").trim();
     const password = String(req.body?.password || "");
     const user = getUserByEmail(email);
@@ -276,7 +301,7 @@ async function startServer() {
     return res.json({ ok: true });
   });
 
-  app.post("/api/auth/magic-link", async (req, res, next) => {
+  app.post("/api/auth/magic-link", rateLimit({ key: "magic", windowMs: 1000 * 60 * 15, limit: 12 }), async (req, res, next) => {
     try {
       const email = String(req.body?.email || "").trim();
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
@@ -304,7 +329,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/auth/forgot-password", async (req, res, next) => {
+  app.post("/api/auth/forgot-password", rateLimit({ key: "forgot", windowMs: 1000 * 60 * 15, limit: 12 }), async (req, res, next) => {
     try {
       const email = String(req.body?.email || "").trim();
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
@@ -332,7 +357,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/auth/reset-password", (req, res) => {
+  app.post("/api/auth/reset-password", rateLimit({ key: "reset", windowMs: 1000 * 60 * 15, limit: 12 }), (req, res) => {
     const token = String(req.body?.token || "").trim();
     const password = String(req.body?.password || "");
 
@@ -410,9 +435,10 @@ async function startServer() {
     return res.redirect(302, redirectUrl);
   });
 
-  app.get("/api/admin/dashboard", (req, res) => {
+  app.get("/api/admin/dashboard", rateLimit({ key: "admin-dashboard", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
     const auth = requireAdmin(req, res);
     if (!auth) return;
+    res.setHeader("Cache-Control", "no-store");
     return res.json({
       admin: {
         email: auth.user.email,
@@ -421,7 +447,7 @@ async function startServer() {
     });
   });
 
-  app.patch("/api/admin/users/:userId", (req, res, next) => {
+  app.patch("/api/admin/users/:userId", rateLimit({ key: "admin-user-patch", windowMs: 1000 * 60 * 5, limit: 60 }), (req, res, next) => {
     try {
       const auth = requireAdmin(req, res);
       if (!auth) return;
@@ -453,7 +479,7 @@ async function startServer() {
     }
   });
 
-  app.delete("/api/admin/users/:userId", (req, res, next) => {
+  app.delete("/api/admin/users/:userId", rateLimit({ key: "admin-user-delete", windowMs: 1000 * 60 * 5, limit: 25 }), (req, res, next) => {
     try {
       const auth = requireAdmin(req, res);
       if (!auth) return;
@@ -474,6 +500,84 @@ async function startServer() {
       });
 
       return res.json({ ok: true });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post("/api/admin/users/:userId/send-verification", rateLimit({ key: "admin-send-verification", windowMs: 1000 * 60 * 5, limit: 30 }), async (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const userId = String(req.params.userId || "").trim();
+      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+      const user = getUserById(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found." });
+      }
+
+      if (user.emailVerifiedAt) {
+        return res.status(400).json({ error: "This email is already verified." });
+      }
+
+      const { rawToken } = createToken(user.id, "verify_email", VERIFY_LINK_MS);
+      const verifyUrl = `${appOrigin(req)}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}`;
+      await sendLinkEmail({ email: user.email, locale, type: "verify", url: verifyUrl });
+
+      recordEvent({
+        type: "admin_verification_sent",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:verify:${user.email}`,
+      });
+
+      return res.json({ ok: true });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.delete("/api/admin/sessions/:sessionId", rateLimit({ key: "admin-session-delete", windowMs: 1000 * 60 * 5, limit: 80 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const sessionId = String(req.params.sessionId || "").trim();
+      deleteSession(sessionId);
+      recordEvent({
+        type: "admin_session_revoked",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:session:${sessionId}`,
+      });
+      return res.json({ ok: true });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.delete("/api/admin/users/:userId/sessions", rateLimit({ key: "admin-user-sessions-delete", windowMs: 1000 * 60 * 5, limit: 40 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const userId = String(req.params.userId || "").trim();
+      const revoked = deleteUserSessions(userId);
+      recordEvent({
+        type: "admin_all_sessions_revoked",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:user-sessions:${userId}:${revoked}`,
+      });
+      return res.json({ ok: true, revoked });
     } catch (error) {
       return next(error);
     }

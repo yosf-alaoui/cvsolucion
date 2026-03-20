@@ -41,7 +41,10 @@ export type AuthEventType =
   | "email_verified"
   | "magic_login_completed"
   | "admin_user_updated"
-  | "admin_user_deleted";
+  | "admin_user_deleted"
+  | "admin_verification_sent"
+  | "admin_session_revoked"
+  | "admin_all_sessions_revoked";
 
 export type AuthEvent = {
   id: string;
@@ -59,6 +62,20 @@ type AuthDb = {
   sessions: AuthSession[];
   tokens: AuthTokenRecord[];
   events: AuthEvent[];
+};
+
+type AdminSnapshotUser = {
+  id: string;
+  email: string;
+  emailVerifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  activeSessions: number;
+  pendingTokens: number;
+  eventCount: number;
+  lastSeenAt: string | null;
+  lastEventType: AuthEventType | null;
+  signupLocale: string | null;
 };
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
@@ -207,6 +224,14 @@ export function deleteSession(sessionId: string) {
   saveDb(db);
 }
 
+export function deleteUserSessions(userId: string) {
+  const db = loadDb();
+  const before = db.sessions.length;
+  db.sessions = db.sessions.filter((item) => item.userId !== userId);
+  saveDb(db);
+  return before - db.sessions.length;
+}
+
 export function createToken(userId: string, type: AuthTokenType, maxAgeMs: number) {
   const db = loadDb();
   const rawToken = randomToken(24);
@@ -290,6 +315,12 @@ export function updateAdminUser(input: {
   return user;
 }
 
+export function getUserActiveSessions(userId: string) {
+  const db = loadDb();
+  const now = Date.now();
+  return db.sessions.filter((item) => item.userId === userId && new Date(item.expiresAt).getTime() > now);
+}
+
 export function deleteUserById(userId: string) {
   const db = loadDb();
   const user = db.users.find((item) => item.id === userId);
@@ -313,7 +344,7 @@ export function recordEvent(input: Omit<AuthEvent, "id" | "createdAt">) {
     ...input,
   };
   db.events.push(event);
-  db.events = db.events.slice(-1000);
+  db.events = db.events.slice(-3000);
   saveDb(db);
   return event;
 }
@@ -323,26 +354,92 @@ export function getAdminSnapshot() {
   const now = Date.now();
 
   const activeSessions = db.sessions.filter((session) => new Date(session.expiresAt).getTime() > now);
+  const activeTokens = db.tokens.filter((token) => !token.usedAt && new Date(token.expiresAt).getTime() > now);
   const recentEvents = [...db.events]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 100);
-  const users = [...db.users]
+    .slice(0, 250);
+  const users: AdminSnapshotUser[] = [...db.users]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .map((user) => ({
-      id: user.id,
-      email: user.email,
-      emailVerifiedAt: user.emailVerifiedAt,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    }));
+    .map((user) => {
+      const userEvents = db.events.filter((event) => event.userId === user.id);
+      const latestEvent = [...userEvents].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )[0];
+      const signupEvent = userEvents.find((event) => event.type === "signup");
+
+      return {
+        id: user.id,
+        email: user.email,
+        emailVerifiedAt: user.emailVerifiedAt,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        activeSessions: activeSessions.filter((session) => session.userId === user.id).length,
+        pendingTokens: activeTokens.filter((token) => token.userId === user.id).length,
+        eventCount: userEvents.length,
+        lastSeenAt: latestEvent?.createdAt ?? null,
+        lastEventType: latestEvent?.type ?? null,
+        signupLocale: signupEvent?.locale ?? null,
+      };
+    });
+
+  const usersLast7Days = db.users.filter(
+    (user) => new Date(user.createdAt).getTime() >= now - 1000 * 60 * 60 * 24 * 7
+  ).length;
+  const usersLast30Days = db.users.filter(
+    (user) => new Date(user.createdAt).getTime() >= now - 1000 * 60 * 60 * 24 * 30
+  ).length;
+  const loginsLast7Days = db.events.filter(
+    (event) => event.type === "login" && new Date(event.createdAt).getTime() >= now - 1000 * 60 * 60 * 24 * 7
+  ).length;
+  const resetRequestsLast30Days = db.events.filter(
+    (event) =>
+      event.type === "password_reset_requested" &&
+      new Date(event.createdAt).getTime() >= now - 1000 * 60 * 60 * 24 * 30
+  ).length;
+  const verificationRate = db.users.length ? Math.round((db.users.filter((user) => Boolean(user.emailVerifiedAt)).length / db.users.length) * 100) : 0;
+  const localeBreakdown = ["en", "fr", "ar"].map((locale) => ({
+    locale,
+    count: db.events.filter((event) => event.locale === locale && event.type === "signup").length,
+  }));
+  const stalePendingUsers = users
+    .filter(
+      (user) =>
+        !user.emailVerifiedAt &&
+        new Date(user.createdAt).getTime() <= now - 1000 * 60 * 60 * 24 * 3
+    )
+    .slice(0, 10);
+  const eventTypes = [
+    "signup",
+    "login",
+    "magic_link_requested",
+    "password_reset_requested",
+    "email_verified",
+    "admin_user_updated",
+    "admin_user_deleted",
+  ] as const;
+  const eventBreakdown = eventTypes.map((type) => ({
+    type,
+    count: db.events.filter((event) => event.type === type).length,
+  }));
+  const tokenBreakdown = [
+    { type: "verify_email", count: activeTokens.filter((token) => token.type === "verify_email").length },
+    { type: "magic_link", count: activeTokens.filter((token) => token.type === "magic_link").length },
+    { type: "reset_password", count: activeTokens.filter((token) => token.type === "reset_password").length },
+  ];
 
   return {
     stats: {
       totalUsers: db.users.length,
       verifiedUsers: db.users.filter((user) => Boolean(user.emailVerifiedAt)).length,
+      unverifiedUsers: db.users.filter((user) => !user.emailVerifiedAt).length,
       activeSessions: activeSessions.length,
-      pendingTokens: db.tokens.filter((token) => !token.usedAt && new Date(token.expiresAt).getTime() > now).length,
+      pendingTokens: activeTokens.length,
       totalEvents: db.events.length,
+      usersLast7Days,
+      usersLast30Days,
+      loginsLast7Days,
+      resetRequestsLast30Days,
+      verificationRate,
     },
     users,
     sessions: activeSessions
@@ -350,9 +447,16 @@ export function getAdminSnapshot() {
       .map((session) => ({
         id: session.id,
         userId: session.userId,
+        email: db.users.find((user) => user.id === session.userId)?.email ?? null,
         createdAt: session.createdAt,
         expiresAt: session.expiresAt,
       })),
     events: recentEvents,
+    insights: {
+      localeBreakdown,
+      eventBreakdown,
+      tokenBreakdown,
+      stalePendingUsers,
+    },
   };
 }
