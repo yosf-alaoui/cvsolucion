@@ -1,0 +1,330 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useI18n } from "@/i18n/i18n";
+import { supabase } from "@/lib/supabase";
+
+type AuthMode = "login" | "signup" | "magic";
+
+export default function Login() {
+  const { t, locale } = useI18n();
+  const [mode, setMode] = useState<AuthMode>("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetMode, setResetMode] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [statusTone, setStatusTone] = useState<"success" | "error" | null>(null);
+  const [busy, setBusy] = useState(false);
+  const emailRef = useRef<HTMLInputElement | null>(null);
+
+  const disabled = useMemo(() => {
+    if (recoveryMode) return !newPassword || newPassword !== confirmPassword;
+    if (resetMode) return !email;
+    return !email || (mode !== "magic" && !password);
+  }, [email, password, mode, resetMode, recoveryMode, newPassword, confirmPassword]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get("mode");
+    if (next === "signup" || next === "login" || next === "magic") {
+      setMode(next);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const params = new URLSearchParams(window.location.search);
+    const recoveryParam = params.get("recovery");
+    if (recoveryParam === "1" || recoveryParam === "true") {
+      setRecoveryMode(true);
+      setResetMode(false);
+    }
+    if (window.location.hash.includes("type=recovery")) {
+      setRecoveryMode(true);
+      setResetMode(false);
+    }
+    const code = params.get("code");
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).catch(() => {});
+    } else if (accessToken && refreshToken) {
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).catch(() => {});
+    }
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setRecoveryMode(true);
+        setResetMode(false);
+      }
+    });
+    return () => {
+      data.subscription?.unsubscribe();
+    };
+  }, []);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!supabase) {
+      setStatus(t("auth.missingConfig"));
+      setStatusTone("error");
+      return;
+    }
+
+    setBusy(true);
+    setStatus(null);
+    setStatusTone(null);
+
+    try {
+      if (recoveryMode) {
+        if (newPassword !== confirmPassword) {
+          setStatus(t("auth.passwordMismatch"));
+          setStatusTone("error");
+          return;
+        }
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+          const accessToken = hashParams.get("access_token");
+          const refreshToken = hashParams.get("refresh_token");
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+          }
+        }
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) throw error;
+        setStatus(t("auth.resetSuccess"));
+        setStatusTone("success");
+        window.location.href = locale === "en" ? "/" : `/${locale}`;
+        return;
+      }
+      if (resetMode) {
+        if (!email) {
+          setStatus(t("auth.resetMissingEmail"));
+          setStatusTone("error");
+          emailRef.current?.focus();
+          emailRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/login?recovery=1`,
+        });
+        if (error) throw error;
+        setStatus(t("auth.resetSent"));
+        setStatusTone("success");
+        return;
+      }
+
+      if (mode === "login") {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        window.location.href = locale === "en" ? "/" : `/${locale}`;
+      } else if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        setStatus(t("auth.checkEmail"));
+        setStatusTone("success");
+      } else {
+        const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+        if (error) throw error;
+        setStatus(t("auth.magicSent"));
+        setStatusTone("success");
+      }
+    } catch (err: any) {
+      const message = err?.message === "Auth session missing!" ? t("auth.sessionMissing") : err?.message;
+      setStatus(message || t("auth.genericError"));
+      setStatusTone("error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!supabase) {
+      setStatus(t("auth.missingConfig"));
+      setStatusTone("error");
+      return;
+    }
+    setResetMode(true);
+    setStatus(null);
+    setStatusTone(null);
+    emailRef.current?.focus();
+    emailRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-white">
+      <Header />
+
+      <main className="flex-1 pt-28 pb-16">
+        <div className="container mx-auto px-4">
+          <div className="max-w-md mx-auto">
+            <Card className="p-8 shadow-lg rounded-2xl">
+              <h1 className="text-2xl font-bold text-primary">
+                {t(mode === "signup" ? "auth.signUp" : mode === "magic" ? "auth.magic" : "auth.signIn")}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-2">{t("auth.subtitle")}</p>
+
+              <div className="mt-6 flex gap-2">
+                <Button
+                  type="button"
+                  variant={mode === "login" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => {
+                    setMode("login");
+                    setResetMode(false);
+                    setRecoveryMode(false);
+                    setStatus(null);
+                    setStatusTone(null);
+                  }}
+                  disabled={recoveryMode}
+                >
+                  {t("auth.login")}
+                </Button>
+                <Button
+                  type="button"
+                  variant={mode === "signup" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => {
+                    setMode("signup");
+                    setResetMode(false);
+                    setRecoveryMode(false);
+                    setStatus(null);
+                    setStatusTone(null);
+                  }}
+                  disabled={recoveryMode}
+                >
+                  {t("auth.signup")}
+                </Button>
+                <Button
+                  type="button"
+                  variant={mode === "magic" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => {
+                    setMode("magic");
+                    setResetMode(false);
+                    setRecoveryMode(false);
+                    setStatus(null);
+                    setStatusTone(null);
+                  }}
+                  disabled={recoveryMode}
+                >
+                  {t("auth.magic")}
+                </Button>
+              </div>
+
+              <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+                {recoveryMode ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-password">{t("auth.newPassword")}</Label>
+                      <Input
+                        id="new-password"
+                        type="password"
+                        autoComplete="new-password"
+                        value={newPassword}
+                        onChange={(event) => setNewPassword(event.target.value)}
+                        placeholder={t("auth.newPasswordPlaceholder")}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-password">{t("auth.confirmPassword")}</Label>
+                      <Input
+                        id="confirm-password"
+                        type="password"
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        placeholder={t("auth.confirmPasswordPlaceholder")}
+                        required
+                      />
+                    </div>
+                    <Button type="submit" className="w-full" disabled={disabled || busy}>
+                      {busy ? t("auth.working") : t("auth.savePassword")}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">{t("auth.email")}</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        autoComplete="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder={t("auth.emailPlaceholder")}
+                        required
+                        ref={emailRef}
+                      />
+                    </div>
+
+                    {mode !== "magic" && !resetMode ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="password">{t("auth.password")}</Label>
+                        <div className="relative">
+                          <Input
+                            id="password"
+                            type={showPassword ? "text" : "password"}
+                            className="pr-16"
+                            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                            value={password}
+                            onChange={(event) => setPassword(event.target.value)}
+                            placeholder={t("auth.passwordPlaceholder")}
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((v) => !v)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                          >
+                            {showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleResetPassword}
+                          className="text-xs font-semibold text-primary hover:text-primary/80"
+                        >
+                          {t("auth.forgotPassword")}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    <Button type="submit" className="w-full" disabled={disabled || busy}>
+                      {busy ? t("auth.working") : t("auth.submit")}
+                    </Button>
+                  </>
+                )}
+              </form>
+
+              {status ? (
+                <div
+                  className={`mt-4 rounded-lg border px-3 py-2 text-sm ${
+                    statusTone === "success"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-rose-200 bg-rose-50 text-rose-700"
+                  }`}
+                >
+                  {status}
+                </div>
+              ) : null}
+              <p className="mt-4 text-xs text-muted-foreground">{t("auth.note")}</p>
+            </Card>
+          </div>
+        </div>
+      </main>
+
+      <Footer />
+    </div>
+  );
+}

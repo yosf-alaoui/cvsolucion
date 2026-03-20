@@ -1,0 +1,295 @@
+export const LAST_UPDATED = "December 24, 2025";
+
+const CONTACT_EMAIL = "contact@cvsolucion.com";
+const WHATSAPP_NUMBER_DISPLAY = "+1 514 963 8719";
+const WHATSAPP_LINK = "https://wa.me/15149638719";
+
+/**
+ * NOTE (template):
+ * This content is a general template for a small service business website.
+ * It is NOT legal advice. Consider having a qualified lawyer review it for your jurisdiction and business model.
+ */
+
+export function PrivacyPolicyContent({ locale = "en" }: { locale?: "en" | "fr" }) {
+  if (locale === "fr") {
+    return (
+      <div>
+        <p>
+          Cette politique de confidentialité explique comment CVsolucion (&quot;CVsolucion&quot;, &quot;nous&quot;, &quot;notre&quot;)
+          collecte, utilise et protège les informations personnelles lorsque vous visitez notre site, demandez du support
+          ou nous contactez (y compris par email ou WhatsApp).
+        </p>
+
+        <p>
+          <strong>Dernière mise à jour :</strong> {LAST_UPDATED}
+        </p>
+
+        <h4>1) Informations que nous collectons</h4>
+        <ul>
+          <li>
+            <strong>Informations de contact :</strong> nom, adresse email, numéro de téléphone/WhatsApp, nom de société (si fourni),
+            et les messages que vous nous envoyez.
+          </li>
+          <li>
+            <strong>Informations liées au service :</strong> informations que vous partagez sur votre configuration Cabinet Vision,
+            vos bibliothèques, vos sorties CNC et les problèmes rencontrés.
+          </li>
+          <li>
+            <strong>Données techniques :</strong> informations de base sur l’appareil/navigateur (ex. type d’appareil, pages consultées),
+            via des cookies et outils d’analyse, selon votre configuration.
+          </li>
+        </ul>
+
+        <h4>2) Comment nous utilisons ces informations</h4>
+        <ul>
+          <li>Répondre à vos demandes et fournir l’assistance ou les services demandés.</li>
+          <li>Analyser/diagnostiquer votre problème et proposer des solutions adaptées.</li>
+          <li>Améliorer notre site, nos offres et la qualité du support.</li>
+          <li>Communiquer avec vous au sujet de votre demande (email/WhatsApp).</li>
+        </ul>
+
+        <h4>3) Cookies et analytics</h4>
+        <p>
+          Nous pouvons utiliser des cookies et des outils d’analyse pour comprendre l’utilisation du site et améliorer l’expérience.
+          Vous pouvez limiter les cookies via les paramètres de votre navigateur.
+        </p>
+
+        <h4>4) Partage des informations</h4>
+        <p>
+          Nous ne vendons pas vos informations personnelles. Nous pouvons partager certaines informations uniquement si nécessaire :
+          (a) avec des prestataires techniques (hébergement, analytics) ; (b) pour respecter la loi ; (c) pour protéger nos droits.
+        </p>
+
+        <h4>5) Sécurité</h4>
+        <p>
+          Nous appliquons des mesures raisonnables pour protéger vos informations. Aucun système n’est toutefois infaillible.
+        </p>
+
+        <h4>6) Conservation</h4>
+        <p>
+          Nous conservons les informations aussi longtemps que nécessaire pour fournir les services, répondre aux obligations légales
+          ou résoudre des litiges.
+        </p>
+
+        <h4>7) Vos droits</h4>
+        <p>
+          Vous pouvez demander l’accès, la correction ou la suppression de vos informations, selon la loi applicable.
+        </p>
+
+        <h4>8) Nous contacter</h4>
+        <p>
+          Email : <a className="underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+          <br />
+          WhatsApp : <a className="underline" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">{WHATSAPP_NUMBER_DISPLAY}</a>
+        </p>
+
+        <p className="text-xs text-muted-foreground">
+          <strong>Note :</strong> ce texte est un modèle général et ne constitue pas un avis juridique.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p>
+        This Privacy Policy explains how CV Solucion (&quot;CV Solucion&quot;, &quot;we&quot;, &quot;us&quot;, &quot;our&quot;) collects, uses, and protects personal information when you visit our website, request support, or contact us (including by email or WhatsApp).
+      </p>
+
+      <p><strong>Last updated:</strong> {LAST_UPDATED}</p>
+
+      <h4>1) What we collect</h4>
+      <ul>
+        <li>
+          <strong>Contact information:</strong> name, email address, phone/WhatsApp number, company name (if provided), and the messages you send us.
+        </li>
+        <li>
+          <strong>Service information:</strong> details you share about your Cabinet Vision setup, libraries, CNC outputs, and issues.
+        </li>
+        <li>
+          <strong>Technical data:</strong> basic device/browser information (e.g., device type, pages visited) via cookies and analytics tools, depending on your configuration.
+        </li>
+      </ul>
+
+      <h4>2) How we use information</h4>
+      <ul>
+        <li>Respond to requests and provide the support/services you asked for.</li>
+        <li>Diagnose issues and propose solutions.</li>
+        <li>Improve our website, offerings, and support quality.</li>
+        <li>Communicate with you about your request (email/WhatsApp).</li>
+      </ul>
+
+      <h4>3) Cookies and analytics</h4>
+      <p>
+        We may use cookies and analytics tools to understand usage and improve the experience. You can limit cookies through your browser settings.
+      </p>
+
+      <h4>4) Sharing</h4>
+      <p>
+        We do not sell your personal information. We may share limited data only when needed: (a) with technical providers (hosting, analytics); (b) to comply with law; (c) to protect our rights.
+      </p>
+
+      <h4>5) Security</h4>
+      <p>
+        We apply reasonable measures to protect information, but no system is 100% secure.
+      </p>
+
+      <h4>6) Retention</h4>
+      <p>
+        We keep information as long as needed to provide services, meet legal obligations, or resolve disputes.
+      </p>
+
+      <h4>7) Your rights</h4>
+      <p>
+        You may request access, correction, or deletion of your information, subject to applicable law.
+      </p>
+
+      <h4>8) Contact</h4>
+      <p>
+        Email: <a className="underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+        <br />
+        WhatsApp: <a className="underline" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">{WHATSAPP_NUMBER_DISPLAY}</a>
+      </p>
+
+      <p className="text-xs text-muted-foreground">
+        <strong>Note:</strong> This is a general template and is not legal advice.
+      </p>
+    </div>
+  );
+}
+
+export function TermsContent({ locale = "en" }: { locale?: "en" | "fr" }) {
+  if (locale === "fr") {
+    return (
+      <div>
+        <p>
+          Les présentes conditions d’utilisation (&quot;Conditions&quot;) régissent l’accès et l’utilisation du site CVsolucion ainsi que
+          la demande de services (conseil, formation, support Cabinet Vision). En utilisant le site ou en nous contactant, vous acceptez ces Conditions.
+        </p>
+
+        <p>
+          <strong>Dernière mise à jour :</strong> {LAST_UPDATED}
+        </p>
+
+        <h4>1) Services</h4>
+        <p>
+          Nous fournissons des services de support et de consulting liés à Cabinet Vision. Les services sont fournis à distance (sauf accord spécifique).
+          Le contenu des services peut varier selon le périmètre convenu.
+        </p>
+
+        <h4>2) Responsabilités du client</h4>
+        <ul>
+          <li>Fournir des informations exactes et l’accès nécessaire (partage d’écran, fichiers, etc.).</li>
+          <li>Effectuer des sauvegardes avant tout changement majeur et suivre les recommandations de sécurité.</li>
+          <li>Respecter les licences logicielles et les conditions du fournisseur Cabinet Vision.</li>
+        </ul>
+
+        <h4>3) Paiement</h4>
+        <p>
+          Les tarifs et modalités (forfait, annuel, etc.) sont communiqués avant intervention. Sauf indication contraire, les paiements sont dus selon l’accord établi.
+        </p>
+
+        <h4>4) Propriété intellectuelle</h4>
+        <p>
+          Les méthodes, scripts, documents et livrables fournis par CVsolucion restent la propriété de CVsolucion, sauf accord écrit. Vous obtenez une licence d’utilisation interne pour votre activité.
+        </p>
+
+        <h4>5) Confidentialité</h4>
+        <p>
+          Nous traitons vos informations et fichiers de manière confidentielle et les utilisons uniquement pour fournir le service.
+        </p>
+
+        <h4>6) Limitation de responsabilité</h4>
+        <p>
+          Les services sont fournis &quot;en l’état&quot;. Nous ne garantissons pas des résultats spécifiques ni l’absence totale d’erreurs.
+          Dans la mesure permise par la loi, la responsabilité de CVsolucion est limitée au montant payé pour le service concerné.
+        </p>
+
+        <h4>7) Résiliation</h4>
+        <p>
+          Vous pouvez arrêter d’utiliser le site à tout moment. Pour les services, les modalités d’annulation sont définies au moment de la commande.
+        </p>
+
+        <h4>8) Droit applicable</h4>
+        <p>
+          Les présentes Conditions sont régies par les lois applicables selon votre juridiction et celle de CVsolucion, sauf disposition impérative contraire.
+        </p>
+
+        <h4>9) Contact</h4>
+        <p>
+          Email : <a className="underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+          <br />
+          WhatsApp : <a className="underline" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">{WHATSAPP_NUMBER_DISPLAY}</a>
+        </p>
+
+        <p className="text-xs text-muted-foreground">
+          <strong>Note :</strong> ce texte est un modèle général et ne constitue pas un avis juridique.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p>
+        These Terms of Service (&quot;Terms&quot;) govern access to and use of the CV Solucion website and the request of services (Cabinet Vision consulting, training, and support). By using the site or contacting us, you agree to these Terms.
+      </p>
+
+      <p><strong>Last updated:</strong> {LAST_UPDATED}</p>
+
+      <h4>1) Services</h4>
+      <p>
+        We provide Cabinet Vision support and consulting services. Services are generally delivered remotely (unless otherwise agreed). Scope may vary based on what is agreed.
+      </p>
+
+      <h4>2) Client responsibilities</h4>
+      <ul>
+        <li>Provide accurate information and necessary access (screen share, files, etc.).</li>
+        <li>Back up your data before major changes and follow safety recommendations.</li>
+        <li>Respect software licensing and Cabinet Vision vendor terms.</li>
+      </ul>
+
+      <h4>3) Payment</h4>
+      <p>
+        Pricing and terms (fixed packages, annual plan, etc.) are shared before work starts. Unless stated otherwise, payments are due according to the agreed terms.
+      </p>
+
+      <h4>4) Intellectual property</h4>
+      <p>
+        Methods, scripts, documents, and deliverables provided by CV Solucion remain the property of CV Solucion unless agreed in writing. You receive an internal-use license for your business.
+      </p>
+
+      <h4>5) Confidentiality</h4>
+      <p>
+        We treat your information and files as confidential and use them only to provide the service.
+      </p>
+
+      <h4>6) Limitation of liability</h4>
+      <p>
+        Services are provided &quot;as is&quot;. We do not guarantee specific results or that issues will never recur. To the extent permitted by law, our liability is limited to the amount paid for the relevant service.
+      </p>
+
+      <h4>7) Termination</h4>
+      <p>
+        You may stop using the website at any time. For services, cancellation terms are defined at order time.
+      </p>
+
+      <h4>8) Governing law</h4>
+      <p>
+        These Terms are governed by applicable laws depending on your jurisdiction and ours, subject to mandatory rules.
+      </p>
+
+      <h4>9) Contact</h4>
+      <p>
+        Email: <a className="underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+        <br />
+        WhatsApp: <a className="underline" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">{WHATSAPP_NUMBER_DISPLAY}</a>
+      </p>
+
+      <p className="text-xs text-muted-foreground">
+        <strong>Note:</strong> This is a general template and is not legal advice.
+      </p>
+    </div>
+  );
+}
+

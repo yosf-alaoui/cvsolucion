@@ -1,0 +1,27 @@
+# CV Solucion — Cabinet Vision Consulting & Support
+
+## Summary
+CV Solucion provides Cabinet Vision consulting, troubleshooting, installation, backup/restore assistance, library/material/hardware setup, and CNC output support for cabinet manufacturing businesses.
+
+## Primary audience
+Cabinet shops, factories, and designers using Cabinet Vision who need faster troubleshooting, stable production systems, and reliable CNC outputs.
+
+## Services
+- Annual Support Plan (priority support, ongoing maintenance, proactive fixes)
+- Cabinet Vision installation & setup
+- Backup / restore and safe migration (minimize downtime)
+- Libraries / materials / hardware configuration
+- CNC post-processor & output troubleshooting
+- Workflow and production optimization
+
+## Contact
+- Email: contact@cvsolucion.com
+- WhatsApp: +1 514 963 8719 (https://wa.me/15149638719)
+
+## Key pages
+- Home: https://cvsolucion.com/
+- Privacy Policy: https://cvsolucion.com/#privacy
+- Terms & Conditions: https://cvsolucion.com/#terms
+
+## Notes
+- This website is a single-page application (SPA). Important content is available on the homepage.
