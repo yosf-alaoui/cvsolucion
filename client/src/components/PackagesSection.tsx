@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 
 /**
  * Packages Section - CV Solution (Upgraded)
@@ -11,8 +10,8 @@ import { supabase } from "@/lib/supabase";
  */
 export default function PackagesSection() {
   const { t, locale } = useI18n();
+  const { user } = useAuth();
   const whatsappHref = buildWhatsAppLink("+1 438 807 8747", t("whatsapp.annualPlan"));
-  const [canSeePrice, setCanSeePrice] = useState(false);
   type ServicePackage = {
     title: string;
     subtitle: string;
@@ -24,30 +23,7 @@ export default function PackagesSection() {
 
   const packages = t("packages.cards") as ServicePackage[];
   const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
-
-  useEffect(() => {
-    if (!supabase) return;
-
-    let active = true;
-    const setFromUser = (user: { email_confirmed_at?: string | null; confirmed_at?: string | null } | null) => {
-      if (!active) return;
-      setCanSeePrice(Boolean(user?.email_confirmed_at || user?.confirmed_at));
-    };
-
-    supabase.auth
-      .getUser()
-      .then(({ data }) => setFromUser(data.user ?? null))
-      .catch(() => {});
-
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setFromUser(session?.user ?? null);
-    });
-
-    return () => {
-      active = false;
-      data.subscription?.unsubscribe();
-    };
-  }, []);
+  const canSeePrice = Boolean(user?.emailVerifiedAt);
 
   return (
     <section id="packages" className="py-20 bg-white scroll-mt-28">

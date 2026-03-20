@@ -1,0 +1,7 @@
+Your secure sign-in link
+
+Use the link below to sign in to your {{appName}} account without entering your password:
+
+{{url}}
+
+If you did not request this sign-in link, you can ignore this email.

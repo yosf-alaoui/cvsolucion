@@ -12,6 +12,7 @@ import Terms from "./pages/Terms";
 import DesignPricing from "./pages/DesignPricing";
 import Analytics from "./components/Analytics";
 import { I18nProvider } from "@/i18n/i18n";
+import { AuthProvider } from "./contexts/AuthContext";
 
 
 function Router() {
@@ -56,11 +57,13 @@ function App() {
       <ThemeProvider
         defaultTheme="light"
       >
-        <TooltipProvider>
-          <Toaster />
-          <Analytics />
-          <Router />
-        </TooltipProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Analytics />
+            <Router />
+          </TooltipProvider>
+        </AuthProvider>
       </ThemeProvider>
       </I18nProvider>
     </ErrorBoundary>

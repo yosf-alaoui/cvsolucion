@@ -1,6 +1,6 @@
 # CVsolucion
 
-Production-focused Cabinet Vision consulting website with multilingual pages, Supabase authentication, gated pricing, training packages, and technical design/pricing service pages.
+Production-focused Cabinet Vision consulting website with multilingual pages, custom authentication, gated pricing, training packages, and technical design/pricing service pages.
 
 ## Stack
 
@@ -10,13 +10,14 @@ Production-focused Cabinet Vision consulting website with multilingual pages, Su
 - Wouter
 - Tailwind CSS
 - Express
-- Supabase Auth
+- Custom auth with server-side sessions
+- Nodemailer for transactional auth emails
 
 ## Main Features
 
 - Multilingual website: English, French, Arabic
 - Service pages for Cabinet Vision support, training, and design/pricing
-- Login, signup, magic link, password reset
+- Login, signup, email verification, magic link, password reset
 - Pricing hidden until login and email confirmation
 - WhatsApp-first contact flow
 - Legal pages: privacy and terms
@@ -78,8 +79,12 @@ Create a local `.env` file based on `.env.example`.
 Required variables:
 
 ```env
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
+APP_ORIGIN=http://localhost:3000
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=
 ```
 
 Optional analytics variables:
@@ -114,6 +119,7 @@ shared/
 - The app builds client assets into `dist/public`
 - The Node server builds to `dist/index.js`
 - In production, Express serves the built app and static assets
+- Auth data is stored locally in `data/auth-db.json`
 - Reverse proxy and CSP are expected to be handled by Nginx
 - Keep `.env` only on the server and never commit secrets
 

@@ -1,0 +1,7 @@
+Votre lien de connexion securise
+
+Utilisez le lien ci-dessous pour vous connecter a votre compte {{appName}} sans mot de passe :
+
+{{url}}
+
+Si vous n'avez pas demande ce lien, ignorez cet email.

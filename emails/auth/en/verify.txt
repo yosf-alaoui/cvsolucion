@@ -1,0 +1,9 @@
+Confirm your email address
+
+Thanks for creating your account with {{appName}}.
+Please confirm your email to activate access and unlock pricing visibility inside the platform.
+
+Open this link:
+{{url}}
+
+Sent to {{email}}.

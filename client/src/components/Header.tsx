@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Menu, MessageCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 
 /**
  * Header Component - CV Solucion
@@ -17,9 +17,9 @@ export default function Header() {
   const [isLangOpen, setIsLangOpen] = useState(false);
   const langMenuRef = useRef<HTMLDivElement | null>(null);
   const mobileLangMenuRef = useRef<HTMLDivElement | null>(null);
-  const [isAuthed, setIsAuthed] = useState(false);
 
   const { locale, t } = useI18n();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     if (!isLangOpen) return;
@@ -41,30 +41,6 @@ export default function Header() {
       document.removeEventListener("touchstart", handlePointerDown);
     };
   }, [isLangOpen]);
-
-  useEffect(() => {
-    if (!supabase) return;
-
-    let active = true;
-    const setFromUser = (user: { id: string } | null) => {
-      if (!active) return;
-      setIsAuthed(Boolean(user?.id));
-    };
-
-    supabase.auth
-      .getUser()
-      .then(({ data }) => setFromUser(data.user ?? null))
-      .catch(() => {});
-
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setFromUser(session?.user ?? null);
-    });
-
-    return () => {
-      active = false;
-      data.subscription?.unsubscribe();
-    };
-  }, []);
 
   // Build locale href while keeping pathname + search + hash
   const getLocaleHref = (target: "en" | "fr" | "ar") => {
@@ -107,7 +83,7 @@ export default function Header() {
   const trainingHref = locale === "en" ? "/training" : `/${locale}/training`;
   const designPricingHref = locale === "en" ? "/design-pricing" : `/${locale}/design-pricing`;
   const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
-  const signupHref = `${loginHref}?mode=signup`;
+  const isAuthed = Boolean(user?.id);
 
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
@@ -121,8 +97,7 @@ export default function Header() {
   };
 
   const handleSignOut = async () => {
-    if (!supabase) return;
-    await supabase.auth.signOut().catch(() => {});
+    await logout().catch(() => {});
     setIsMenuOpen(false);
   };
 

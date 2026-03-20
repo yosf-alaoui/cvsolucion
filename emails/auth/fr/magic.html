@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="{{lang}}" dir="{{dir}}">
+  <body style="margin:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#0f172a">
+    <div style="max-width:640px;margin:0 auto;padding:32px 20px">
+      <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden">
+        <div style="background:linear-gradient(135deg,#0f1f4d 0%,#1e3a8a 100%);padding:28px 32px;color:#ffffff">
+          <div style="font-size:14px;opacity:.85;letter-spacing:.08em;text-transform:uppercase">CVsolucion</div>
+          <h1 style="margin:14px 0 0;font-size:30px;line-height:1.2">Votre lien de connexion securise</h1>
+        </div>
+        <div style="padding:32px">
+          <p style="margin:0 0 18px;font-size:16px;line-height:1.8">
+            Utilisez le lien securise ci-dessous pour vous connecter a votre compte {{appName}} sans saisir votre mot de passe.
+          </p>
+          <p style="margin:0 0 24px;font-size:16px;line-height:1.8">
+            Pour des raisons de securite, ce lien est temporaire et reserve a votre usage.
+          </p>
+          <p style="margin:0 0 28px">
+            <a href="{{url}}" style="display:inline-block;background:#1e3a8a;color:#ffffff;text-decoration:none;padding:14px 24px;border-radius:12px;font-weight:700">
+              Se connecter
+            </a>
+          </p>
+          <p style="margin:0 0 10px;font-size:14px;color:#475569">Si le bouton ne fonctionne pas, copiez et ouvrez ce lien :</p>
+          <p style="margin:0;font-size:14px;line-height:1.7;word-break:break-all;color:#1e293b">{{url}}</p>
+        </div>
+        <div style="padding:20px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b">
+          Envoye par {{appName}} a {{email}}. Si vous n'avez pas demande ce lien, ignorez cet email.
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -6,12 +6,13 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n/i18n";
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 
 type AuthMode = "login" | "signup" | "magic";
 
 export default function Login() {
   const { t, locale } = useI18n();
+  const { login, signup, sendMagic, sendReset, resetPassword } = useAuth();
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,65 +21,44 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [recoveryMode, setRecoveryMode] = useState(false);
+  const [resetToken, setResetToken] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<"success" | "error" | null>(null);
   const [busy, setBusy] = useState(false);
   const emailRef = useRef<HTMLInputElement | null>(null);
 
   const disabled = useMemo(() => {
-    if (recoveryMode) return !newPassword || newPassword !== confirmPassword;
+    if (recoveryMode) return !resetToken || !newPassword || newPassword !== confirmPassword;
     if (resetMode) return !email;
     return !email || (mode !== "magic" && !password);
-  }, [email, password, mode, resetMode, recoveryMode, newPassword, confirmPassword]);
+  }, [email, password, mode, resetMode, recoveryMode, newPassword, confirmPassword, resetToken]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const next = params.get("mode");
+    const reset = params.get("reset");
+    const recovery = params.get("recovery");
+    const token = params.get("token");
+
     if (next === "signup" || next === "login" || next === "magic") {
       setMode(next);
     }
-  }, []);
+    if (reset === "success") {
+      setStatus(t("auth.resetSuccess"));
+      setStatusTone("success");
+    }
+    if ((recovery === "1" || recovery === "true") && token) {
+      setRecoveryMode(true);
+      setResetMode(false);
+      setResetToken(token);
+    }
+  }, [t]);
 
-  useEffect(() => {
-    if (!supabase) return;
-    const params = new URLSearchParams(window.location.search);
-    const recoveryParam = params.get("recovery");
-    if (recoveryParam === "1" || recoveryParam === "true") {
-      setRecoveryMode(true);
-      setResetMode(false);
-    }
-    if (window.location.hash.includes("type=recovery")) {
-      setRecoveryMode(true);
-      setResetMode(false);
-    }
-    const code = params.get("code");
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const accessToken = hashParams.get("access_token");
-    const refreshToken = hashParams.get("refresh_token");
-    if (code) {
-      supabase.auth.exchangeCodeForSession(code).catch(() => {});
-    } else if (accessToken && refreshToken) {
-      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).catch(() => {});
-    }
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setRecoveryMode(true);
-        setResetMode(false);
-      }
-    });
-    return () => {
-      data.subscription?.unsubscribe();
-    };
-  }, []);
+  const homeHref = locale === "en" ? "/" : `/${locale}`;
+  const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!supabase) {
-      setStatus(t("auth.missingConfig"));
-      setStatusTone("error");
-      return;
-    }
-
     setBusy(true);
     setStatus(null);
     setStatusTone(null);
@@ -90,22 +70,11 @@ export default function Login() {
           setStatusTone("error");
           return;
         }
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData.session) {
-          const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-          const accessToken = hashParams.get("access_token");
-          const refreshToken = hashParams.get("refresh_token");
-          if (accessToken && refreshToken) {
-            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-          }
-        }
-        const { error } = await supabase.auth.updateUser({ password: newPassword });
-        if (error) throw error;
-        setStatus(t("auth.resetSuccess"));
-        setStatusTone("success");
-        window.location.href = locale === "en" ? "/" : `/${locale}`;
+        await resetPassword(resetToken, newPassword);
+        window.location.href = `${loginHref}?mode=login&reset=success`;
         return;
       }
+
       if (resetMode) {
         if (!email) {
           setStatus(t("auth.resetMissingEmail"));
@@ -114,45 +83,33 @@ export default function Login() {
           emailRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
           return;
         }
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/login?recovery=1`,
-        });
-        if (error) throw error;
+        await sendReset(email, locale);
         setStatus(t("auth.resetSent"));
         setStatusTone("success");
         return;
       }
 
       if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        window.location.href = locale === "en" ? "/" : `/${locale}`;
+        await login(email, password);
+        window.location.href = homeHref;
       } else if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
+        await signup(email, password, locale);
         setStatus(t("auth.checkEmail"));
         setStatusTone("success");
       } else {
-        const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
-        if (error) throw error;
+        await sendMagic(email, locale);
         setStatus(t("auth.magicSent"));
         setStatusTone("success");
       }
     } catch (err: any) {
-      const message = err?.message === "Auth session missing!" ? t("auth.sessionMissing") : err?.message;
-      setStatus(message || t("auth.genericError"));
+      setStatus(err?.message || t("auth.genericError"));
       setStatusTone("error");
     } finally {
       setBusy(false);
     }
   };
 
-  const handleResetPassword = async () => {
-    if (!supabase) {
-      setStatus(t("auth.missingConfig"));
-      setStatusTone("error");
-      return;
-    }
+  const handleResetPassword = () => {
     setResetMode(true);
     setStatus(null);
     setStatusTone(null);
@@ -182,6 +139,7 @@ export default function Login() {
                     setMode("login");
                     setResetMode(false);
                     setRecoveryMode(false);
+                    setResetToken("");
                     setStatus(null);
                     setStatusTone(null);
                   }}
@@ -197,6 +155,7 @@ export default function Login() {
                     setMode("signup");
                     setResetMode(false);
                     setRecoveryMode(false);
+                    setResetToken("");
                     setStatus(null);
                     setStatusTone(null);
                   }}
@@ -212,6 +171,7 @@ export default function Login() {
                     setMode("magic");
                     setResetMode(false);
                     setRecoveryMode(false);
+                    setResetToken("");
                     setStatus(null);
                     setStatusTone(null);
                   }}
@@ -284,7 +244,7 @@ export default function Login() {
                           />
                           <button
                             type="button"
-                            onClick={() => setShowPassword((v) => !v)}
+                            onClick={() => setShowPassword((value) => !value)}
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground hover:text-foreground"
                           >
                             {showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
@@ -318,6 +278,7 @@ export default function Login() {
                   {status}
                 </div>
               ) : null}
+
               <p className="mt-4 text-xs text-muted-foreground">{t("auth.note")}</p>
             </Card>
           </div>

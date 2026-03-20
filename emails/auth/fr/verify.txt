@@ -1,0 +1,9 @@
+Confirmez votre adresse email
+
+Merci d'avoir cree votre compte sur {{appName}}.
+Confirmez votre email pour activer votre acces et afficher les tarifs dans la plateforme.
+
+Ouvrez ce lien :
+{{url}}
+
+Envoye a {{email}}.
