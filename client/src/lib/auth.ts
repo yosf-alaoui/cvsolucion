@@ -4,6 +4,11 @@ export type AuthUser = {
   emailVerifiedAt: string | null;
 };
 
+export type CurrentUserResponse = {
+  user: AuthUser | null;
+  isAdmin?: boolean;
+};
+
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
@@ -22,11 +27,11 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
 }
 
 export function getCurrentUser() {
-  return request<{ user: AuthUser | null }>("/api/auth/me", { method: "GET" });
+  return request<CurrentUserResponse>("/api/auth/me", { method: "GET" });
 }
 
 export function loginWithPassword(email: string, password: string) {
-  return request<{ user: AuthUser }>("/api/auth/login", {
+  return request<{ user: AuthUser; isAdmin?: boolean }>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });

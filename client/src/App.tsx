@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import DesignPricing from "./pages/DesignPricing";
+import AdminDashboard from "./pages/AdminDashboard";
 import Analytics from "./components/Analytics";
 import { I18nProvider } from "@/i18n/i18n";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -31,6 +32,9 @@ function Router() {
       <Route path={"/login"} component={Login} />
       <Route path={"/fr/login"} component={Login} />
       <Route path={"/ar/login"} component={Login} />
+      <Route path={"/dashboard"} component={AdminDashboard} />
+      <Route path={"/fr/dashboard"} component={AdminDashboard} />
+      <Route path={"/ar/dashboard"} component={AdminDashboard} />
       {/* Legal */}
       <Route path={"/privacy"} component={Privacy} />
       <Route path={"/terms"} component={Terms} />

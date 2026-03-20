@@ -31,10 +31,34 @@ export type AuthTokenRecord = {
   usedAt: string | null;
 };
 
+export type AuthEventType =
+  | "signup"
+  | "login"
+  | "logout"
+  | "magic_link_requested"
+  | "password_reset_requested"
+  | "password_reset_completed"
+  | "email_verified"
+  | "magic_login_completed"
+  | "admin_user_updated"
+  | "admin_user_deleted";
+
+export type AuthEvent = {
+  id: string;
+  type: AuthEventType;
+  userId: string | null;
+  email: string | null;
+  locale: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: string;
+};
+
 type AuthDb = {
   users: AuthUser[];
   sessions: AuthSession[];
   tokens: AuthTokenRecord[];
+  events: AuthEvent[];
 };
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
@@ -45,14 +69,20 @@ function ensureDbFile() {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
   if (!fs.existsSync(DB_PATH)) {
-    const emptyDb: AuthDb = { users: [], sessions: [], tokens: [] };
+    const emptyDb: AuthDb = { users: [], sessions: [], tokens: [], events: [] };
     fs.writeFileSync(DB_PATH, JSON.stringify(emptyDb, null, 2), "utf8");
   }
 }
 
 function loadDb(): AuthDb {
   ensureDbFile();
-  return JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as AuthDb;
+  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<AuthDb>;
+  return {
+    users: parsed.users ?? [],
+    sessions: parsed.sessions ?? [],
+    tokens: parsed.tokens ?? [],
+    events: parsed.events ?? [],
+  };
 }
 
 function saveDb(db: AuthDb) {
@@ -215,5 +245,114 @@ export function serializePublicUser(user: AuthUser) {
     id: user.id,
     email: user.email,
     emailVerifiedAt: user.emailVerifiedAt,
+  };
+}
+
+export function updateAdminUser(input: {
+  userId: string;
+  email?: string;
+  password?: string;
+  emailVerified?: boolean;
+}) {
+  const db = loadDb();
+  const user = db.users.find((item) => item.id === input.userId);
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  if (typeof input.email === "string") {
+    const normalizedEmail = input.email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new Error("Email is required.");
+    }
+    const existing = db.users.find((item) => item.email === normalizedEmail && item.id !== input.userId);
+    if (existing) {
+      throw new Error("Another account already uses this email.");
+    }
+    user.email = normalizedEmail;
+  }
+
+  if (typeof input.password === "string" && input.password.length > 0) {
+    if (input.password.length < 8) {
+      throw new Error("Password must be at least 8 characters.");
+    }
+    const { passwordSalt, passwordHash } = hashPassword(input.password);
+    user.passwordSalt = passwordSalt;
+    user.passwordHash = passwordHash;
+  }
+
+  if (typeof input.emailVerified === "boolean") {
+    user.emailVerifiedAt = input.emailVerified ? user.emailVerifiedAt ?? nowIso() : null;
+  }
+
+  user.updatedAt = nowIso();
+  saveDb(db);
+  return user;
+}
+
+export function deleteUserById(userId: string) {
+  const db = loadDb();
+  const user = db.users.find((item) => item.id === userId);
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  db.users = db.users.filter((item) => item.id !== userId);
+  db.sessions = db.sessions.filter((item) => item.userId !== userId);
+  db.tokens = db.tokens.filter((item) => item.userId !== userId);
+  db.events = db.events.filter((item) => item.userId !== userId);
+  saveDb(db);
+  return user;
+}
+
+export function recordEvent(input: Omit<AuthEvent, "id" | "createdAt">) {
+  const db = loadDb();
+  const event: AuthEvent = {
+    id: randomToken(12),
+    createdAt: nowIso(),
+    ...input,
+  };
+  db.events.push(event);
+  db.events = db.events.slice(-1000);
+  saveDb(db);
+  return event;
+}
+
+export function getAdminSnapshot() {
+  const db = loadDb();
+  const now = Date.now();
+
+  const activeSessions = db.sessions.filter((session) => new Date(session.expiresAt).getTime() > now);
+  const recentEvents = [...db.events]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 100);
+  const users = [...db.users]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .map((user) => ({
+      id: user.id,
+      email: user.email,
+      emailVerifiedAt: user.emailVerifiedAt,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }));
+
+  return {
+    stats: {
+      totalUsers: db.users.length,
+      verifiedUsers: db.users.filter((user) => Boolean(user.emailVerifiedAt)).length,
+      activeSessions: activeSessions.length,
+      pendingTokens: db.tokens.filter((token) => !token.usedAt && new Date(token.expiresAt).getTime() > now).length,
+      totalEvents: db.events.length,
+    },
+    users,
+    sessions: activeSessions
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((session) => ({
+        id: session.id,
+        userId: session.userId,
+        createdAt: session.createdAt,
+        expiresAt: session.expiresAt,
+      })),
+    events: recentEvents,
   };
 }

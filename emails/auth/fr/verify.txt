@@ -5,5 +5,3 @@ Confirmez votre email pour activer votre acces et afficher les tarifs dans la pl
 
 Ouvrez ce lien :
 {{url}}
-
-Envoye a {{email}}.

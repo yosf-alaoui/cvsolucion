@@ -19,7 +19,7 @@ export default function Header() {
   const mobileLangMenuRef = useRef<HTMLDivElement | null>(null);
 
   const { locale, t } = useI18n();
-  const { user, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
 
   useEffect(() => {
     if (!isLangOpen) return;
@@ -82,6 +82,7 @@ export default function Header() {
 
   const trainingHref = locale === "en" ? "/training" : `/${locale}/training`;
   const designPricingHref = locale === "en" ? "/design-pricing" : `/${locale}/design-pricing`;
+  const dashboardHref = locale === "en" ? "/dashboard" : `/${locale}/dashboard`;
   const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
   const isAuthed = Boolean(user?.id);
 
@@ -129,6 +130,15 @@ export default function Header() {
                 href={designPricingHref}
                 className="text-foreground hover:text-primary transition-colors font-semibold"
               >{t("nav.designPricing")}</a>
+
+              {isAuthed && isAdmin ? (
+                <a
+                  href={dashboardHref}
+                  className="text-foreground hover:text-primary transition-colors font-semibold"
+                >
+                  Dashboard
+                </a>
+              ) : null}
 
               <button
                 onClick={() => scrollToSection("services")}
@@ -307,6 +317,16 @@ export default function Header() {
                 className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/30 transition-colors font-semibold"
                 onClick={() => setIsMenuOpen(false)}
               >{t("nav.designPricing")}</a>
+
+              {isAuthed && isAdmin ? (
+                <a
+                  href={dashboardHref}
+                  className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/30 transition-colors font-semibold"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Dashboard
+                </a>
+              ) : null}
 
               <button
                 onClick={() => scrollToSection("services")}

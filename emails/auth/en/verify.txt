@@ -5,5 +5,3 @@ Please confirm your email to activate access and unlock pricing visibility insid
 
 Open this link:
 {{url}}
-
-Sent to {{email}}.

@@ -10,12 +10,16 @@ import {
   createSession,
   createToken,
   createUser,
+  deleteUserById,
   deleteSession,
+  getAdminSnapshot,
   getSession,
   getUserByEmail,
   getUserById,
   markUserEmailVerified,
+  recordEvent,
   serializePublicUser,
+  updateAdminUser,
   updateUserPassword,
   verifyPassword,
 } from "./authStore";
@@ -85,6 +89,42 @@ function getCurrentUser(req: express.Request) {
   if (!user) return null;
 
   return { session, user };
+}
+
+function getRequestIp(req: express.Request) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.ip || null;
+}
+
+function isAdminEmail(email: string) {
+  const configured = (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (configured.length > 0) {
+    return configured.includes(email.toLowerCase());
+  }
+
+  return email.toLowerCase().endsWith("@cvsolucion.com");
+}
+
+function requireAdmin(req: express.Request, res: express.Response) {
+  const auth = getCurrentUser(req);
+  if (!auth) {
+    res.status(401).json({ error: "Authentication required." });
+    return null;
+  }
+
+  if (!isAdminEmail(auth.user.email)) {
+    res.status(403).json({ error: "Admin access required." });
+    return null;
+  }
+
+  return auth;
 }
 
 async function sendLinkEmail(args: {
@@ -159,7 +199,7 @@ async function startServer() {
       clearSessionCookie(res);
       return res.json({ user: null });
     }
-    return res.json({ user: serializePublicUser(auth.user) });
+    return res.json({ user: serializePublicUser(auth.user), isAdmin: isAdminEmail(auth.user.email) });
   });
 
   app.post("/api/auth/signup", async (req, res, next) => {
@@ -176,6 +216,14 @@ async function startServer() {
       const { rawToken } = createToken(user.id, "verify_email", VERIFY_LINK_MS);
       const verifyUrl = `${appOrigin(req)}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}`;
 
+      recordEvent({
+        type: "signup",
+        userId: user.id,
+        email: user.email,
+        locale,
+        ip: getRequestIp(req),
+        userAgent: req.get("user-agent") || null,
+      });
       await sendLinkEmail({ email: user.email, locale, type: "verify", url: verifyUrl });
 
       return res.status(201).json({ ok: true });
@@ -195,15 +243,35 @@ async function startServer() {
 
     const session = createSession(user.id, ONE_YEAR_MS);
     setSessionCookie(res, session.id);
-    return res.json({ user: serializePublicUser(user) });
+    recordEvent({
+      type: "login",
+      userId: user.id,
+      email: user.email,
+      locale: null,
+      ip: getRequestIp(req),
+      userAgent: req.get("user-agent") || null,
+    });
+    return res.json({
+      user: serializePublicUser(user),
+      isAdmin: isAdminEmail(user.email),
+    });
   });
 
   app.post("/api/auth/logout", (req, res) => {
+    const auth = getCurrentUser(req);
     const cookies = parseCookies(req.headers.cookie);
     const sessionId = cookies[COOKIE_NAME];
     if (sessionId) {
       deleteSession(sessionId);
     }
+    recordEvent({
+      type: "logout",
+      userId: auth?.user?.id ?? null,
+      email: auth?.user?.email ?? null,
+      locale: null,
+      ip: getRequestIp(req),
+      userAgent: req.get("user-agent") || null,
+    });
     clearSessionCookie(res);
     return res.json({ ok: true });
   });
@@ -221,6 +289,14 @@ async function startServer() {
       const { rawToken } = createToken(user.id, "magic_link", MAGIC_LINK_MS);
       const magicUrl = `${appOrigin(req)}/api/auth/magic-login?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}`;
 
+      recordEvent({
+        type: "magic_link_requested",
+        userId: user.id,
+        email: user.email,
+        locale,
+        ip: getRequestIp(req),
+        userAgent: req.get("user-agent") || null,
+      });
       await sendLinkEmail({ email: user.email, locale, type: "magic", url: magicUrl });
       return res.json({ ok: true });
     } catch (error) {
@@ -241,6 +317,14 @@ async function startServer() {
       const { rawToken } = createToken(user.id, "reset_password", RESET_LINK_MS);
       const resetUrl = `${appOrigin(req)}${localePrefix(locale)}/login?recovery=1&token=${encodeURIComponent(rawToken)}`;
 
+      recordEvent({
+        type: "password_reset_requested",
+        userId: user.id,
+        email: user.email,
+        locale,
+        ip: getRequestIp(req),
+        userAgent: req.get("user-agent") || null,
+      });
       await sendLinkEmail({ email: user.email, locale, type: "reset", url: resetUrl });
       return res.json({ ok: true });
     } catch (error) {
@@ -262,6 +346,15 @@ async function startServer() {
     }
 
     updateUserPassword(tokenRecord.userId, password);
+    const user = getUserById(tokenRecord.userId);
+    recordEvent({
+      type: "password_reset_completed",
+      userId: tokenRecord.userId,
+      email: user?.email ?? null,
+      locale: null,
+      ip: getRequestIp(req),
+      userAgent: req.get("user-agent") || null,
+    });
     return res.json({ ok: true });
   });
 
@@ -278,6 +371,14 @@ async function startServer() {
     const user = markUserEmailVerified(tokenRecord.userId);
     const session = createSession(user.id, ONE_YEAR_MS);
     setSessionCookie(res, session.id);
+    recordEvent({
+      type: "email_verified",
+      userId: user.id,
+      email: user.email,
+      locale,
+      ip: getRequestIp(req),
+      userAgent: req.get("user-agent") || null,
+    });
     return res.redirect(302, redirectUrl);
   });
 
@@ -298,7 +399,84 @@ async function startServer() {
 
     const session = createSession(user.id, ONE_YEAR_MS);
     setSessionCookie(res, session.id);
+    recordEvent({
+      type: "magic_login_completed",
+      userId: user.id,
+      email: user.email,
+      locale,
+      ip: getRequestIp(req),
+      userAgent: req.get("user-agent") || null,
+    });
     return res.redirect(302, redirectUrl);
+  });
+
+  app.get("/api/admin/dashboard", (req, res) => {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+    return res.json({
+      admin: {
+        email: auth.user.email,
+      },
+      ...getAdminSnapshot(),
+    });
+  });
+
+  app.patch("/api/admin/users/:userId", (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const userId = String(req.params.userId || "").trim();
+      const email = req.body?.email;
+      const password = req.body?.password;
+      const emailVerified = req.body?.emailVerified;
+
+      const user = updateAdminUser({
+        userId,
+        email: typeof email === "string" ? email : undefined,
+        password: typeof password === "string" ? password : undefined,
+        emailVerified: typeof emailVerified === "boolean" ? emailVerified : undefined,
+      });
+
+      recordEvent({
+        type: "admin_user_updated",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:update:${user.email}`,
+      });
+
+      return res.json({ ok: true, user });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.delete("/api/admin/users/:userId", (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const userId = String(req.params.userId || "").trim();
+      if (userId === auth.user.id) {
+        return res.status(400).json({ error: "You cannot delete your own admin account." });
+      }
+
+      const deletedUser = deleteUserById(userId);
+      recordEvent({
+        type: "admin_user_deleted",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:delete:${deletedUser.email}`,
+      });
+
+      return res.json({ ok: true });
+    } catch (error) {
+      return next(error);
+    }
   });
 
   const staticPath =

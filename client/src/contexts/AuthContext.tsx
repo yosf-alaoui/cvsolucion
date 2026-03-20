@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   AuthUser,
+  CurrentUserResponse,
   getCurrentUser,
   loginWithPassword,
   logout as logoutRequest,
@@ -12,6 +13,7 @@ import {
 
 type AuthContextValue = {
   user: AuthUser | null;
+  isAdmin: boolean;
   loading: boolean;
   refresh: () => Promise<AuthUser | null>;
   login: (email: string, password: string) => Promise<AuthUser>;
@@ -26,11 +28,13 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refresh = async () => {
-    const response = await getCurrentUser();
+    const response: CurrentUserResponse = await getCurrentUser();
     setUser(response.user);
+    setIsAdmin(Boolean(response.isAdmin));
     return response.user;
   };
 
@@ -41,11 +45,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
+      isAdmin,
       loading,
       refresh,
       login: async (email, password) => {
         const response = await loginWithPassword(email, password);
         setUser(response.user);
+        setIsAdmin(Boolean(response.isAdmin));
         return response.user;
       },
       signup: async (email, password, locale) => {
@@ -54,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout: async () => {
         await logoutRequest();
         setUser(null);
+        setIsAdmin(false);
       },
       sendMagic: async (email, locale) => {
         await sendMagicLink(email, locale);
@@ -65,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await resetPasswordRequest(token, password);
       },
     }),
-    [user, loading]
+    [user, isAdmin, loading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
