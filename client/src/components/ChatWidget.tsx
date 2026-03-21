@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { LoaderCircle, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
-import { useAuth } from "@/contexts/AuthContext";
 import { openChatSession, sendChatMessage, type ChatConversation } from "@/lib/chat";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -33,7 +32,6 @@ function formatTime(value: string, locale: string) {
 export default function ChatWidget() {
   const [location] = useLocation();
   const { locale } = useI18n();
-  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [conversation, setConversation] = useState<ChatConversation | null>(null);
   const [busy, setBusy] = useState(false);
@@ -191,7 +189,6 @@ export default function ChatWidget() {
               : conversation?.status === "waiting_client"
                 ? copy.statusWaiting
                 : copy.statusOpen}
-            {user?.email ? ` • ${user.email}` : ""}
           </div>
 
           <ScrollArea className="h-[360px] px-4 py-4">
