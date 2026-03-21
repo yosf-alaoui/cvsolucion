@@ -148,7 +148,6 @@ export default function Analytics() {
     const dnt =
       typeof navigator !== "undefined" &&
       (navigator.doNotTrack === "1" || (window as any).doNotTrack === "1");
-    if (dnt) return;
 
     const search = window.location.search || "";
     const params = new URLSearchParams(search.replace(/^\?/, ""));
@@ -162,17 +161,19 @@ export default function Analytics() {
       fbclid: params.get("fbclid"),
     };
 
-    (window as any).dataLayer = (window as any).dataLayer || [];
-    (window as any).dataLayer.push({
-      event: "virtual_pageview",
-      page_title: document.title,
-      page_path: window.location.pathname,
-      page_location: window.location.href,
-      page_search: search,
-      locale,
-      user_status: user ? "registered" : "anonymous",
-      ...campaign,
-    });
+    if (!dnt) {
+      (window as any).dataLayer = (window as any).dataLayer || [];
+      (window as any).dataLayer.push({
+        event: "virtual_pageview",
+        page_title: document.title,
+        page_path: window.location.pathname,
+        page_location: window.location.href,
+        page_search: search,
+        locale,
+        user_status: user ? "registered" : "anonymous",
+        ...campaign,
+      });
+    }
 
     const controller = new AbortController();
     const session = ensureSessionState();
