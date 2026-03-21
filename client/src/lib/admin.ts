@@ -52,6 +52,35 @@ export type AdminDashboardInsights = {
   stalePendingUsers: AdminDashboardUser[];
 };
 
+export type AdminDashboardVisitorPageView = {
+  path: string;
+  locale: string;
+  title: string | null;
+  referrer: string | null;
+  occurredAt: string;
+};
+
+export type AdminDashboardVisitor = {
+  id: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  visitCount: number;
+  landingPath: string;
+  lastPath: string;
+  locale: string;
+  referrer: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  browserLanguage: string | null;
+  timezone: string | null;
+  screen: string | null;
+  deviceType: "desktop" | "mobile" | "tablet" | "bot" | "unknown";
+  isRegistered: boolean;
+  userId: string | null;
+  email: string | null;
+  pageViews: AdminDashboardVisitorPageView[];
+};
+
 export type AdminDashboardResponse = {
   admin: { email: string };
   stats: AdminDashboardStats;
@@ -59,6 +88,7 @@ export type AdminDashboardResponse = {
   sessions: AdminDashboardSession[];
   events: AdminDashboardEvent[];
   insights: AdminDashboardInsights;
+  visitors: AdminDashboardVisitor[];
 };
 
 async function adminRequest<T>(input: string, init?: RequestInit): Promise<T> {

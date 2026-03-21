@@ -15,6 +15,7 @@ import {
   type AdminDashboardResponse,
   type AdminDashboardSession,
   type AdminDashboardUser,
+  type AdminDashboardVisitor,
 } from "@/lib/admin";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -113,6 +114,7 @@ export default function AdminDashboard() {
   const [query, setQuery] = useState("");
   const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "pending">("all");
   const [eventFilter, setEventFilter] = useState("all");
+  const [selectedVisitorId, setSelectedVisitorId] = useState<string | null>(null);
 
   const copy = useMemo(() => {
     if (locale === "fr") {
@@ -125,6 +127,7 @@ export default function AdminDashboard() {
         exportEvents: "Exporter les evenements",
         overview: "Vue generale",
         users: "Utilisateurs",
+        visitors: "Visiteurs",
         sessions: "Sessions",
         events: "Activite",
         search: "Rechercher par email",
@@ -162,6 +165,16 @@ export default function AdminDashboard() {
         funnel: "Tunnel d'activation",
         localeDemand: "Demande par langue",
         stalePending: "Comptes non verifies a relancer",
+        visitorDetail: "Profil visiteur",
+        registeredState: "Inscription",
+        registeredYes: "Compte cree",
+        registeredNo: "Anonyme",
+        deviceType: "Appareil",
+        lastPage: "Derniere page",
+        landingPage: "Page d'entree",
+        browserLanguage: "Langue navigateur",
+        timezone: "Fuseau",
+        pageHistory: "Historique des pages",
         noResults: "Aucun resultat.",
         activeForUser: "Sessions actives utilisateur",
         recentUserEvents: "Derniere activite utilisateur",
@@ -192,6 +205,7 @@ export default function AdminDashboard() {
         exportEvents: "تصدير الأحداث",
         overview: "نظرة عامة",
         users: "المستخدمون",
+        visitors: "الزوار",
         sessions: "الجلسات",
         events: "النشاط",
         search: "ابحث بالبريد الإلكتروني",
@@ -229,6 +243,16 @@ export default function AdminDashboard() {
         funnel: "مسار التفعيل",
         localeDemand: "الاهتمام حسب اللغة",
         stalePending: "حسابات قديمة غير مؤكدة",
+        visitorDetail: "ملف الزائر",
+        registeredState: "حالة التسجيل",
+        registeredYes: "لديه حساب",
+        registeredNo: "زائر مجهول",
+        deviceType: "نوع الجهاز",
+        lastPage: "آخر صفحة",
+        landingPage: "صفحة الدخول",
+        browserLanguage: "لغة المتصفح",
+        timezone: "المنطقة الزمنية",
+        pageHistory: "سجل الصفحات",
         noResults: "لا توجد نتائج.",
         activeForUser: "جلسات المستخدم النشطة",
         recentUserEvents: "آخر نشاط للمستخدم",
@@ -258,6 +282,7 @@ export default function AdminDashboard() {
       exportEvents: "Export events",
       overview: "Overview",
       users: "Users",
+      visitors: "Visitors",
       sessions: "Sessions",
       events: "Activity",
       search: "Search by email",
@@ -295,6 +320,16 @@ export default function AdminDashboard() {
       funnel: "Activation funnel",
       localeDemand: "Demand by locale",
       stalePending: "Older unverified accounts",
+      visitorDetail: "Visitor profile",
+      registeredState: "Registration status",
+      registeredYes: "Registered",
+      registeredNo: "Anonymous",
+      deviceType: "Device",
+      lastPage: "Last page",
+      landingPage: "Landing page",
+      browserLanguage: "Browser language",
+      timezone: "Timezone",
+      pageHistory: "Page history",
       noResults: "No results.",
       activeForUser: "User active sessions",
       recentUserEvents: "Recent user activity",
@@ -344,13 +379,25 @@ export default function AdminDashboard() {
       return;
     }
     if (!selectedUserId || !data.users.some((item) => item.id === selectedUserId)) {
-      const next = data.users[0];
-      setSelectedUserId(next.id);
-      setEditEmail(next.email);
-      setEditPassword("");
-      setEditVerified(Boolean(next.emailVerifiedAt));
+      const next = data?.users[0];
+      if (next) {
+        setSelectedUserId(next.id);
+        setEditEmail(next.email);
+        setEditPassword("");
+        setEditVerified(Boolean(next.emailVerifiedAt));
+      }
     }
   }, [data, selectedUserId]);
+
+  useEffect(() => {
+    if (!data?.visitors.length) {
+      setSelectedVisitorId(null);
+      return;
+    }
+    if (!selectedVisitorId || !data.visitors.some((item) => item.id === selectedVisitorId)) {
+      setSelectedVisitorId(data.visitors[0].id);
+    }
+  }, [data, selectedVisitorId]);
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -378,6 +425,16 @@ export default function AdminDashboard() {
     return (data?.sessions ?? []).filter((item) => !normalizedQuery || (item.email || "").toLowerCase().includes(normalizedQuery));
   }, [data?.sessions, query]);
 
+  const filteredVisitors = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return (data?.visitors ?? []).filter((item) => {
+      if (!normalizedQuery) return true;
+      return [item.email, item.ip, item.lastPath, item.landingPath, item.userAgent]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+    });
+  }, [data?.visitors, query]);
+
   const selectedUser = useMemo(
     () => (data?.users ?? []).find((item) => item.id === selectedUserId) ?? null,
     [data?.users, selectedUserId]
@@ -389,6 +446,10 @@ export default function AdminDashboard() {
   const selectedUserEvents = useMemo(
     () => filteredEvents.filter((event) => event.userId === selectedUserId).slice(0, 20),
     [filteredEvents, selectedUserId]
+  );
+  const selectedVisitor = useMemo(
+    () => filteredVisitors.find((item) => item.id === selectedVisitorId) ?? null,
+    [filteredVisitors, selectedVisitorId]
   );
   const eventTypes = useMemo(
     () => Array.from(new Set((data?.events ?? []).map((item) => item.type))),
@@ -682,9 +743,10 @@ export default function AdminDashboard() {
                 </Card>
 
                 <Tabs defaultValue="overview" className="space-y-6">
-                  <TabsList className="grid w-full grid-cols-4">
+                  <TabsList className="grid w-full grid-cols-5">
                     <TabsTrigger value="overview">{copy.overview}</TabsTrigger>
                     <TabsTrigger value="users">{copy.users}</TabsTrigger>
+                    <TabsTrigger value="visitors">{copy.visitors}</TabsTrigger>
                     <TabsTrigger value="sessions">{copy.sessions}</TabsTrigger>
                     <TabsTrigger value="events">{copy.events}</TabsTrigger>
                   </TabsList>
@@ -717,6 +779,19 @@ export default function AdminDashboard() {
 
                   <TabsContent value="users">
                     <UsersTable copy={copy} locale={locale} users={filteredUsers} selectedUserId={selectedUserId} onSelect={handleSelectUser} />
+                  </TabsContent>
+
+                  <TabsContent value="visitors">
+                    <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                      <VisitorsTable
+                        copy={copy}
+                        locale={locale}
+                        visitors={filteredVisitors}
+                        selectedVisitorId={selectedVisitorId}
+                        onSelect={setSelectedVisitorId}
+                      />
+                      <VisitorDetailPanel copy={copy} locale={locale} visitor={selectedVisitor} />
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="sessions">
@@ -978,6 +1053,136 @@ function UserDetailPanel({
                   </div>
                 ))
               ) : <div className="text-sm text-slate-500">{copy.noResults}</div>}
+            </div>
+          </>
+        ) : <div className="text-sm text-slate-500">-</div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function VisitorsTable({
+  copy,
+  locale,
+  visitors,
+  selectedVisitorId,
+  onSelect,
+}: {
+  copy: Record<string, string>;
+  locale: string;
+  visitors: AdminDashboardVisitor[];
+  selectedVisitorId: string | null;
+  onSelect: (visitorId: string) => void;
+}) {
+  return (
+    <Card>
+      <CardHeader><CardTitle>{copy.visitors}</CardTitle></CardHeader>
+      <CardContent>
+        <ScrollArea className="w-full">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{copy.email}</TableHead>
+                <TableHead>{copy.registeredState}</TableHead>
+                <TableHead>{copy.deviceType}</TableHead>
+                <TableHead>{copy.lastSeen}</TableHead>
+                <TableHead>{copy.actions}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visitors.length ? (
+                visitors.map((visitor) => (
+                  <TableRow key={visitor.id}>
+                    <TableCell className="font-medium">
+                      <div>{visitor.email || visitor.ip || visitor.id.slice(0, 12)}</div>
+                      <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                        <span>{copy.lastPage}: {visitor.lastPath}</span>
+                        <span>{copy.locale}: {localeBadge(visitor.locale)}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={visitor.isRegistered ? "default" : "secondary"}>
+                        {visitor.isRegistered ? copy.registeredYes : copy.registeredNo}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{visitor.deviceType}</TableCell>
+                    <TableCell>{formatDate(visitor.lastSeenAt, locale)}</TableCell>
+                    <TableCell>
+                      <Button type="button" size="sm" variant={selectedVisitorId === visitor.id ? "default" : "outline"} onClick={() => onSelect(visitor.id)}>
+                        {copy.select}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-slate-500">{copy.noResults}</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </ScrollArea>
+      </CardContent>
+    </Card>
+  );
+}
+
+function VisitorDetailPanel({
+  copy,
+  locale,
+  visitor,
+}: {
+  copy: Record<string, string>;
+  locale: string;
+  visitor: AdminDashboardVisitor | null;
+}) {
+  return (
+    <Card>
+      <CardHeader><CardTitle>{copy.visitorDetail}</CardTitle></CardHeader>
+      <CardContent className="space-y-6">
+        {visitor ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <StatPill label={copy.registeredState} value={visitor.isRegistered ? copy.registeredYes : copy.registeredNo} />
+              <StatPill label={copy.deviceType} value={visitor.deviceType} />
+              <StatPill label={copy.created} value={formatDate(visitor.firstSeenAt, locale)} />
+              <StatPill label={copy.lastSeen} value={formatDate(visitor.lastSeenAt, locale)} />
+              <StatPill label={copy.locale} value={localeBadge(visitor.locale)} />
+              <StatPill label={copy.browserLanguage} value={visitor.browserLanguage || "-"} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <StatPill label={copy.email} value={visitor.email || "-"} />
+              <StatPill label="IP" value={visitor.ip || "-"} />
+              <StatPill label={copy.timezone} value={visitor.timezone || "-"} />
+              <StatPill label="Screen" value={visitor.screen || "-"} />
+              <StatPill label={copy.landingPage} value={visitor.landingPath} />
+              <StatPill label={copy.lastPage} value={visitor.lastPath} />
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">User agent</div>
+              <div className="mt-2 break-all text-sm text-slate-600">{visitor.userAgent || "-"}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">Referrer</div>
+              <div className="mt-2 break-all text-sm text-slate-600">{visitor.referrer || "-"}</div>
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">{copy.pageHistory}</h3>
+              {visitor.pageViews.length ? (
+                visitor.pageViews.map((pageView, index) => (
+                  <div key={`${pageView.occurredAt}-${index}`} className="rounded-xl border border-slate-200 px-4 py-3 text-sm">
+                    <div className="font-medium text-slate-800">{pageView.title || pageView.path}</div>
+                    <div className="mt-1 break-all text-slate-500">{pageView.path}</div>
+                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
+                      <span>{formatDate(pageView.occurredAt, locale)}</span>
+                      <span>{localeBadge(pageView.locale)}</span>
+                      <span>{pageView.referrer || "-"}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-slate-500">{copy.noResults}</div>
+              )}
             </div>
           </>
         ) : <div className="text-sm text-slate-500">-</div>}

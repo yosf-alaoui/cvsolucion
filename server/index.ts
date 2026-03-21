@@ -4,7 +4,7 @@ import { createServer } from "http";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS, VISITOR_COOKIE_NAME } from "../shared/const";
 import {
   consumeToken,
   createSession,
@@ -26,6 +26,7 @@ import {
 } from "./authStore";
 import { sendAuthEmail } from "./authMailer";
 import { normalizeAuthLocale, renderAuthEmailTemplate } from "./authEmailTemplates";
+import { createVisitorId, getVisitorsSnapshot, trackVisitor } from "./visitorStore";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,6 +77,16 @@ function clearSessionCookie(res: express.Response) {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
+    path: "/",
+  });
+}
+
+function setVisitorCookie(res: express.Response, visitorId: string) {
+  res.cookie(VISITOR_COOKIE_NAME, visitorId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: ONE_YEAR_MS,
     path: "/",
   });
 }
@@ -225,6 +236,41 @@ async function startServer() {
       return res.json({ user: null });
     }
     return res.json({ user: serializePublicUser(auth.user), isAdmin: isAdminEmail(auth.user.email) });
+  });
+
+  app.post("/api/visitor/track", rateLimit({ key: "visitor-track", windowMs: 1000 * 60, limit: 240 }), (req, res) => {
+    const cookies = parseCookies(req.headers.cookie);
+    const existingVisitorId = cookies[VISITOR_COOKIE_NAME];
+    const visitorId = existingVisitorId || createVisitorId();
+    const auth = getCurrentUser(req);
+    const payload = req.body || {};
+
+    const visitor = trackVisitor({
+      visitorId,
+      path: String(payload.path || "/"),
+      locale: normalizeAuthLocale(String(payload.locale || "en")),
+      title: typeof payload.title === "string" ? payload.title : null,
+      referrer: typeof payload.referrer === "string" ? payload.referrer : null,
+      ip: getRequestIp(req),
+      userAgent: req.get("user-agent") || null,
+      browserLanguage: typeof payload.browserLanguage === "string" ? payload.browserLanguage : null,
+      timezone: typeof payload.timezone === "string" ? payload.timezone : null,
+      screen: typeof payload.screen === "string" ? payload.screen : null,
+      userId: auth?.user?.id ?? null,
+      email: auth?.user?.email ?? null,
+    });
+
+    if (!existingVisitorId) {
+      setVisitorCookie(res, visitorId);
+    }
+
+    return res.json({
+      ok: true,
+      visitor: {
+        id: visitor.id,
+        isRegistered: visitor.isRegistered,
+      },
+    });
   });
 
   app.post("/api/auth/signup", rateLimit({ key: "signup", windowMs: 1000 * 60 * 10, limit: 10 }), async (req, res, next) => {
@@ -444,6 +490,7 @@ async function startServer() {
         email: auth.user.email,
       },
       ...getAdminSnapshot(),
+      visitors: getVisitorsSnapshot(),
     });
   });
 
