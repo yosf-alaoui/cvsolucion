@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { LoaderCircle, MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { ChevronDown, LoaderCircle, MessageCircleMore, Send, UserRound } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
-import { openChatSession, sendChatMessage, type ChatConversation } from "@/lib/chat";
+import { openChatSession, sendChatMessage, type ChatConversation, type ChatMessage } from "@/lib/chat";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 
 const SESSION_STORAGE_KEY = "cvs_visitor_session";
@@ -35,74 +34,83 @@ export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [conversation, setConversation] = useState<ChatConversation | null>(null);
   const [busy, setBusy] = useState(false);
+  const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const messagesRef = useRef<HTMLDivElement | null>(null);
+  const [introVisibleCount, setIntroVisibleCount] = useState<number | null>(null);
+  const [showAgentCard, setShowAgentCard] = useState(false);
+  const [inputLocked, setInputLocked] = useState(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const introTimersRef = useRef<number[]>([]);
+  const replyTypingTimerRef = useRef<number | null>(null);
+
+  function clearIntroTimers() {
+    introTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    introTimersRef.current = [];
+  }
+
+  function clearReplyTypingTimer() {
+    if (replyTypingTimerRef.current !== null) {
+      window.clearTimeout(replyTypingTimerRef.current);
+      replyTypingTimerRef.current = null;
+    }
+  }
 
   const copy = useMemo(() => {
     if (locale === "fr") {
       return {
-        button: "Assistant",
-        title: "Assistant CVsolucion",
-        subtitle: "Posez une question sur les services, la formation ou la tarification.",
+        button: "Chat",
+        waiting: "Connexion en cours...",
         placeholder: "Ecrivez votre question...",
-        send: "Envoyer",
-        starters: [
-          "J'ai besoin d'aide sur Cabinet Vision",
-          "Quelle formation me convient ?",
-          "Je veux un service design & pricing",
-        ],
-        statusOpen: "Reponse en cours",
-        statusWaiting: "En attente du client",
-        statusHuman: "A rediriger vers WhatsApp",
-        empty: "Commencez par une question simple.",
-        error: "Impossible de charger l'assistant.",
+        empty: "Commencez ici.",
+        error: "Impossible de charger le chat.",
+        typing: "ecrit...",
+        locked: "Attendez un instant...",
       };
     }
+
     if (locale === "ar") {
       return {
-        button: "المجيب",
-        title: "مجيب CVsolucion",
-        subtitle: "اسأل عن الخدمات أو التدريب أو التصميم والتسعير.",
+        button: "الدردشة",
+        waiting: "جارٍ ربطك...",
         placeholder: "اكتب سؤالك هنا...",
-        send: "إرسال",
-        starters: [
-          "أحتاج دعماً في Cabinet Vision",
-          "ما الباقة التدريبية المناسبة لي؟",
-          "أريد خدمة التصميم والتسعير",
-        ],
-        statusOpen: "المحادثة نشطة",
-        statusWaiting: "بانتظار رد العميل",
-        statusHuman: "يفضل التحويل إلى واتساب",
-        empty: "ابدأ بسؤال بسيط.",
-        error: "تعذر تحميل المجيب.",
+        empty: "ابدأ من هنا.",
+        error: "تعذر تحميل الدردشة.",
+        typing: "يكتب الآن...",
+        locked: "انتظر قليلًا...",
       };
     }
+
     return {
-      button: "Assistant",
-      title: "CVsolucion Assistant",
-      subtitle: "Ask about services, training, design, or pricing.",
+      button: "Chat",
+      waiting: "Connecting you...",
       placeholder: "Type your question...",
-      send: "Send",
-      starters: [
-        "I need Cabinet Vision support",
-        "Which training level fits me?",
-        "I want design & pricing help",
-      ],
-      statusOpen: "Conversation active",
-      statusWaiting: "Waiting for client reply",
-      statusHuman: "Best moved to WhatsApp",
-      empty: "Start with a simple question.",
-      error: "Failed to load the assistant.",
+      empty: "Start here.",
+      error: "Failed to load the chat.",
+      typing: "is typing...",
+      locked: "Please wait...",
     };
   }, [locale]);
 
   const hidden = location.includes("/dashboard");
 
   useEffect(() => {
+    return () => {
+      clearIntroTimers();
+      clearReplyTypingTimer();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!open || hidden) return;
+
+    clearIntroTimers();
     setBusy(true);
+    setTyping(false);
     setError(null);
+    setShowAgentCard(false);
+    setInputLocked(false);
+
     openChatSession({
       locale,
       path: window.location.pathname + window.location.search + window.location.hash,
@@ -110,6 +118,34 @@ export default function ChatWidget() {
     })
       .then((payload) => {
         setConversation(payload.conversation);
+
+        if (payload.isNew && payload.conversation.messages.length) {
+          setIntroVisibleCount(1);
+          setInputLocked(true);
+
+          const agentDelay = window.setTimeout(() => {
+            setShowAgentCard(true);
+          }, 7000);
+
+          const typingDelay = window.setTimeout(() => {
+            setTyping(true);
+          }, 9000);
+
+          const revealDelay = window.setTimeout(() => {
+            setIntroVisibleCount(2);
+          }, 14000);
+
+          const doneDelay = window.setTimeout(() => {
+            setTyping(false);
+            setIntroVisibleCount(null);
+            setInputLocked(false);
+          }, 14600);
+
+          introTimersRef.current = [agentDelay, typingDelay, revealDelay, doneDelay];
+          return;
+        }
+
+        setIntroVisibleCount(null);
       })
       .catch((err) => {
         setError(err?.message || copy.error);
@@ -119,18 +155,19 @@ export default function ChatWidget() {
       });
   }, [open, hidden, locale, copy.error]);
 
-  useEffect(() => {
-    if (!messagesRef.current) return;
-    messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
-  }, [conversation?.messages.length, open]);
-
   async function handleSend(message: string) {
     const content = message.trim();
     if (!content || busy) return;
 
     try {
       setBusy(true);
+      setTyping(false);
       setError(null);
+      clearIntroTimers();
+      clearReplyTypingTimer();
+      setIntroVisibleCount(null);
+      setInputLocked(false);
+
       const currentConversation =
         conversation ||
         (
@@ -141,7 +178,22 @@ export default function ChatWidget() {
           })
         ).conversation;
 
-      setConversation(currentConversation);
+      const optimisticMessage: ChatMessage = {
+        id: `pending-${Date.now()}`,
+        role: "user",
+        content,
+        createdAt: new Date().toISOString(),
+      };
+
+      setConversation({
+        ...currentConversation,
+        messages: [...currentConversation.messages, optimisticMessage],
+      });
+      setDraft("");
+      replyTypingTimerRef.current = window.setTimeout(() => {
+        setTyping(true);
+      }, 2000);
+
       const payload = await sendChatMessage({
         conversationId: currentConversation.id,
         locale,
@@ -149,60 +201,70 @@ export default function ChatWidget() {
         message: content,
         sessionId: getSessionId(),
       });
+
+      clearReplyTypingTimer();
+      await new Promise((resolve) => window.setTimeout(resolve, 900));
       setConversation(payload.conversation);
-      setDraft("");
     } catch (err: any) {
+      clearReplyTypingTimer();
       setError(err?.message || copy.error);
     } finally {
+      setTyping(false);
       setBusy(false);
     }
   }
 
+  const visibleMessages = useMemo(() => {
+    if (!conversation) return [];
+    if (introVisibleCount === null) return conversation.messages;
+    return conversation.messages.slice(0, introVisibleCount);
+  }, [conversation, introVisibleCount]);
+
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [visibleMessages.length, open, typing, showAgentCard]);
+
   if (hidden) return null;
 
   return (
-    <div className="fixed bottom-6 left-4 z-[65] sm:left-6">
+    <div className="fixed bottom-6 right-4 z-[65] sm:right-6">
       {open ? (
-        <Card className="w-[calc(100vw-2rem)] max-w-[380px] overflow-hidden rounded-[28px] border-slate-200 bg-white shadow-2xl">
-          <div className="flex items-start justify-between gap-3 bg-gradient-to-br from-[#1d3278] to-[#2f4aa3] px-5 py-4 text-white">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-white/75">
-                <Sparkles className="h-4 w-4" />
-                CVsolucion
-              </div>
-              <div className="mt-2 text-xl font-semibold">{copy.title}</div>
-              <div className="mt-1 text-sm text-white/80">{copy.subtitle}</div>
-            </div>
-            <button
-              type="button"
-              className="rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
-              onClick={() => setOpen(false)}
-              aria-label="Close assistant"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+        <div className="relative pt-8">
+          <button
+            type="button"
+            className="absolute left-1/2 top-0 z-10 -translate-x-1/2 rounded-full bg-white p-3 text-slate-500 shadow-lg transition hover:bg-slate-100"
+            onClick={() => setOpen(false)}
+            aria-label="Close chat"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </button>
 
-          <div className="border-b border-slate-100 px-5 py-3 text-xs text-slate-500">
-            {conversation?.status === "needs_human"
-              ? copy.statusHuman
-              : conversation?.status === "waiting_client"
-                ? copy.statusWaiting
-                : copy.statusOpen}
-          </div>
+          <Card className="w-[calc(100vw-2rem)] max-w-[300px] overflow-hidden rounded-[24px] border-slate-200 bg-white shadow-2xl">
+            <div ref={scrollRef} className="h-[320px] overflow-y-auto px-3 pb-3 pt-3">
+              <div className="space-y-3">
+              {showAgentCard && conversation?.assistantName ? (
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1d3278] text-white">
+                    <UserRound className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-800">{conversation.assistantName}</div>
+                    <div className="text-[11px] text-slate-500">{copy.waiting}</div>
+                  </div>
+                </div>
+              ) : null}
 
-          <ScrollArea className="h-[360px] px-4 py-4">
-            <div ref={messagesRef} className="space-y-3">
-              {!conversation?.messages.length ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+              {!visibleMessages.length ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
                   {copy.empty}
                 </div>
               ) : null}
 
-              {conversation?.messages.map((message) => (
+              {visibleMessages.map((message) => (
                 <div
                   key={message.id}
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ${
+                  className={`max-w-[86%] rounded-2xl px-3.5 py-3 text-sm leading-6 ${
                     message.role === "assistant"
                       ? "bg-slate-100 text-slate-800"
                       : "ms-auto bg-[#1d3278] text-white"
@@ -215,58 +277,60 @@ export default function ChatWidget() {
                 </div>
               ))}
 
-              {!conversation?.messages.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {copy.starters.map((starter) => (
-                    <button
-                      key={starter}
-                      type="button"
-                      className="rounded-full border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 transition hover:border-primary hover:text-primary"
-                      onClick={() => handleSend(starter)}
-                    >
-                      {starter}
-                    </button>
-                  ))}
+              {typing ? (
+                <div className="max-w-[72%] rounded-2xl bg-slate-100 px-3.5 py-3 text-slate-500">
+                  <div className="mb-2 text-[11px] text-slate-400">
+                    {conversation?.assistantName ? `${conversation.assistantName} ${copy.typing}` : copy.typing}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400" />
+                  </div>
                 </div>
               ) : null}
+              </div>
             </div>
-          </ScrollArea>
 
-          <div className="border-t border-slate-100 bg-white px-4 py-4">
-            {error ? <div className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div> : null}
-            <div className="flex items-end gap-3">
-              <Textarea
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder={copy.placeholder}
-                className="min-h-[56px] resize-none rounded-2xl border-slate-200"
-                rows={2}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    void handleSend(draft);
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                className="h-12 rounded-2xl px-4"
-                disabled={busy || !draft.trim()}
-                onClick={() => void handleSend(draft)}
-              >
-                {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </Button>
+            <div className="border-t border-slate-100 bg-white px-3 py-3">
+              {error ? <div className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div> : null}
+              <div className="flex items-end gap-3">
+                <Textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  placeholder={inputLocked ? copy.locked : copy.placeholder}
+                  className="min-h-[50px] resize-none rounded-2xl border-slate-200 text-sm"
+                  rows={2}
+                  disabled={inputLocked}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      void handleSend(draft);
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  className="h-11 w-11 rounded-2xl px-0"
+                  disabled={busy || inputLocked || !draft.trim()}
+                  onClick={() => void handleSend(draft)}
+                >
+                  {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
       ) : (
         <Button
           type="button"
-          className="h-14 rounded-full bg-[#1d3278] px-5 text-white shadow-xl hover:bg-[#243f93]"
+          className="group h-14 w-14 rounded-[20px] border border-white/20 bg-gradient-to-br from-[#1d3278] via-[#27439a] to-[#0f8b5f] p-0 text-white shadow-[0_20px_50px_rgba(29,50,120,0.35)] transition-all hover:scale-[1.03] hover:shadow-[0_24px_60px_rgba(15,139,95,0.28)]"
           onClick={() => setOpen(true)}
+          aria-label={copy.button}
         >
-          <MessageCircle className="me-2 h-5 w-5" />
-          {copy.button}
+          <span className="relative flex h-full w-full items-center justify-center">
+            <MessageCircleMore className="h-6 w-6 transition-transform group-hover:scale-105" />
+          </span>
         </Button>
       )}
     </div>

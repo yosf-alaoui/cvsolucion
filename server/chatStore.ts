@@ -20,6 +20,7 @@ export type ChatConversationRecord = {
   userId: string | null;
   email: string | null;
   locale: "en" | "fr" | "ar";
+  assistantName: string;
   status: ChatConversationStatus;
   title: string;
   createdAt: string;
@@ -113,6 +114,69 @@ function buildConversationTitle(locale: ChatConversationRecord["locale"]) {
   return "New conversation";
 }
 
+function pickAssistantName(locale: ChatConversationRecord["locale"]) {
+  const names =
+    locale === "fr"
+      ? ["Karim", "Sami", "Adam", "Youssef", "Nabil", "Amine"]
+      : locale === "ar"
+        ? ["يوسف", "أمين", "كريم", "سامي", "آدم", "نادر"]
+        : ["Adam", "Daniel", "Sam", "Karim", "Youssef", "Nabil"];
+  return names[Math.floor(Math.random() * names.length)];
+}
+
+function buildIntroMessages(locale: ChatConversationRecord["locale"], assistantName: string) {
+  const now = nowIso();
+
+  if (locale === "fr") {
+    return [
+      {
+        id: randomId(10),
+        role: "assistant" as const,
+        content: "Bienvenue. Merci de patienter un instant.",
+        createdAt: now,
+      },
+      {
+        id: randomId(10),
+        role: "assistant" as const,
+        content: `Bonjour, je suis ${assistantName}. Comment puis-je vous aider ?`,
+        createdAt: new Date(Date.now() + 1200).toISOString(),
+      },
+    ];
+  }
+
+  if (locale === "ar") {
+    return [
+      {
+        id: randomId(10),
+        role: "assistant" as const,
+        content: "مرحبًا. يرجى الانتظار قليلًا.",
+        createdAt: now,
+      },
+      {
+        id: randomId(10),
+        role: "assistant" as const,
+        content: `مرحبًا، معك ${assistantName}. كيف أستطيع مساعدتك؟`,
+        createdAt: new Date(Date.now() + 1200).toISOString(),
+      },
+    ];
+  }
+
+  return [
+    {
+      id: randomId(10),
+      role: "assistant" as const,
+      content: "Welcome. Please wait a moment.",
+      createdAt: now,
+    },
+    {
+      id: randomId(10),
+      role: "assistant" as const,
+      content: `Hi, I'm ${assistantName}. How can I help you?`,
+      createdAt: new Date(Date.now() + 1200).toISOString(),
+    },
+  ];
+}
+
 function computeLeadScore(conversation: ChatConversationRecord, visitor?: VisitorRecord | null) {
   let score = 0;
   score += Math.min(conversation.messageCount * 8, 40);
@@ -163,7 +227,8 @@ export function createConversation(input: {
     userId: input.userId ?? null,
     email: input.email ?? null,
     locale: input.locale,
-    status: "open",
+    assistantName: pickAssistantName(input.locale),
+    status: "waiting_client",
     title: buildConversationTitle(input.locale),
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -174,7 +239,12 @@ export function createConversation(input: {
     leadScore: 0,
     messages: [],
   };
+
+  conversation.messages = buildIntroMessages(input.locale, conversation.assistantName);
+  conversation.messageCount = conversation.messages.length;
+  conversation.lastMessageAt = conversation.messages[conversation.messages.length - 1]?.createdAt ?? timestamp;
   conversation.leadScore = computeLeadScore(conversation, input.visitor);
+
   db.conversations.push(conversation);
   db.conversations = db.conversations
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
@@ -196,6 +266,7 @@ export function upsertConversationForVisitor(input: {
     locale: input.locale,
     userId: input.userId ?? null,
   });
+
   if (existing) {
     const db = loadDb();
     const conversation = db.conversations.find((item) => item.id === existing.id)!;
@@ -205,9 +276,10 @@ export function upsertConversationForVisitor(input: {
     conversation.updatedAt = nowIso();
     conversation.leadScore = computeLeadScore(conversation, input.visitor);
     saveDb(db);
-    return conversation;
+    return { conversation, isNew: false };
   }
-  return createConversation(input);
+
+  return { conversation: createConversation(input), isNew: true };
 }
 
 export function appendConversationMessage(input: {
@@ -222,21 +294,25 @@ export function appendConversationMessage(input: {
   if (!conversation) {
     throw new Error("Conversation not found.");
   }
+
   const message: ChatMessageRecord = {
     id: randomId(10),
     role: input.role,
     content: input.content.trim(),
     createdAt: nowIso(),
   };
+
   conversation.messages.push(message);
   conversation.messages = conversation.messages.slice(-60);
   conversation.messageCount = conversation.messages.length;
   conversation.lastMessageAt = message.createdAt;
   conversation.updatedAt = message.createdAt;
   conversation.lastPath = input.path ?? conversation.lastPath;
+
   if (conversation.title === buildConversationTitle(conversation.locale) && input.role === "user") {
     conversation.title = input.content.trim().slice(0, 70);
   }
+
   conversation.leadScore = computeLeadScore(conversation, input.visitor);
   saveDb(db);
   return { conversation, message };
@@ -254,6 +330,7 @@ export function updateConversationMeta(input: {
   if (!conversation) {
     throw new Error("Conversation not found.");
   }
+
   conversation.updatedAt = nowIso();
   conversation.lastPath = input.path ?? conversation.lastPath;
   if (typeof input.latestResponseId !== "undefined") {
@@ -274,6 +351,7 @@ export function getConversationMessages(conversationId: string) {
 export function getConversationsSnapshot(visitors: VisitorRecord[]): ChatConversationSnapshot[] {
   const visitorMap = new Map(visitors.map((item) => [item.id, item]));
   const db = loadDb();
+
   return db.conversations
     .slice()
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())

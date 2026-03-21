@@ -357,7 +357,7 @@ async function startServer() {
         email: auth?.user?.email ?? null,
       });
 
-    const conversation = upsertConversationForVisitor({
+    const { conversation, isNew } = upsertConversationForVisitor({
       visitorId,
       userId: auth?.user?.id ?? null,
       email: auth?.user?.email ?? null,
@@ -378,9 +378,11 @@ async function startServer() {
     return res.json({
       ok: true,
       enabled: isChatEnabled(),
+      isNew,
       conversation: {
         id: conversation.id,
         locale: conversation.locale,
+        assistantName: conversation.assistantName,
         status: conversation.status,
         title: conversation.title,
         messages: conversation.messages,
@@ -432,7 +434,7 @@ async function startServer() {
         locale,
         path: pathValue,
         visitor,
-      });
+      }).conversation;
 
     if (conversation.visitorId !== visitorId) {
       return res.status(403).json({ error: "Conversation access denied." });
@@ -501,9 +503,11 @@ async function startServer() {
     return res.json({
       ok: true,
       enabled: isChatEnabled(),
+      isNew: false,
       conversation: {
         id: updatedConversation.id,
         locale: updatedConversation.locale,
+        assistantName: updatedConversation.assistantName,
         status: updatedConversation.status,
         title: updatedConversation.title,
         leadScore: updatedConversation.leadScore,

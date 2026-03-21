@@ -10,6 +10,7 @@ export type ChatMessage = {
 export type ChatConversation = {
   id: string;
   locale: "en" | "fr" | "ar";
+  assistantName: string;
   status: "open" | "waiting_client" | "needs_human";
   title: string;
   leadScore: number;
@@ -19,6 +20,7 @@ export type ChatConversation = {
 type ChatSessionResponse = {
   ok: true;
   enabled: boolean;
+  isNew: boolean;
   conversation: ChatConversation;
 };
 
