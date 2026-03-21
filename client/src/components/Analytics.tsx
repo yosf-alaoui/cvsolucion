@@ -25,8 +25,36 @@ export default function Analytics() {
       (navigator.doNotTrack === "1" || (window as any).doNotTrack === "1");
     if (dnt) return;
 
+    const gtmId = (import.meta.env.VITE_GTM_ID as string | undefined)?.trim();
     const ga4Id = (import.meta.env.VITE_GA4_ID as string | undefined)?.trim();
-    if (ga4Id && !document.querySelector(`script[data-ga4-id="${ga4Id}"]`)) {
+
+    if (gtmId && !document.querySelector(`script[data-gtm-id="${gtmId}"]`)) {
+      (window as any).dataLayer = (window as any).dataLayer || [];
+      (window as any).dataLayer.push({
+        "gtm.start": new Date().getTime(),
+        event: "gtm.js",
+      });
+
+      const gtmScript = document.createElement("script");
+      gtmScript.async = true;
+      gtmScript.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(gtmId)}`;
+      gtmScript.setAttribute("data-gtm-id", gtmId);
+      document.head.appendChild(gtmScript);
+
+      const iframe = document.createElement("iframe");
+      iframe.src = `https://www.googletagmanager.com/ns.html?id=${encodeURIComponent(gtmId)}`;
+      iframe.height = "0";
+      iframe.width = "0";
+      iframe.style.display = "none";
+      iframe.style.visibility = "hidden";
+      iframe.setAttribute("data-gtm-noscript", gtmId);
+
+      const noscript = document.createElement("noscript");
+      noscript.appendChild(iframe);
+      document.body.prepend(noscript);
+    }
+
+    if (!gtmId && ga4Id && !document.querySelector(`script[data-ga4-id="${ga4Id}"]`)) {
       const gaScript = document.createElement("script");
       gaScript.async = true;
       gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(ga4Id)}`;
@@ -72,6 +100,30 @@ export default function Analytics() {
       (navigator.doNotTrack === "1" || (window as any).doNotTrack === "1");
     if (dnt) return;
 
+    const search = window.location.search || "";
+    const params = new URLSearchParams(search.replace(/^\?/, ""));
+    const campaign = {
+      utm_source: params.get("utm_source"),
+      utm_medium: params.get("utm_medium"),
+      utm_campaign: params.get("utm_campaign"),
+      utm_term: params.get("utm_term"),
+      utm_content: params.get("utm_content"),
+      gclid: params.get("gclid"),
+      fbclid: params.get("fbclid"),
+    };
+
+    (window as any).dataLayer = (window as any).dataLayer || [];
+    (window as any).dataLayer.push({
+      event: "virtual_pageview",
+      page_title: document.title,
+      page_path: window.location.pathname,
+      page_location: window.location.href,
+      page_search: search,
+      locale,
+      user_status: user ? "registered" : "anonymous",
+      ...campaign,
+    });
+
     const controller = new AbortController();
     fetch("/api/visitor/track", {
       method: "POST",
@@ -81,6 +133,7 @@ export default function Analytics() {
       },
       body: JSON.stringify({
         path: window.location.pathname + window.location.search + window.location.hash,
+        search,
         locale,
         title: document.title,
         referrer: document.referrer || null,

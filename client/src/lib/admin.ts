@@ -78,6 +78,13 @@ export type AdminDashboardVisitor = {
   isRegistered: boolean;
   userId: string | null;
   email: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmTerm: string | null;
+  utmContent: string | null;
+  gclid: string | null;
+  fbclid: string | null;
   pageViews: AdminDashboardVisitorPageView[];
 };
 

@@ -248,6 +248,7 @@ async function startServer() {
     const visitor = trackVisitor({
       visitorId,
       path: String(payload.path || "/"),
+      search: typeof payload.search === "string" ? payload.search : "",
       locale: normalizeAuthLocale(String(payload.locale || "en")),
       title: typeof payload.title === "string" ? payload.title : null,
       referrer: typeof payload.referrer === "string" ? payload.referrer : null,

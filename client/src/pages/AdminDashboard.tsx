@@ -175,6 +175,10 @@ export default function AdminDashboard() {
         browserLanguage: "Langue navigateur",
         timezone: "Fuseau",
         pageHistory: "Historique des pages",
+        campaignData: "Acquisition",
+        source: "Source",
+        medium: "Medium",
+        campaign: "Campaign",
         noResults: "Aucun resultat.",
         activeForUser: "Sessions actives utilisateur",
         recentUserEvents: "Derniere activite utilisateur",
@@ -253,6 +257,10 @@ export default function AdminDashboard() {
         browserLanguage: "لغة المتصفح",
         timezone: "المنطقة الزمنية",
         pageHistory: "سجل الصفحات",
+        campaignData: "بيانات الاكتساب",
+        source: "المصدر",
+        medium: "الوسيط",
+        campaign: "الحملة",
         noResults: "لا توجد نتائج.",
         activeForUser: "جلسات المستخدم النشطة",
         recentUserEvents: "آخر نشاط للمستخدم",
@@ -330,6 +338,10 @@ export default function AdminDashboard() {
       browserLanguage: "Browser language",
       timezone: "Timezone",
       pageHistory: "Page history",
+      campaignData: "Acquisition data",
+      source: "Source",
+      medium: "Medium",
+      campaign: "Campaign",
       noResults: "No results.",
       activeForUser: "User active sessions",
       recentUserEvents: "Recent user activity",
@@ -1157,6 +1169,17 @@ function VisitorDetailPanel({
               <StatPill label="Screen" value={visitor.screen || "-"} />
               <StatPill label={copy.landingPage} value={visitor.landingPath} />
               <StatPill label={copy.lastPage} value={visitor.lastPath} />
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">{copy.campaignData}</div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <StatPill label={copy.source} value={visitor.utmSource || "-"} />
+                <StatPill label={copy.medium} value={visitor.utmMedium || "-"} />
+                <StatPill label={copy.campaign} value={visitor.utmCampaign || "-"} />
+                <StatPill label="gclid" value={visitor.gclid || "-"} />
+                <StatPill label="fbclid" value={visitor.fbclid || "-"} />
+                <StatPill label="utm_term" value={visitor.utmTerm || "-"} />
+              </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="text-sm font-semibold text-slate-900">User agent</div>

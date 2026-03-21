@@ -28,6 +28,13 @@ export type VisitorRecord = {
   isRegistered: boolean;
   userId: string | null;
   email: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmTerm: string | null;
+  utmContent: string | null;
+  gclid: string | null;
+  fbclid: string | null;
   pageViews: VisitorPageView[];
 };
 
@@ -77,6 +84,7 @@ function inferDeviceType(userAgent: string | null): VisitorRecord["deviceType"] 
 export function trackVisitor(input: {
   visitorId: string;
   path: string;
+  search?: string | null;
   locale: string;
   title?: string | null;
   referrer?: string | null;
@@ -90,6 +98,14 @@ export function trackVisitor(input: {
 }) {
   const db = loadDb();
   const timestamp = nowIso();
+  const params = new URLSearchParams(String(input.search || "").replace(/^\?/, ""));
+  const utmSource = params.get("utm_source");
+  const utmMedium = params.get("utm_medium");
+  const utmCampaign = params.get("utm_campaign");
+  const utmTerm = params.get("utm_term");
+  const utmContent = params.get("utm_content");
+  const gclid = params.get("gclid");
+  const fbclid = params.get("fbclid");
   let visitor = db.visitors.find((item) => item.id === input.visitorId);
 
   if (!visitor) {
@@ -111,6 +127,13 @@ export function trackVisitor(input: {
       isRegistered: Boolean(input.userId),
       userId: input.userId || null,
       email: input.email || null,
+      utmSource,
+      utmMedium,
+      utmCampaign,
+      utmTerm,
+      utmContent,
+      gclid,
+      fbclid,
       pageViews: [],
     };
     db.visitors.push(visitor);
@@ -130,6 +153,13 @@ export function trackVisitor(input: {
   visitor.isRegistered = visitor.isRegistered || Boolean(input.userId);
   visitor.userId = input.userId || visitor.userId;
   visitor.email = input.email || visitor.email;
+  visitor.utmSource = visitor.utmSource || utmSource;
+  visitor.utmMedium = visitor.utmMedium || utmMedium;
+  visitor.utmCampaign = visitor.utmCampaign || utmCampaign;
+  visitor.utmTerm = visitor.utmTerm || utmTerm;
+  visitor.utmContent = visitor.utmContent || utmContent;
+  visitor.gclid = visitor.gclid || gclid;
+  visitor.fbclid = visitor.fbclid || fbclid;
   visitor.pageViews.push({
     path: input.path,
     locale: input.locale || visitor.locale,
