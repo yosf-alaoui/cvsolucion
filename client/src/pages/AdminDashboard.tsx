@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -402,8 +402,10 @@ export default function AdminDashboard() {
 
   const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
 
-  const load = async () => {
-    setBusy(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) {
+      setBusy(true);
+    }
     setError(null);
     try {
       const response = await getAdminDashboard();
@@ -411,9 +413,11 @@ export default function AdminDashboard() {
     } catch (err: any) {
       setError(err?.message || copy.dashboardLoadError);
     } finally {
-      setBusy(false);
+      if (!silent) {
+        setBusy(false);
+      }
     }
-  };
+  }, [copy.dashboardLoadError]);
 
   useEffect(() => {
     if (!loading && user && isAdmin) {
@@ -421,7 +425,32 @@ export default function AdminDashboard() {
     } else if (!loading) {
       setBusy(false);
     }
-  }, [loading, user, isAdmin]);
+  }, [loading, user, isAdmin, load]);
+
+  useEffect(() => {
+    if (loading || !user || !isAdmin) return;
+
+    const refresh = () => {
+      void load(true);
+    };
+
+    const intervalId = window.setInterval(refresh, 15000);
+    const handleFocus = () => refresh();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refresh();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [loading, user, isAdmin, load]);
 
   useEffect(() => {
     if (!data?.users.length) {
@@ -669,7 +698,7 @@ export default function AdminDashboard() {
                   <Button type="button" variant="outline" onClick={() => exportCsv("cvsolucion-events.csv", eventsCsv)}>
                     {copy.exportEvents}
                   </Button>
-                  <Button type="button" onClick={load} disabled={busy || savingUser}>
+                  <Button type="button" onClick={() => void load()} disabled={busy || savingUser}>
                     {copy.refresh}
                   </Button>
                 </div>
