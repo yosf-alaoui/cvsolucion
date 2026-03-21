@@ -27,6 +27,7 @@ import {
 import { sendAuthEmail } from "./authMailer";
 import { normalizeAuthLocale, renderAuthEmailTemplate } from "./authEmailTemplates";
 import { createVisitorId, getVisitorsSnapshot, trackVisitor, trackVisitorInteraction } from "./visitorStore";
+import { getGa4DashboardSnapshot } from "./ga4Reporting";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -510,16 +511,18 @@ async function startServer() {
     return res.redirect(302, redirectUrl);
   });
 
-  app.get("/api/admin/dashboard", rateLimit({ key: "admin-dashboard", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+  app.get("/api/admin/dashboard", rateLimit({ key: "admin-dashboard", windowMs: 1000 * 60, limit: 120 }), async (req, res) => {
     const auth = requireAdmin(req, res);
     if (!auth) return;
     res.setHeader("Cache-Control", "no-store");
+    const ga4 = await getGa4DashboardSnapshot();
     return res.json({
       admin: {
         email: auth.user.email,
       },
       ...getAdminSnapshot(),
       visitors: getVisitorsSnapshot(),
+      ga4,
     });
   });
 

@@ -400,6 +400,60 @@ export default function AdminDashboard() {
     };
   }, [locale]);
 
+  const ga4Copy = useMemo(() => {
+    if (locale === "fr") {
+      return {
+        title: "Google Analytics",
+        ready: "Connecte",
+        missing: "Configuration requise",
+        fetchedAt: "Derniere sync",
+        activeUsersToday: "Utilisateurs actifs aujourd'hui",
+        activeUsers7d: "Utilisateurs actifs 7j",
+        sessions7d: "Sessions 7j",
+        pageViews7d: "Pages vues 7j",
+        avgSession: "Duree moyenne",
+        topPages: "Top pages",
+        sources: "Sources",
+        countries: "Pays",
+        devices: "Appareils",
+      };
+    }
+
+    if (locale === "ar") {
+      return {
+        title: "Google Analytics",
+        ready: "مربوط",
+        missing: "يحتاج إعداد",
+        fetchedAt: "آخر مزامنة",
+        activeUsersToday: "المستخدمون النشطون اليوم",
+        activeUsers7d: "المستخدمون النشطون 7 أيام",
+        sessions7d: "الجلسات 7 أيام",
+        pageViews7d: "مشاهدات الصفحات 7 أيام",
+        avgSession: "متوسط الجلسة",
+        topPages: "أكثر الصفحات",
+        sources: "المصادر",
+        countries: "الدول",
+        devices: "الأجهزة",
+      };
+    }
+
+    return {
+      title: "Google Analytics",
+      ready: "Connected",
+      missing: "Setup required",
+      fetchedAt: "Last sync",
+      activeUsersToday: "Active users today",
+      activeUsers7d: "Active users 7d",
+      sessions7d: "Sessions 7d",
+      pageViews7d: "Pageviews 7d",
+      avgSession: "Average session",
+      topPages: "Top pages",
+      sources: "Sources",
+      countries: "Countries",
+      devices: "Devices",
+    };
+  }, [locale]);
+
   const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
 
   const load = useCallback(async (silent = false) => {
@@ -791,6 +845,96 @@ export default function AdminDashboard() {
                     </CardContent>
                   </Card>
                 </div>
+
+                <Card>
+                  <CardHeader>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <CardTitle>{ga4Copy.title}</CardTitle>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={data?.ga4?.enabled ? "default" : "secondary"}>
+                          {data?.ga4?.enabled ? ga4Copy.ready : ga4Copy.missing}
+                        </Badge>
+                        <span className="text-xs text-slate-500">
+                          {ga4Copy.fetchedAt}: {data?.ga4?.fetchedAt ? formatDate(data.ga4.fetchedAt, locale) : "-"}
+                        </span>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {data?.ga4?.error ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                        {data.ga4.error}
+                      </div>
+                    ) : null}
+
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                      <MetricCard title={ga4Copy.activeUsersToday} value={data?.ga4?.overview.activeUsers1d ?? 0} />
+                      <MetricCard title={ga4Copy.activeUsers7d} value={data?.ga4?.overview.activeUsers7d ?? 0} />
+                      <MetricCard title={ga4Copy.sessions7d} value={data?.ga4?.overview.sessions7d ?? 0} />
+                      <MetricCard title={ga4Copy.pageViews7d} value={data?.ga4?.overview.pageViews7d ?? 0} />
+                      <MetricCard title={ga4Copy.avgSession} value={formatDuration(Math.round((data?.ga4?.overview.avgSessionDuration7d ?? 0) * 1000))} />
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      <StatPill label="page_view" value={data?.ga4?.events7d.pageViews ?? 0} />
+                      <StatPill label="whatsapp_click" value={data?.ga4?.events7d.whatsappClicks ?? 0} />
+                      <StatPill label="email_click" value={data?.ga4?.events7d.emailClicks ?? 0} />
+                      <StatPill label="cta_click" value={data?.ga4?.events7d.ctaClicks ?? 0} />
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <Card>
+                        <CardHeader><CardTitle>{ga4Copy.topPages}</CardTitle></CardHeader>
+                        <CardContent className="space-y-3">
+                          {data?.ga4?.topPages?.length ? data.ga4.topPages.map((item) => (
+                            <div key={item.pagePath} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                              <span className="truncate text-sm text-slate-700">{item.pagePath}</span>
+                              <span className="text-base font-semibold text-slate-900">{item.views}</span>
+                            </div>
+                          )) : <div className="text-sm text-slate-500">{copy.noResults}</div>}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader><CardTitle>{ga4Copy.sources}</CardTitle></CardHeader>
+                        <CardContent className="space-y-3">
+                          {data?.ga4?.trafficSources?.length ? data.ga4.trafficSources.map((item) => (
+                            <div key={item.sourceMedium} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                              <span className="truncate text-sm text-slate-700">{item.sourceMedium}</span>
+                              <span className="text-base font-semibold text-slate-900">{item.users}</span>
+                            </div>
+                          )) : <div className="text-sm text-slate-500">{copy.noResults}</div>}
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <Card>
+                        <CardHeader><CardTitle>{ga4Copy.countries}</CardTitle></CardHeader>
+                        <CardContent className="space-y-3">
+                          {data?.ga4?.countries?.length ? data.ga4.countries.map((item) => (
+                            <div key={item.country} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                              <span className="truncate text-sm text-slate-700">{item.country}</span>
+                              <span className="text-base font-semibold text-slate-900">{item.users}</span>
+                            </div>
+                          )) : <div className="text-sm text-slate-500">{copy.noResults}</div>}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader><CardTitle>{ga4Copy.devices}</CardTitle></CardHeader>
+                        <CardContent className="space-y-3">
+                          {data?.ga4?.devices?.length ? data.ga4.devices.map((item) => (
+                            <div key={item.deviceCategory} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                              <span className="truncate text-sm capitalize text-slate-700">{item.deviceCategory}</span>
+                              <span className="text-base font-semibold text-slate-900">{item.users}</span>
+                            </div>
+                          )) : <div className="text-sm text-slate-500">{copy.noResults}</div>}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 <Card>
                   <CardContent className="p-5">

@@ -111,6 +111,30 @@ export type AdminDashboardVisitor = {
   interactions: AdminDashboardVisitorInteraction[];
 };
 
+export type AdminDashboardGa4 = {
+  enabled: boolean;
+  propertyId: string | null;
+  fetchedAt: string | null;
+  error: string | null;
+  overview: {
+    activeUsers1d: number;
+    activeUsers7d: number;
+    sessions7d: number;
+    pageViews7d: number;
+    avgSessionDuration7d: number;
+  };
+  events7d: {
+    pageViews: number;
+    whatsappClicks: number;
+    emailClicks: number;
+    ctaClicks: number;
+  };
+  topPages: Array<{ pagePath: string; views: number }>;
+  trafficSources: Array<{ sourceMedium: string; users: number }>;
+  countries: Array<{ country: string; users: number }>;
+  devices: Array<{ deviceCategory: string; users: number }>;
+};
+
 export type AdminDashboardResponse = {
   admin: { email: string };
   stats: AdminDashboardStats;
@@ -119,6 +143,7 @@ export type AdminDashboardResponse = {
   events: AdminDashboardEvent[];
   insights: AdminDashboardInsights;
   visitors: AdminDashboardVisitor[];
+  ga4: AdminDashboardGa4;
 };
 
 async function adminRequest<T>(input: string, init?: RequestInit): Promise<T> {
