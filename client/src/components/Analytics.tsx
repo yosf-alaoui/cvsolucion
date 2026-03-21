@@ -38,8 +38,9 @@ function sendVisitorEvent(payload: Record<string, unknown>, preferBeacon = false
   const body = JSON.stringify(payload);
   if (preferBeacon && typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
     const blob = new Blob([body], { type: "application/json" });
-    navigator.sendBeacon("/api/visitor/event", blob);
-    return;
+    if (navigator.sendBeacon("/api/visitor/event", blob)) {
+      return;
+    }
   }
 
   fetch("/api/visitor/event", {
@@ -228,7 +229,7 @@ export default function Analytics() {
           href,
           label,
           sessionId: session.id,
-        });
+        }, true);
       } else if (href.startsWith("mailto:")) {
         sendVisitorEvent({
           type: "email_click",
@@ -236,7 +237,7 @@ export default function Analytics() {
           href,
           label,
           sessionId: session.id,
-        });
+        }, true);
       } else if (link.dataset.cta === "true" || link.getAttribute("data-track") === "cta") {
         sendVisitorEvent({
           type: "cta_click",
@@ -244,7 +245,7 @@ export default function Analytics() {
           href,
           label,
           sessionId: session.id,
-        });
+        }, true);
       }
     };
 
