@@ -28,6 +28,16 @@ import { sendAuthEmail } from "./authMailer";
 import { normalizeAuthLocale, renderAuthEmailTemplate } from "./authEmailTemplates";
 import { createVisitorId, getVisitorsSnapshot, trackVisitor, trackVisitorInteraction } from "./visitorStore";
 import { getGa4DashboardSnapshot } from "./ga4Reporting";
+import { generateAssistantReply, isChatEnabled } from "./chatAssistant";
+import {
+  appendConversationMessage,
+  getConversationById,
+  getConversationMessages,
+  getConversationsSnapshot,
+  updateConversationMeta,
+  upsertConversationForVisitor,
+} from "./chatStore";
+import { getVisitorById } from "./visitorStore";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -164,6 +174,26 @@ function requireAdmin(req: express.Request, res: express.Response) {
   return auth;
 }
 
+function getOrCreateRequestVisitor(req: express.Request, res: express.Response) {
+  const cookies = parseCookies(req.headers.cookie);
+  const existingVisitorId = cookies[VISITOR_COOKIE_NAME];
+  const visitorId = existingVisitorId || createVisitorId();
+  if (!existingVisitorId) {
+    setVisitorCookie(res, visitorId);
+  }
+  return visitorId;
+}
+
+function getChatFallback(locale: "en" | "fr" | "ar") {
+  if (locale === "fr") {
+    return "Je ne peux pas répondre correctement pour l'instant. Reessayez dans un instant ou contactez-nous sur WhatsApp avec votre besoin.";
+  }
+  if (locale === "ar") {
+    return "تعذر عليّ الرد بشكل صحيح الآن. حاول بعد قليل أو تواصل معنا عبر واتساب مع تفاصيل طلبك.";
+  }
+  return "I could not answer properly right now. Please try again in a moment or contact us on WhatsApp with your request.";
+}
+
 async function sendLinkEmail(args: {
   email: string;
   locale?: string;
@@ -285,7 +315,7 @@ async function startServer() {
 
     const payload = req.body || {};
     const eventType = String(payload.type || "");
-    if (!["session_start", "session_end", "whatsapp_click", "email_click", "cta_click"].includes(eventType)) {
+    if (!["session_start", "session_end", "whatsapp_click", "email_click", "cta_click", "chat_open", "chat_message"].includes(eventType)) {
       return res.status(400).json({ error: "Unsupported visitor event." });
     }
 
@@ -301,6 +331,185 @@ async function startServer() {
     });
 
     return res.json({ ok: true, tracked: Boolean(visitor) });
+  });
+
+  app.post("/api/chat/session", rateLimit({ key: "chat-session", windowMs: 1000 * 60 * 10, limit: 80 }), (req, res) => {
+    const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+    const pathValue = typeof req.body?.path === "string" ? req.body.path : req.path;
+    const auth = getCurrentUser(req);
+    const visitorId = getOrCreateRequestVisitor(req, res);
+    const visitor =
+      getVisitorById(visitorId) ??
+      trackVisitor({
+        visitorId,
+        path: pathValue,
+        search: "",
+        sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
+        locale,
+        title: null,
+        referrer: req.get("referer") || null,
+        ip: getRequestIp(req),
+        userAgent: req.get("user-agent") || null,
+        browserLanguage: null,
+        timezone: null,
+        screen: null,
+        userId: auth?.user?.id ?? null,
+        email: auth?.user?.email ?? null,
+      });
+
+    const conversation = upsertConversationForVisitor({
+      visitorId,
+      userId: auth?.user?.id ?? null,
+      email: auth?.user?.email ?? null,
+      locale,
+      path: pathValue,
+      visitor,
+    });
+
+    trackVisitorInteraction({
+      visitorId,
+      type: "chat_open",
+      path: pathValue,
+      label: "chat_widget",
+      href: null,
+      sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
+    });
+
+    return res.json({
+      ok: true,
+      enabled: isChatEnabled(),
+      conversation: {
+        id: conversation.id,
+        locale: conversation.locale,
+        status: conversation.status,
+        title: conversation.title,
+        messages: conversation.messages,
+        leadScore: conversation.leadScore,
+      },
+    });
+  });
+
+  app.post("/api/chat/message", rateLimit({ key: "chat-message", windowMs: 1000 * 60 * 10, limit: 120 }), async (req, res) => {
+    const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+    const pathValue = typeof req.body?.path === "string" ? req.body.path : "/";
+    const rawMessage = String(req.body?.message || "").trim();
+    const conversationId = String(req.body?.conversationId || "").trim();
+
+    if (!rawMessage || rawMessage.length < 2) {
+      return res.status(400).json({ error: "Message is required." });
+    }
+    if (rawMessage.length > 2000) {
+      return res.status(400).json({ error: "Message is too long." });
+    }
+
+    const auth = getCurrentUser(req);
+    const visitorId = getOrCreateRequestVisitor(req, res);
+    const visitor =
+      getVisitorById(visitorId) ??
+      trackVisitor({
+        visitorId,
+        path: pathValue,
+        search: "",
+        sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
+        locale,
+        title: null,
+        referrer: req.get("referer") || null,
+        ip: getRequestIp(req),
+        userAgent: req.get("user-agent") || null,
+        browserLanguage: null,
+        timezone: null,
+        screen: null,
+        userId: auth?.user?.id ?? null,
+        email: auth?.user?.email ?? null,
+      });
+
+    let conversation =
+      (conversationId ? getConversationById(conversationId) : null) ??
+      upsertConversationForVisitor({
+        visitorId,
+        userId: auth?.user?.id ?? null,
+        email: auth?.user?.email ?? null,
+        locale,
+        path: pathValue,
+        visitor,
+      });
+
+    if (conversation.visitorId !== visitorId) {
+      return res.status(403).json({ error: "Conversation access denied." });
+    }
+    if (auth?.user?.id && conversation.userId && conversation.userId !== auth.user.id) {
+      return res.status(403).json({ error: "Conversation access denied." });
+    }
+
+    appendConversationMessage({
+      conversationId: conversation.id,
+      role: "user",
+      content: rawMessage,
+      path: pathValue,
+      visitor,
+    });
+    trackVisitorInteraction({
+      visitorId,
+      type: "chat_message",
+      path: pathValue,
+      label: "user_message",
+      href: null,
+      sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
+    });
+
+    conversation = getConversationById(conversation.id)!;
+    const messages = getConversationMessages(conversation.id);
+
+    let assistantText = getChatFallback(locale);
+    let responseId: string | null = null;
+    let status: "open" | "waiting_client" | "needs_human" = "open";
+
+    if (isChatEnabled()) {
+      try {
+        const reply = await generateAssistantReply({
+          locale,
+          conversation,
+          messages,
+          visitor,
+          latestUserMessage: rawMessage,
+        });
+        assistantText = reply.text;
+        responseId = reply.responseId;
+        status = reply.status;
+      } catch (error) {
+        console.error("[chat-assistant]", error);
+        status = "needs_human";
+      }
+    }
+
+    appendConversationMessage({
+      conversationId: conversation.id,
+      role: "assistant",
+      content: assistantText,
+      path: pathValue,
+      visitor,
+    });
+
+    const updatedConversation = updateConversationMeta({
+      conversationId: conversation.id,
+      latestResponseId: responseId,
+      status,
+      path: pathValue,
+      visitor,
+    });
+
+    return res.json({
+      ok: true,
+      enabled: isChatEnabled(),
+      conversation: {
+        id: updatedConversation.id,
+        locale: updatedConversation.locale,
+        status: updatedConversation.status,
+        title: updatedConversation.title,
+        leadScore: updatedConversation.leadScore,
+        messages: updatedConversation.messages,
+      },
+    });
   });
 
   app.post("/api/auth/signup", rateLimit({ key: "signup", windowMs: 1000 * 60 * 10, limit: 10 }), async (req, res, next) => {
@@ -516,13 +725,18 @@ async function startServer() {
     if (!auth) return;
     res.setHeader("Cache-Control", "no-store");
     const ga4 = await getGa4DashboardSnapshot();
+    const visitors = getVisitorsSnapshot();
     return res.json({
       admin: {
         email: auth.user.email,
       },
       ...getAdminSnapshot(),
-      visitors: getVisitorsSnapshot(),
+      visitors,
+      conversations: getConversationsSnapshot(visitors),
       ga4,
+      chat: {
+        enabled: isChatEnabled(),
+      },
     });
   });
 

@@ -16,7 +16,9 @@ export type VisitorInteractionType =
   | "session_end"
   | "whatsapp_click"
   | "email_click"
-  | "cta_click";
+  | "cta_click"
+  | "chat_open"
+  | "chat_message";
 
 export type VisitorInteraction = {
   type: VisitorInteractionType;
@@ -62,8 +64,11 @@ export type VisitorRecord = {
   whatsappClicks: number;
   emailClicks: number;
   ctaClicks: number;
+  chatOpens: number;
+  chatMessages: number;
   lastWhatsappClickAt: string | null;
   lastEmailClickAt: string | null;
+  lastChatAt: string | null;
   pageViews: VisitorPageView[];
   interactions: VisitorInteraction[];
 };
@@ -173,8 +178,11 @@ export function trackVisitor(input: {
       whatsappClicks: 0,
       emailClicks: 0,
       ctaClicks: 0,
+      chatOpens: 0,
+      chatMessages: 0,
       lastWhatsappClickAt: null,
       lastEmailClickAt: null,
+      lastChatAt: null,
       pageViews: [],
       interactions: [],
     };
@@ -202,6 +210,9 @@ export function trackVisitor(input: {
   visitor.utmContent = visitor.utmContent || utmContent;
   visitor.gclid = visitor.gclid || gclid;
   visitor.fbclid = visitor.fbclid || fbclid;
+  visitor.chatOpens = visitor.chatOpens ?? 0;
+  visitor.chatMessages = visitor.chatMessages ?? 0;
+  visitor.lastChatAt = visitor.lastChatAt ?? null;
   visitor.totalPageViews += 1;
   visitor.pageViews.push({
     path: input.path,
@@ -270,10 +281,23 @@ export function trackVisitorInteraction(input: {
   if (input.type === "cta_click") {
     visitor.ctaClicks += 1;
   }
+  if (input.type === "chat_open") {
+    visitor.chatOpens += 1;
+    visitor.lastChatAt = timestamp;
+  }
+  if (input.type === "chat_message") {
+    visitor.chatMessages += 1;
+    visitor.lastChatAt = timestamp;
+  }
 
   visitor.lastSeenAt = timestamp;
   saveDb(db);
   return visitor;
+}
+
+export function getVisitorById(visitorId: string) {
+  const db = loadDb();
+  return db.visitors.find((item) => item.id === visitorId) ?? null;
 }
 
 export function getVisitorsSnapshot() {

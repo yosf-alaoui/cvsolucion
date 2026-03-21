@@ -11,12 +11,14 @@ import {
   revokeAdminSession,
   revokeAdminUserSessions,
   updateAdminUser,
+  type AdminDashboardConversation,
   type AdminDashboardEvent,
   type AdminDashboardResponse,
   type AdminDashboardSession,
   type AdminDashboardUser,
   type AdminDashboardVisitor,
 } from "@/lib/admin";
+import ConversationsPanel from "@/components/admin/ConversationsPanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -126,6 +128,7 @@ export default function AdminDashboard() {
   const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "pending">("all");
   const [eventFilter, setEventFilter] = useState("all");
   const [selectedVisitorId, setSelectedVisitorId] = useState<string | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
 
   const copy = useMemo(() => {
     if (locale === "fr") {
@@ -454,6 +457,52 @@ export default function AdminDashboard() {
     };
   }, [locale]);
 
+  const conversationCopy = useMemo(() => {
+    if (locale === "fr") {
+      return {
+        conversations: "Conversations",
+        conversationDetail: "Detail de la conversation",
+        status: "Statut",
+        leadScore: "Lead score",
+        messages: "Messages",
+        clientProfile: "Profil client",
+        assistant: "Assistant",
+        client: "Client",
+        open: "Ouverte",
+        waiting_client: "En attente client",
+        needs_human: "A reprendre manuellement",
+      };
+    }
+    if (locale === "ar") {
+      return {
+        conversations: "المحادثات",
+        conversationDetail: "تفاصيل المحادثة",
+        status: "الحالة",
+        leadScore: "قوة العميل",
+        messages: "الرسائل",
+        clientProfile: "ملف العميل",
+        assistant: "المجيب",
+        client: "العميل",
+        open: "نشطة",
+        waiting_client: "بانتظار العميل",
+        needs_human: "تحتاج تدخل بشري",
+      };
+    }
+    return {
+      conversations: "Conversations",
+      conversationDetail: "Conversation detail",
+      status: "Status",
+      leadScore: "Lead score",
+      messages: "Messages",
+      clientProfile: "Client profile",
+      assistant: "Assistant",
+      client: "Client",
+      open: "Open",
+      waiting_client: "Waiting for client",
+      needs_human: "Needs human follow-up",
+    };
+  }, [locale]);
+
   const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
 
   const load = useCallback(async (silent = false) => {
@@ -532,6 +581,16 @@ export default function AdminDashboard() {
     }
   }, [data, selectedVisitorId]);
 
+  useEffect(() => {
+    if (!data?.conversations.length) {
+      setSelectedConversationId(null);
+      return;
+    }
+    if (!selectedConversationId || !data.conversations.some((item) => item.id === selectedConversationId)) {
+      setSelectedConversationId(data.conversations[0].id);
+    }
+  }, [data, selectedConversationId]);
+
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return (data?.users ?? []).filter((item) => {
@@ -567,6 +626,24 @@ export default function AdminDashboard() {
         .some((value) => String(value).toLowerCase().includes(normalizedQuery));
     });
   }, [data?.visitors, query]);
+
+  const filteredConversations = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return (data?.conversations ?? []).filter((item) => {
+      if (!normalizedQuery) return true;
+      return [
+        item.email,
+        item.title,
+        item.visitor?.email,
+        item.visitor?.ip,
+        item.visitor?.utmSource,
+        item.visitor?.utmCampaign,
+        item.lastPath,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+    });
+  }, [data?.conversations, query]);
 
   const selectedUser = useMemo(
     () => (data?.users ?? []).find((item) => item.id === selectedUserId) ?? null,
@@ -966,10 +1043,11 @@ export default function AdminDashboard() {
                 </Card>
 
                 <Tabs defaultValue="overview" className="space-y-6">
-                  <TabsList className="grid w-full grid-cols-5">
+                  <TabsList className="grid w-full grid-cols-6">
                     <TabsTrigger value="overview">{copy.overview}</TabsTrigger>
                     <TabsTrigger value="users">{copy.users}</TabsTrigger>
                     <TabsTrigger value="visitors">{copy.visitors}</TabsTrigger>
+                    <TabsTrigger value="conversations">{conversationCopy.conversations}</TabsTrigger>
                     <TabsTrigger value="sessions">{copy.sessions}</TabsTrigger>
                     <TabsTrigger value="events">{copy.events}</TabsTrigger>
                   </TabsList>
@@ -1015,6 +1093,16 @@ export default function AdminDashboard() {
                       />
                       <VisitorDetailPanel copy={copy} locale={locale} visitor={selectedVisitor} />
                     </div>
+                  </TabsContent>
+
+                  <TabsContent value="conversations">
+                    <ConversationsPanel
+                      copy={{ ...copy, ...conversationCopy }}
+                      locale={locale}
+                      conversations={filteredConversations}
+                      selectedConversationId={selectedConversationId}
+                      onSelect={setSelectedConversationId}
+                    />
                   </TabsContent>
 
                   <TabsContent value="sessions">
@@ -1419,6 +1507,8 @@ function VisitorDetailPanel({
                 <StatPill label={copy.whatsappClicks} value={visitor.whatsappClicks} />
                 <StatPill label={copy.emailClicks} value={visitor.emailClicks} />
                 <StatPill label={copy.ctaClicks} value={visitor.ctaClicks} />
+                <StatPill label="Chat opens" value={visitor.chatOpens} />
+                <StatPill label="Chat messages" value={visitor.chatMessages} />
                 <StatPill label="pages/session" value={visitor.lastSessionPageCount ?? "-"} />
               </div>
             </div>

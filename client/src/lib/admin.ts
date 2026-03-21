@@ -62,7 +62,14 @@ export type AdminDashboardVisitorPageView = {
 };
 
 export type AdminDashboardVisitorInteraction = {
-  type: "session_start" | "session_end" | "whatsapp_click" | "email_click" | "cta_click";
+  type:
+    | "session_start"
+    | "session_end"
+    | "whatsapp_click"
+    | "email_click"
+    | "cta_click"
+    | "chat_open"
+    | "chat_message";
   path: string;
   label: string | null;
   href: string | null;
@@ -105,10 +112,61 @@ export type AdminDashboardVisitor = {
   whatsappClicks: number;
   emailClicks: number;
   ctaClicks: number;
+  chatOpens: number;
+  chatMessages: number;
   lastWhatsappClickAt: string | null;
   lastEmailClickAt: string | null;
+  lastChatAt: string | null;
   pageViews: AdminDashboardVisitorPageView[];
   interactions: AdminDashboardVisitorInteraction[];
+};
+
+export type AdminDashboardConversationMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+};
+
+export type AdminDashboardConversation = {
+  id: string;
+  visitorId: string;
+  userId: string | null;
+  email: string | null;
+  locale: "en" | "fr" | "ar";
+  status: "open" | "waiting_client" | "needs_human";
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt: string;
+  lastPath: string | null;
+  latestResponseId: string | null;
+  messageCount: number;
+  leadScore: number;
+  messages: AdminDashboardConversationMessage[];
+  visitor: {
+    id: string;
+    email: string | null;
+    isRegistered: boolean;
+    ip: string | null;
+    deviceType: "desktop" | "mobile" | "tablet" | "bot" | "unknown";
+    locale: string;
+    landingPath: string;
+    lastPath: string;
+    browserLanguage: string | null;
+    timezone: string | null;
+    utmSource: string | null;
+    utmMedium: string | null;
+    utmCampaign: string | null;
+    gclid: string | null;
+    fbclid: string | null;
+    totalSessions: number;
+    totalPageViews: number;
+    whatsappClicks: number;
+    emailClicks: number;
+    ctaClicks: number;
+    lastSeenAt: string;
+  } | null;
 };
 
 export type AdminDashboardGa4 = {
@@ -143,7 +201,11 @@ export type AdminDashboardResponse = {
   events: AdminDashboardEvent[];
   insights: AdminDashboardInsights;
   visitors: AdminDashboardVisitor[];
+  conversations: AdminDashboardConversation[];
   ga4: AdminDashboardGa4;
+  chat: {
+    enabled: boolean;
+  };
 };
 
 async function adminRequest<T>(input: string, init?: RequestInit): Promise<T> {
