@@ -8,6 +8,25 @@ export type VisitorPageView = {
   title: string | null;
   referrer: string | null;
   occurredAt: string;
+  sessionId: string | null;
+};
+
+export type VisitorInteractionType =
+  | "session_start"
+  | "session_end"
+  | "whatsapp_click"
+  | "email_click"
+  | "cta_click";
+
+export type VisitorInteraction = {
+  type: VisitorInteractionType;
+  path: string;
+  label: string | null;
+  href: string | null;
+  sessionId: string | null;
+  durationMs: number | null;
+  pageCount: number | null;
+  occurredAt: string;
 };
 
 export type VisitorRecord = {
@@ -35,7 +54,18 @@ export type VisitorRecord = {
   utmContent: string | null;
   gclid: string | null;
   fbclid: string | null;
+  totalSessions: number;
+  totalPageViews: number;
+  totalDurationMs: number;
+  lastSessionDurationMs: number | null;
+  lastSessionPageCount: number | null;
+  whatsappClicks: number;
+  emailClicks: number;
+  ctaClicks: number;
+  lastWhatsappClickAt: string | null;
+  lastEmailClickAt: string | null;
   pageViews: VisitorPageView[];
+  interactions: VisitorInteraction[];
 };
 
 type VisitorDb = {
@@ -85,6 +115,7 @@ export function trackVisitor(input: {
   visitorId: string;
   path: string;
   search?: string | null;
+  sessionId?: string | null;
   locale: string;
   title?: string | null;
   referrer?: string | null;
@@ -134,7 +165,18 @@ export function trackVisitor(input: {
       utmContent,
       gclid,
       fbclid,
+      totalSessions: 0,
+      totalPageViews: 0,
+      totalDurationMs: 0,
+      lastSessionDurationMs: null,
+      lastSessionPageCount: null,
+      whatsappClicks: 0,
+      emailClicks: 0,
+      ctaClicks: 0,
+      lastWhatsappClickAt: null,
+      lastEmailClickAt: null,
       pageViews: [],
+      interactions: [],
     };
     db.visitors.push(visitor);
   }
@@ -160,18 +202,76 @@ export function trackVisitor(input: {
   visitor.utmContent = visitor.utmContent || utmContent;
   visitor.gclid = visitor.gclid || gclid;
   visitor.fbclid = visitor.fbclid || fbclid;
+  visitor.totalPageViews += 1;
   visitor.pageViews.push({
     path: input.path,
     locale: input.locale || visitor.locale,
     title: input.title || null,
     referrer: input.referrer || null,
     occurredAt: timestamp,
+    sessionId: input.sessionId || null,
   });
   visitor.pageViews = visitor.pageViews.slice(-50);
 
   db.visitors = db.visitors
     .sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime())
     .slice(0, 2000);
+  saveDb(db);
+  return visitor;
+}
+
+export function trackVisitorInteraction(input: {
+  visitorId: string;
+  type: VisitorInteractionType;
+  path: string;
+  label?: string | null;
+  href?: string | null;
+  sessionId?: string | null;
+  durationMs?: number | null;
+  pageCount?: number | null;
+}) {
+  const db = loadDb();
+  const visitor = db.visitors.find((item) => item.id === input.visitorId);
+  if (!visitor) return null;
+
+  const timestamp = nowIso();
+  const interaction: VisitorInteraction = {
+    type: input.type,
+    path: input.path,
+    label: input.label || null,
+    href: input.href || null,
+    sessionId: input.sessionId || null,
+    durationMs: typeof input.durationMs === "number" ? input.durationMs : null,
+    pageCount: typeof input.pageCount === "number" ? input.pageCount : null,
+    occurredAt: timestamp,
+  };
+
+  visitor.interactions.push(interaction);
+  visitor.interactions = visitor.interactions.slice(-80);
+
+  if (input.type === "session_start") {
+    visitor.totalSessions += 1;
+  }
+  if (input.type === "session_end") {
+    visitor.lastSessionDurationMs = interaction.durationMs;
+    visitor.lastSessionPageCount = interaction.pageCount;
+    if (interaction.durationMs) {
+      visitor.totalDurationMs += interaction.durationMs;
+    }
+  }
+  if (input.type === "whatsapp_click") {
+    visitor.whatsappClicks += 1;
+    visitor.lastWhatsappClickAt = timestamp;
+  }
+  if (input.type === "email_click") {
+    visitor.emailClicks += 1;
+    visitor.lastEmailClickAt = timestamp;
+  }
+  if (input.type === "cta_click") {
+    visitor.ctaClicks += 1;
+  }
+
+  visitor.lastSeenAt = timestamp;
   saveDb(db);
   return visitor;
 }
@@ -187,5 +287,9 @@ export function getVisitorsSnapshot() {
         .slice()
         .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
         .slice(0, 20),
+      interactions: visitor.interactions
+        .slice()
+        .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+        .slice(0, 30),
     }));
 }

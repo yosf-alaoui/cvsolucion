@@ -34,6 +34,17 @@ function formatDate(value: string | null, locale: string) {
   }).format(new Date(value));
 }
 
+function formatDuration(ms: number | null) {
+  if (!ms || ms <= 0) return "-";
+  const totalSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds}s`;
+  if (minutes < 60) return `${minutes}m ${seconds}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
 function exportCsv(filename: string, rows: Array<Record<string, string | number | null>>) {
   if (!rows.length || typeof window === "undefined") return;
   const headers = Object.keys(rows[0]);
@@ -179,6 +190,15 @@ export default function AdminDashboard() {
         source: "Source",
         medium: "Medium",
         campaign: "Campaign",
+        engagement: "Engagement",
+        totalSessions: "Sessions totales",
+        totalPageViews: "Pages vues",
+        avgDuration: "Duree moyenne",
+        lastSessionDuration: "Derniere session",
+        whatsappClicks: "Clics WhatsApp",
+        emailClicks: "Clics email",
+        ctaClicks: "Clics CTA",
+        interactionHistory: "Historique d'interaction",
         noResults: "Aucun resultat.",
         activeForUser: "Sessions actives utilisateur",
         recentUserEvents: "Derniere activite utilisateur",
@@ -261,6 +281,15 @@ export default function AdminDashboard() {
         source: "المصدر",
         medium: "الوسيط",
         campaign: "الحملة",
+        engagement: "التفاعل",
+        totalSessions: "إجمالي الجلسات",
+        totalPageViews: "إجمالي الصفحات",
+        avgDuration: "متوسط المدة",
+        lastSessionDuration: "مدة آخر جلسة",
+        whatsappClicks: "ضغطات واتساب",
+        emailClicks: "ضغطات الإيميل",
+        ctaClicks: "ضغطات الأزرار",
+        interactionHistory: "سجل التفاعل",
         noResults: "لا توجد نتائج.",
         activeForUser: "جلسات المستخدم النشطة",
         recentUserEvents: "آخر نشاط للمستخدم",
@@ -342,6 +371,15 @@ export default function AdminDashboard() {
       source: "Source",
       medium: "Medium",
       campaign: "Campaign",
+      engagement: "Engagement",
+      totalSessions: "Total sessions",
+      totalPageViews: "Total pageviews",
+      avgDuration: "Average duration",
+      lastSessionDuration: "Last session",
+      whatsappClicks: "WhatsApp clicks",
+      emailClicks: "Email clicks",
+      ctaClicks: "CTA clicks",
+      interactionHistory: "Interaction history",
       noResults: "No results.",
       activeForUser: "User active sessions",
       recentUserEvents: "Recent user activity",
@@ -1182,6 +1220,22 @@ function VisitorDetailPanel({
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">{copy.engagement}</div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <StatPill label={copy.totalSessions} value={visitor.totalSessions} />
+                <StatPill label={copy.totalPageViews} value={visitor.totalPageViews} />
+                <StatPill
+                  label={copy.avgDuration}
+                  value={formatDuration(visitor.totalSessions ? Math.round(visitor.totalDurationMs / visitor.totalSessions) : null)}
+                />
+                <StatPill label={copy.lastSessionDuration} value={formatDuration(visitor.lastSessionDurationMs)} />
+                <StatPill label={copy.whatsappClicks} value={visitor.whatsappClicks} />
+                <StatPill label={copy.emailClicks} value={visitor.emailClicks} />
+                <StatPill label={copy.ctaClicks} value={visitor.ctaClicks} />
+                <StatPill label="pages/session" value={visitor.lastSessionPageCount ?? "-"} />
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="text-sm font-semibold text-slate-900">User agent</div>
               <div className="mt-2 break-all text-sm text-slate-600">{visitor.userAgent || "-"}</div>
             </div>
@@ -1200,6 +1254,27 @@ function VisitorDetailPanel({
                       <span>{formatDate(pageView.occurredAt, locale)}</span>
                       <span>{localeBadge(pageView.locale)}</span>
                       <span>{pageView.referrer || "-"}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-slate-500">{copy.noResults}</div>
+              )}
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">{copy.interactionHistory}</h3>
+              {visitor.interactions.length ? (
+                visitor.interactions.map((interaction, index) => (
+                  <div key={`${interaction.occurredAt}-${index}`} className="rounded-xl border border-slate-200 px-4 py-3 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="font-medium text-slate-800">{interaction.type}</span>
+                      <span className="text-xs text-slate-500">{formatDate(interaction.occurredAt, locale)}</span>
+                    </div>
+                    <div className="mt-2 break-all text-slate-600">{interaction.href || interaction.path}</div>
+                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
+                      <span>{interaction.label || "-"}</span>
+                      <span>{formatDuration(interaction.durationMs)}</span>
+                      <span>{interaction.pageCount ?? "-"}</span>
                     </div>
                   </div>
                 ))

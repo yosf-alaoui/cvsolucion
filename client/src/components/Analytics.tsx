@@ -3,6 +3,56 @@ import { useLocation } from "wouter";
 import { useI18n } from "@/i18n/i18n";
 import { useAuth } from "@/contexts/AuthContext";
 
+const SESSION_STORAGE_KEY = "cvs_visitor_session";
+
+function getSessionState() {
+  if (typeof window === "undefined") return null;
+  const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as { id: string; startedAt: number; pageCount: number; startedEventSent?: boolean };
+  } catch {
+    return null;
+  }
+}
+
+function setSessionState(value: { id: string; startedAt: number; pageCount: number; startedEventSent?: boolean }) {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(value));
+}
+
+function ensureSessionState() {
+  const existing = getSessionState();
+  if (existing) return existing;
+  const next = {
+    id: Math.random().toString(36).slice(2) + Date.now().toString(36),
+    startedAt: Date.now(),
+    pageCount: 0,
+    startedEventSent: false,
+  };
+  setSessionState(next);
+  return next;
+}
+
+function sendVisitorEvent(payload: Record<string, unknown>, preferBeacon = false) {
+  const body = JSON.stringify(payload);
+  if (preferBeacon && typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+    const blob = new Blob([body], { type: "application/json" });
+    navigator.sendBeacon("/api/visitor/event", blob);
+    return;
+  }
+
+  fetch("/api/visitor/event", {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body,
+    keepalive: preferBeacon,
+  }).catch(() => {});
+}
+
 /**
  * Optional analytics loader + first-party visitor tracking.
  *
@@ -125,6 +175,20 @@ export default function Analytics() {
     });
 
     const controller = new AbortController();
+    const session = ensureSessionState();
+    session.pageCount += 1;
+    setSessionState(session);
+
+    if (!session.startedEventSent) {
+      sendVisitorEvent({
+        type: "session_start",
+        path: window.location.pathname,
+        sessionId: session.id,
+      });
+      session.startedEventSent = true;
+      setSessionState(session);
+    }
+
     fetch("/api/visitor/track", {
       method: "POST",
       credentials: "include",
@@ -144,11 +208,68 @@ export default function Analytics() {
             ? `${window.screen?.width || 0}x${window.screen?.height || 0}`
             : null,
         userId: user?.id ?? null,
+        sessionId: session.id,
       }),
       signal: controller.signal,
     }).catch(() => {});
 
-    return () => controller.abort();
+    const clickHandler = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const link = target?.closest("a") as HTMLAnchorElement | null;
+      if (!link) return;
+      const href = link.href || "";
+      const label = (link.textContent || "").trim().slice(0, 140) || null;
+
+      if (/wa\.me|whatsapp/i.test(href)) {
+        sendVisitorEvent({
+          type: "whatsapp_click",
+          path: window.location.pathname,
+          href,
+          label,
+          sessionId: session.id,
+        });
+      } else if (href.startsWith("mailto:")) {
+        sendVisitorEvent({
+          type: "email_click",
+          path: window.location.pathname,
+          href,
+          label,
+          sessionId: session.id,
+        });
+      } else if (link.dataset.cta === "true" || link.getAttribute("data-track") === "cta") {
+        sendVisitorEvent({
+          type: "cta_click",
+          path: window.location.pathname,
+          href,
+          label,
+          sessionId: session.id,
+        });
+      }
+    };
+
+    const pageHideHandler = () => {
+      const current = getSessionState();
+      if (!current) return;
+      sendVisitorEvent(
+        {
+          type: "session_end",
+          path: window.location.pathname,
+          sessionId: current.id,
+          durationMs: Date.now() - current.startedAt,
+          pageCount: current.pageCount,
+        },
+        true
+      );
+    };
+
+    document.addEventListener("click", clickHandler, true);
+    window.addEventListener("pagehide", pageHideHandler);
+
+    return () => {
+      controller.abort();
+      document.removeEventListener("click", clickHandler, true);
+      window.removeEventListener("pagehide", pageHideHandler);
+    };
   }, [location, locale, user?.id]);
 
   return null;

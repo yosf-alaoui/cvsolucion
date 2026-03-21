@@ -58,6 +58,18 @@ export type AdminDashboardVisitorPageView = {
   title: string | null;
   referrer: string | null;
   occurredAt: string;
+  sessionId: string | null;
+};
+
+export type AdminDashboardVisitorInteraction = {
+  type: "session_start" | "session_end" | "whatsapp_click" | "email_click" | "cta_click";
+  path: string;
+  label: string | null;
+  href: string | null;
+  sessionId: string | null;
+  durationMs: number | null;
+  pageCount: number | null;
+  occurredAt: string;
 };
 
 export type AdminDashboardVisitor = {
@@ -85,7 +97,18 @@ export type AdminDashboardVisitor = {
   utmContent: string | null;
   gclid: string | null;
   fbclid: string | null;
+  totalSessions: number;
+  totalPageViews: number;
+  totalDurationMs: number;
+  lastSessionDurationMs: number | null;
+  lastSessionPageCount: number | null;
+  whatsappClicks: number;
+  emailClicks: number;
+  ctaClicks: number;
+  lastWhatsappClickAt: string | null;
+  lastEmailClickAt: string | null;
   pageViews: AdminDashboardVisitorPageView[];
+  interactions: AdminDashboardVisitorInteraction[];
 };
 
 export type AdminDashboardResponse = {

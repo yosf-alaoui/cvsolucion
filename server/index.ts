@@ -26,7 +26,7 @@ import {
 } from "./authStore";
 import { sendAuthEmail } from "./authMailer";
 import { normalizeAuthLocale, renderAuthEmailTemplate } from "./authEmailTemplates";
-import { createVisitorId, getVisitorsSnapshot, trackVisitor } from "./visitorStore";
+import { createVisitorId, getVisitorsSnapshot, trackVisitor, trackVisitorInteraction } from "./visitorStore";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -249,6 +249,7 @@ async function startServer() {
       visitorId,
       path: String(payload.path || "/"),
       search: typeof payload.search === "string" ? payload.search : "",
+      sessionId: typeof payload.sessionId === "string" ? payload.sessionId : null,
       locale: normalizeAuthLocale(String(payload.locale || "en")),
       title: typeof payload.title === "string" ? payload.title : null,
       referrer: typeof payload.referrer === "string" ? payload.referrer : null,
@@ -272,6 +273,33 @@ async function startServer() {
         isRegistered: visitor.isRegistered,
       },
     });
+  });
+
+  app.post("/api/visitor/event", rateLimit({ key: "visitor-event", windowMs: 1000 * 60, limit: 300 }), (req, res) => {
+    const cookies = parseCookies(req.headers.cookie);
+    const visitorId = cookies[VISITOR_COOKIE_NAME];
+    if (!visitorId) {
+      return res.json({ ok: true });
+    }
+
+    const payload = req.body || {};
+    const eventType = String(payload.type || "");
+    if (!["session_start", "session_end", "whatsapp_click", "email_click", "cta_click"].includes(eventType)) {
+      return res.status(400).json({ error: "Unsupported visitor event." });
+    }
+
+    const visitor = trackVisitorInteraction({
+      visitorId,
+      type: eventType as any,
+      path: String(payload.path || "/"),
+      label: typeof payload.label === "string" ? payload.label : null,
+      href: typeof payload.href === "string" ? payload.href : null,
+      sessionId: typeof payload.sessionId === "string" ? payload.sessionId : null,
+      durationMs: typeof payload.durationMs === "number" ? payload.durationMs : null,
+      pageCount: typeof payload.pageCount === "number" ? payload.pageCount : null,
+    });
+
+    return res.json({ ok: true, tracked: Boolean(visitor) });
   });
 
   app.post("/api/auth/signup", rateLimit({ key: "signup", windowMs: 1000 * 60 * 10, limit: 10 }), async (req, res, next) => {
