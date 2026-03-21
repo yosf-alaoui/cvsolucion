@@ -832,7 +832,7 @@ export default function AdminDashboard() {
                   </TabsContent>
 
                   <TabsContent value="visitors">
-                    <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                    <div className="grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
                       <VisitorsTable
                         copy={copy}
                         locale={locale}
@@ -1141,8 +1141,14 @@ function VisitorsTable({
             </TableHeader>
             <TableBody>
               {visitors.length ? (
-                visitors.map((visitor) => (
-                  <TableRow key={visitor.id}>
+                visitors.map((visitor) => {
+                  const isSelected = selectedVisitorId === visitor.id;
+                  return (
+                  <TableRow
+                    key={visitor.id}
+                    className={`cursor-pointer transition-colors ${isSelected ? "bg-primary/5" : "hover:bg-slate-50"}`}
+                    onClick={() => onSelect(visitor.id)}
+                  >
                     <TableCell className="font-medium">
                       <div>{visitor.email || visitor.ip || visitor.id.slice(0, 12)}</div>
                       <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
@@ -1158,12 +1164,20 @@ function VisitorsTable({
                     <TableCell>{visitor.deviceType}</TableCell>
                     <TableCell>{formatDate(visitor.lastSeenAt, locale)}</TableCell>
                     <TableCell>
-                      <Button type="button" size="sm" variant={selectedVisitorId === visitor.id ? "default" : "outline"} onClick={() => onSelect(visitor.id)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isSelected ? "default" : "outline"}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onSelect(visitor.id);
+                        }}
+                      >
                         {copy.select}
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))
+                )})
               ) : (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-slate-500">{copy.noResults}</TableCell>
