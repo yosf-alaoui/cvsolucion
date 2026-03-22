@@ -47,6 +47,7 @@ import {
   listAdminArticles,
   listPublishedArticles,
   saveArticleImage,
+  saveArticleImageBuffer,
   updateArticle,
 } from "./articleStore";
 
@@ -1078,15 +1079,33 @@ async function startServer() {
     return res.json({ articles });
   });
 
-  app.post("/api/admin/article-images", rateLimit({ key: "admin-article-images", windowMs: 1000 * 60 * 5, limit: 40 }), (req, res, next) => {
+  app.post(
+    "/api/admin/article-images",
+    express.raw({ type: ["image/png", "image/jpeg", "image/webp"], limit: "12mb" }),
+    rateLimit({ key: "admin-article-images", windowMs: 1000 * 60 * 5, limit: 40 }),
+    (req, res, next) => {
     try {
       const auth = requireAdmin(req, res);
       if (!auth) return;
 
+      const rawContentType = String(req.headers["content-type"] || "").trim().toLowerCase();
+      const binaryTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+
+      if (binaryTypes.has(rawContentType)) {
+        const rawFilename = String(req.headers["x-upload-filename"] || "").trim();
+        const filename = rawFilename ? decodeURIComponent(rawFilename) : "";
+        const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+        if (!buffer.length) {
+          return res.status(400).json({ error: "Image content is required." });
+        }
+
+        const image = saveArticleImageBuffer({ filename, contentType: rawContentType, buffer });
+        return res.json({ ok: true, image });
+      }
+
       const filename = String(req.body?.filename || "").trim();
       const contentType = String(req.body?.contentType || "").trim().toLowerCase();
       const base64 = String(req.body?.base64 || "").trim();
-
       if (!contentType || !base64) {
         return res.status(400).json({ error: "Image content is required." });
       }
@@ -1096,7 +1115,8 @@ async function startServer() {
     } catch (error) {
       return next(error);
     }
-  });
+    }
+  );
 
   app.post("/api/admin/articles", rateLimit({ key: "admin-articles-create", windowMs: 1000 * 60 * 5, limit: 40 }), (req, res, next) => {
     try {

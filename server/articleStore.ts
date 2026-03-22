@@ -172,11 +172,7 @@ function extensionFromMime(mime: string) {
   throw new Error("Unsupported image type. Use JPG, PNG, or WebP.");
 }
 
-export function saveArticleImage(input: {
-  filename?: string | null;
-  contentType: string;
-  base64: string;
-}) {
+function buildArticleImagePath(input: { filename?: string | null; contentType: string }) {
   ensureStorage();
   const extension = extensionFromMime(input.contentType);
   const safeBase = (input.filename || "article-image")
@@ -188,6 +184,15 @@ export function saveArticleImage(input: {
 
   const fileName = `${Date.now()}-${safeBase}-${randomId(4)}${extension}`;
   const filePath = path.join(ARTICLE_UPLOADS_DIR, fileName);
+  return { fileName, filePath };
+}
+
+export function saveArticleImage(input: {
+  filename?: string | null;
+  contentType: string;
+  base64: string;
+}) {
+  const { fileName, filePath } = buildArticleImagePath(input);
   const buffer = Buffer.from(input.base64, "base64");
 
   fs.writeFileSync(filePath, buffer);
@@ -198,3 +203,16 @@ export function saveArticleImage(input: {
   };
 }
 
+export function saveArticleImageBuffer(input: {
+  filename?: string | null;
+  contentType: string;
+  buffer: Buffer;
+}) {
+  const { fileName, filePath } = buildArticleImagePath(input);
+  fs.writeFileSync(filePath, input.buffer);
+
+  return {
+    url: `/uploads/articles/${fileName}`,
+    fileName,
+  };
+}
