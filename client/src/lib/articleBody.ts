@@ -30,6 +30,18 @@ function renderInlineMarkup(value: string) {
   return html;
 }
 
+function isLikelyHeading(text: string) {
+  const value = text.trim();
+  if (!value || value.length > 90) return false;
+  if (/[.!?]$/.test(value)) return false;
+
+  const words = value.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 12) return false;
+
+  const capitalizedWords = words.filter((word) => /^[A-Z"'(][A-Za-z0-9"'():-]*/.test(word)).length;
+  return capitalizedWords >= Math.max(2, Math.ceil(words.length * 0.5));
+}
+
 export function markdownishToHtml(body: string) {
   const blocks = normalizePastedText(body)
     .split(/\n\s*\n/)
@@ -42,10 +54,15 @@ export function markdownishToHtml(body: string) {
       const heading = block.match(/^(#{1,6})\s+(.+)$/);
       const isBulletList = lines.every((line) => /^[-*•]\s+/.test(line));
       const isNumberedList = lines.every((line) => /^\d+\.\s+/.test(line));
+      const inferredHeading = lines.length === 1 && isLikelyHeading(block);
 
       if (heading) {
         const level = Math.min(heading[1].length, 6);
         return `<h${level}>${renderInlineMarkup(heading[2])}</h${level}>`;
+      }
+
+      if (inferredHeading) {
+        return `<h2>${renderInlineMarkup(block)}</h2>`;
       }
 
       if (isBulletList) {
@@ -63,39 +80,92 @@ export function markdownishToHtml(body: string) {
     .join("");
 }
 
+const ALLOWED_BLOCK_TAGS = new Set(["P", "UL", "OL", "LI", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
+const INLINE_TAGS = new Set(["STRONG", "B", "EM", "I", "A", "BR", "SPAN"]);
+const BLOCK_CONTAINER_TAGS = new Set(["DIV", "SECTION", "ARTICLE", "MAIN", "HEADER", "FOOTER", "ASIDE", "FIGURE", "FIGCAPTION"]);
+
+function sanitizeInlineNode(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return escapeHtml(node.textContent || "");
+  }
+
+  if (!(node instanceof HTMLElement)) {
+    return "";
+  }
+
+  if (node.tagName === "BR") {
+    return "<br>";
+  }
+
+  if (node.tagName === "A") {
+    const href = node.getAttribute("href") || "";
+    const safeHref = /^https?:\/\//i.test(href) ? escapeHtml(href) : "";
+    const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("");
+    if (!content.trim()) return "";
+    if (!safeHref) return content;
+    return `<a href="${safeHref}" target="_blank" rel="noreferrer">${content}</a>`;
+  }
+
+  if (node.tagName === "STRONG" || node.tagName === "B") {
+    const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("");
+    return content.trim() ? `<strong>${content}</strong>` : "";
+  }
+
+  if (node.tagName === "EM" || node.tagName === "I") {
+    const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("");
+    return content.trim() ? `<em>${content}</em>` : "";
+  }
+
+  return Array.from(node.childNodes).map(sanitizeInlineNode).join("");
+}
+
 export function sanitizeArticleHtml(input: string) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(input, "text/html");
-  const allowed = new Set(["P", "BR", "STRONG", "B", "EM", "I", "A", "UL", "OL", "LI", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
 
   const sanitizeNode = (node: Node): string => {
     if (node.nodeType === Node.TEXT_NODE) {
-      return escapeHtml(node.textContent || "");
+      const text = node.textContent?.trim() || "";
+      return text ? `<p>${escapeHtml(text)}</p>` : "";
     }
 
     if (!(node instanceof HTMLElement)) {
       return "";
     }
 
-    if (!allowed.has(node.tagName)) {
-      return Array.from(node.childNodes).map(sanitizeNode).join("");
+    if (INLINE_TAGS.has(node.tagName)) {
+      const inlineContent = sanitizeInlineNode(node).trim();
+      return inlineContent ? `<p>${inlineContent}</p>` : "";
     }
 
-    if (node.tagName === "BR") {
-      return "<br>";
+    if (ALLOWED_BLOCK_TAGS.has(node.tagName)) {
+      const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("").trim();
+      if (!content) return "";
+      const tag = node.tagName.toLowerCase();
+      return `<${tag}>${content}</${tag}>`;
     }
 
-    if (node.tagName === "A") {
-      const href = node.getAttribute("href") || "";
-      const safeHref = /^https?:\/\//i.test(href) ? escapeHtml(href) : "";
-      const content = Array.from(node.childNodes).map(sanitizeNode).join("");
-      if (!safeHref || !content.trim()) return content;
-      return `<a href="${safeHref}" target="_blank" rel="noreferrer">${content}</a>`;
+    if (BLOCK_CONTAINER_TAGS.has(node.tagName)) {
+      const hasNestedBlocks = Array.from(node.children).some(
+        (child) => ALLOWED_BLOCK_TAGS.has(child.tagName) || BLOCK_CONTAINER_TAGS.has(child.tagName)
+      );
+
+      if (hasNestedBlocks) {
+        return Array.from(node.childNodes).map(sanitizeNode).join("");
+      }
+
+      const inlineContent = Array.from(node.childNodes).map(sanitizeInlineNode).join("").trim();
+      if (!inlineContent) return "";
+
+      const plainText = node.textContent?.replace(/\s+/g, " ").trim() || "";
+      if (isLikelyHeading(plainText) && !/<a\b/i.test(inlineContent)) {
+        return `<h2>${inlineContent}</h2>`;
+      }
+
+      return `<p>${inlineContent}</p>`;
     }
 
-    const content = Array.from(node.childNodes).map(sanitizeNode).join("");
-    const tag = node.tagName.toLowerCase();
-    return `<${tag}>${content}</${tag}>`;
+    return Array.from(node.childNodes).map(sanitizeNode).join("");
   };
 
   return Array.from(doc.body.childNodes).map(sanitizeNode).join("").trim();
