@@ -31,9 +31,11 @@ import { getGa4DashboardSnapshot } from "./ga4Reporting";
 import { generateAssistantReply, isChatEnabled } from "./chatAssistant";
 import {
   appendConversationMessage,
+  createConversation,
   getConversationById,
   getConversationMessages,
   getConversationsSnapshot,
+  saveConversationSupportIntake,
   updateConversationMeta,
   upsertConversationForVisitor,
 } from "./chatStore";
@@ -381,12 +383,76 @@ async function startServer() {
       isNew,
       conversation: {
         id: conversation.id,
+        email: conversation.email,
         locale: conversation.locale,
         assistantName: conversation.assistantName,
         status: conversation.status,
         title: conversation.title,
         messages: conversation.messages,
         leadScore: conversation.leadScore,
+        supportFormRequired: conversation.supportFormRequired,
+        supportIntake: conversation.supportIntake,
+      },
+    });
+  });
+
+  app.post("/api/chat/new-session", rateLimit({ key: "chat-new-session", windowMs: 1000 * 60 * 10, limit: 40 }), (req, res) => {
+    const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+    const pathValue = typeof req.body?.path === "string" ? req.body.path : req.path;
+    const auth = getCurrentUser(req);
+    const visitorId = getOrCreateRequestVisitor(req, res);
+    const visitor =
+      getVisitorById(visitorId) ??
+      trackVisitor({
+        visitorId,
+        path: pathValue,
+        search: "",
+        sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
+        locale,
+        title: null,
+        referrer: req.get("referer") || null,
+        ip: getRequestIp(req),
+        userAgent: req.get("user-agent") || null,
+        browserLanguage: null,
+        timezone: null,
+        screen: null,
+        userId: auth?.user?.id ?? null,
+        email: auth?.user?.email ?? null,
+      });
+
+    const conversation = createConversation({
+      visitorId,
+      userId: auth?.user?.id ?? null,
+      email: auth?.user?.email ?? null,
+      locale,
+      path: pathValue,
+      visitor,
+    });
+
+    trackVisitorInteraction({
+      visitorId,
+      type: "chat_open",
+      path: pathValue,
+      label: "chat_widget_new_session",
+      href: null,
+      sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
+    });
+
+    return res.json({
+      ok: true,
+      enabled: isChatEnabled(),
+      isNew: true,
+      conversation: {
+        id: conversation.id,
+        email: conversation.email,
+        locale: conversation.locale,
+        assistantName: conversation.assistantName,
+        status: conversation.status,
+        title: conversation.title,
+        messages: conversation.messages,
+        leadScore: conversation.leadScore,
+        supportFormRequired: conversation.supportFormRequired,
+        supportIntake: conversation.supportIntake,
       },
     });
   });
@@ -397,7 +463,7 @@ async function startServer() {
     const rawMessage = String(req.body?.message || "").trim();
     const conversationId = String(req.body?.conversationId || "").trim();
 
-    if (!rawMessage || rawMessage.length < 2) {
+    if (!rawMessage) {
       return res.status(400).json({ error: "Message is required." });
     }
     if (rawMessage.length > 2000) {
@@ -465,6 +531,7 @@ async function startServer() {
     let assistantText = getChatFallback(locale);
     let responseId: string | null = null;
     let status: "open" | "waiting_client" | "needs_human" = "open";
+    let supportFormRequired = conversation.supportFormRequired;
 
     if (isChatEnabled()) {
       try {
@@ -478,6 +545,7 @@ async function startServer() {
         assistantText = reply.text;
         responseId = reply.responseId;
         status = reply.status;
+        supportFormRequired = reply.supportFormRequired;
       } catch (error) {
         console.error("[chat-assistant]", error);
         status = "needs_human";
@@ -498,6 +566,7 @@ async function startServer() {
       status,
       path: pathValue,
       visitor,
+      supportFormRequired,
     });
 
     return res.json({
@@ -506,12 +575,93 @@ async function startServer() {
       isNew: false,
       conversation: {
         id: updatedConversation.id,
+        email: updatedConversation.email,
         locale: updatedConversation.locale,
         assistantName: updatedConversation.assistantName,
         status: updatedConversation.status,
         title: updatedConversation.title,
         leadScore: updatedConversation.leadScore,
         messages: updatedConversation.messages,
+        supportFormRequired: updatedConversation.supportFormRequired,
+        supportIntake: updatedConversation.supportIntake,
+      },
+    });
+  });
+
+  app.post("/api/chat/support-intake", rateLimit({ key: "chat-support-intake", windowMs: 1000 * 60 * 10, limit: 40 }), (req, res) => {
+    const conversationId = String(req.body?.conversationId || "").trim();
+    const phone = String(req.body?.phone || "").trim();
+    const email = String(req.body?.email || "").trim();
+    const cabinetVisionVersion = String(req.body?.cabinetVisionVersion || "").trim();
+    const country = String(req.body?.country || "").trim();
+    const deviceCount = String(req.body?.deviceCount || "").trim();
+    const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+    const pathValue = typeof req.body?.path === "string" ? req.body.path : "/";
+
+    if (!conversationId) {
+      return res.status(400).json({ error: "Conversation is required." });
+    }
+    if (!phone || !email || !cabinetVisionVersion || !country || !deviceCount) {
+      return res.status(400).json({ error: "All support fields are required." });
+    }
+    if (!EMAIL_REGEX.test(email)) {
+      return res.status(400).json({ error: "Valid email is required." });
+    }
+
+    const auth = getCurrentUser(req);
+    const visitorId = getOrCreateRequestVisitor(req, res);
+    const visitor = getVisitorById(visitorId);
+    const conversation = getConversationById(conversationId);
+
+    if (!conversation || conversation.visitorId !== visitorId) {
+      return res.status(403).json({ error: "Conversation access denied." });
+    }
+    if (auth?.user?.id && conversation.userId && conversation.userId !== auth.user.id) {
+      return res.status(403).json({ error: "Conversation access denied." });
+    }
+
+    const updatedConversation = saveConversationSupportIntake({
+      conversationId,
+      phone,
+      email,
+      cabinetVisionVersion,
+      country,
+      deviceCount,
+      visitor,
+    });
+
+    const confirmation =
+      locale === "fr"
+        ? "Merci. Les informations sont recues. Un membre de l'equipe reviendra vers vous."
+        : locale === "ar"
+          ? "شكرًا. تم استلام المعلومات، وسيتواصل معك أحد أفراد الفريق."
+          : "Thanks. Your details are received, and a team member will follow up.";
+
+    appendConversationMessage({
+      conversationId,
+      role: "assistant",
+      content: confirmation,
+      path: pathValue,
+      visitor,
+    });
+
+    const finalConversation = getConversationById(conversationId)!;
+
+    return res.json({
+      ok: true,
+      enabled: isChatEnabled(),
+      isNew: false,
+      conversation: {
+        id: finalConversation.id,
+        email: finalConversation.email,
+        locale: finalConversation.locale,
+        assistantName: finalConversation.assistantName,
+        status: finalConversation.status,
+        title: finalConversation.title,
+        leadScore: finalConversation.leadScore,
+        messages: finalConversation.messages,
+        supportFormRequired: finalConversation.supportFormRequired,
+        supportIntake: finalConversation.supportIntake,
       },
     });
   });

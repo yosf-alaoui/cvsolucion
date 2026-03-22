@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronDown, LoaderCircle, MessageCircleMore, Send, UserRound } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
-import { openChatSession, sendChatMessage, type ChatConversation, type ChatMessage } from "@/lib/chat";
+import { openChatSession, sendChatMessage, startNewChatSession, submitSupportIntake, type ChatConversation, type ChatMessage } from "@/lib/chat";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,9 +40,18 @@ export default function ChatWidget() {
   const [introVisibleCount, setIntroVisibleCount] = useState<number | null>(null);
   const [showAgentCard, setShowAgentCard] = useState(false);
   const [inputLocked, setInputLocked] = useState(false);
+  const [supportBusy, setSupportBusy] = useState(false);
+  const [supportForm, setSupportForm] = useState({
+    phone: "",
+    email: "",
+    cabinetVisionVersion: "",
+    country: "",
+    deviceCount: "",
+  });
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const introTimersRef = useRef<number[]>([]);
   const replyTypingTimerRef = useRef<number | null>(null);
+  const sendingRef = useRef(false);
 
   function clearIntroTimers() {
     introTimersRef.current.forEach((timer) => window.clearTimeout(timer));
@@ -64,8 +73,17 @@ export default function ChatWidget() {
         placeholder: "Ecrivez votre question...",
         empty: "Commencez ici.",
         error: "Impossible de charger le chat.",
+        formError: "Merci de remplir tous les champs.",
         typing: "ecrit...",
         locked: "Attendez un instant...",
+        supportTitle: "Details support",
+        phone: "Telephone",
+        email: "Email",
+        cvVersion: "Version CABINET VISION",
+        country: "Pays",
+        deviceCount: "Nombre de postes",
+        submitSupport: "Envoyer",
+        newChat: "Nouveau chat",
       };
     }
 
@@ -76,8 +94,17 @@ export default function ChatWidget() {
         placeholder: "اكتب سؤالك هنا...",
         empty: "ابدأ من هنا.",
         error: "تعذر تحميل الدردشة.",
+        formError: "يرجى تعبئة جميع الخانات.",
         typing: "يكتب الآن...",
         locked: "انتظر قليلًا...",
+        supportTitle: "بيانات الدعم",
+        phone: "رقم الهاتف",
+        email: "البريد الإلكتروني",
+        cvVersion: "إصدار CABINET VISION",
+        country: "الدولة",
+        deviceCount: "كم جهاز",
+        submitSupport: "إرسال",
+        newChat: "محادثة جديدة",
       };
     }
 
@@ -87,8 +114,17 @@ export default function ChatWidget() {
       placeholder: "Type your question...",
       empty: "Start here.",
       error: "Failed to load the chat.",
+      formError: "Please fill all fields.",
       typing: "is typing...",
       locked: "Please wait...",
+      supportTitle: "Support details",
+      phone: "Phone number",
+      email: "Email",
+      cvVersion: "CABINET VISION version",
+      country: "Country",
+      deviceCount: "How many devices",
+      submitSupport: "Submit",
+      newChat: "New chat",
     };
   }, [locale]);
 
@@ -100,6 +136,26 @@ export default function ChatWidget() {
       clearReplyTypingTimer();
     };
   }, []);
+
+  useEffect(() => {
+    if (conversation?.supportIntake) {
+      setSupportForm({
+        phone: conversation.supportIntake.phone || "",
+        email: conversation.supportIntake.email || "",
+        cabinetVisionVersion: conversation.supportIntake.cabinetVisionVersion || "",
+        country: conversation.supportIntake.country || "",
+        deviceCount: conversation.supportIntake.deviceCount || "",
+      });
+      return;
+    }
+
+    if (conversation?.email) {
+      setSupportForm((current) => ({
+        ...current,
+        email: current.email || conversation.email || "",
+      }));
+    }
+  }, [conversation?.supportIntake, conversation?.email]);
 
   useEffect(() => {
     if (!open || hidden) return;
@@ -157,9 +213,10 @@ export default function ChatWidget() {
 
   async function handleSend(message: string) {
     const content = message.trim();
-    if (!content || busy) return;
+    if (!content || busy || sendingRef.current) return;
 
     try {
+      sendingRef.current = true;
       setBusy(true);
       setTyping(false);
       setError(null);
@@ -209,7 +266,101 @@ export default function ChatWidget() {
       clearReplyTypingTimer();
       setError(err?.message || copy.error);
     } finally {
+      sendingRef.current = false;
       setTyping(false);
+      setBusy(false);
+    }
+  }
+
+  async function handleSupportSubmit() {
+    if (!conversation || supportBusy) return;
+
+    if (
+      !supportForm.phone.trim() ||
+      !supportForm.email.trim() ||
+      !supportForm.cabinetVisionVersion.trim() ||
+      !supportForm.country.trim() ||
+      !supportForm.deviceCount.trim()
+    ) {
+      setError(copy.formError);
+      return;
+    }
+
+    try {
+      setSupportBusy(true);
+      setError(null);
+
+      const payload = await submitSupportIntake({
+        conversationId: conversation.id,
+        locale,
+        path: window.location.pathname + window.location.search + window.location.hash,
+        phone: supportForm.phone,
+        email: supportForm.email,
+        cabinetVisionVersion: supportForm.cabinetVisionVersion,
+        country: supportForm.country,
+        deviceCount: supportForm.deviceCount,
+      });
+
+      setConversation(payload.conversation);
+      setTyping(false);
+      setInputLocked(false);
+    } catch (err: any) {
+      setError(err?.message || copy.error);
+    } finally {
+      setSupportBusy(false);
+    }
+  }
+
+  async function handleNewChat() {
+    try {
+      setBusy(true);
+      setTyping(false);
+      setError(null);
+      clearIntroTimers();
+      clearReplyTypingTimer();
+      setShowAgentCard(false);
+      setInputLocked(false);
+      setDraft("");
+      setSupportForm({
+        phone: "",
+        email: conversation?.email || "",
+        cabinetVisionVersion: "",
+        country: "",
+        deviceCount: "",
+      });
+
+      const payload = await startNewChatSession({
+        locale,
+        path: window.location.pathname + window.location.search + window.location.hash,
+        sessionId: getSessionId(),
+      });
+
+      setConversation(payload.conversation);
+      setIntroVisibleCount(1);
+      setInputLocked(true);
+
+      const agentDelay = window.setTimeout(() => {
+        setShowAgentCard(true);
+      }, 7000);
+
+      const typingDelay = window.setTimeout(() => {
+        setTyping(true);
+      }, 9000);
+
+      const revealDelay = window.setTimeout(() => {
+        setIntroVisibleCount(2);
+      }, 14000);
+
+      const doneDelay = window.setTimeout(() => {
+        setTyping(false);
+        setIntroVisibleCount(null);
+        setInputLocked(false);
+      }, 14600);
+
+      introTimersRef.current = [agentDelay, typingDelay, revealDelay, doneDelay];
+    } catch (err: any) {
+      setError(err?.message || copy.error);
+    } finally {
       setBusy(false);
     }
   }
@@ -223,7 +374,7 @@ export default function ChatWidget() {
   useEffect(() => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [visibleMessages.length, open, typing, showAgentCard]);
+  }, [visibleMessages.length, open, typing, showAgentCard, conversation?.supportFormRequired]);
 
   if (hidden) return null;
 
@@ -243,65 +394,116 @@ export default function ChatWidget() {
           <Card className="w-[calc(100vw-2rem)] max-w-[300px] overflow-hidden rounded-[24px] border-slate-200 bg-white shadow-2xl">
             <div ref={scrollRef} className="h-[320px] overflow-y-auto px-3 pb-3 pt-3">
               <div className="space-y-3">
-              {showAgentCard && conversation?.assistantName ? (
-                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1d3278] text-white">
-                    <UserRound className="h-5 w-5" />
+                {showAgentCard && conversation?.assistantName ? (
+                  <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1d3278] text-white">
+                      <UserRound className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-800">{conversation.assistantName}</div>
+                      <div className="text-[11px] text-slate-500">{copy.waiting}</div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-slate-800">{conversation.assistantName}</div>
-                    <div className="text-[11px] text-slate-500">{copy.waiting}</div>
-                  </div>
-                </div>
-              ) : null}
+                ) : null}
 
-              {!visibleMessages.length ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                  {copy.empty}
-                </div>
-              ) : null}
+                {!visibleMessages.length ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                    {copy.empty}
+                  </div>
+                ) : null}
 
-              {visibleMessages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`max-w-[86%] rounded-2xl px-3.5 py-3 text-sm leading-6 ${
-                    message.role === "assistant"
-                      ? "bg-slate-100 text-slate-800"
-                      : "ms-auto bg-[#1d3278] text-white"
-                  }`}
-                >
-                  <div className="whitespace-pre-wrap">{message.content}</div>
-                  <div className={`mt-2 text-[11px] ${message.role === "assistant" ? "text-slate-400" : "text-white/65"}`}>
-                    {formatTime(message.createdAt, locale)}
+                {visibleMessages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`max-w-[86%] rounded-2xl px-3.5 py-3 text-sm leading-6 ${
+                      message.role === "assistant" ? "bg-slate-100 text-slate-800" : "ms-auto bg-[#1d3278] text-white"
+                    }`}
+                  >
+                    <div className="whitespace-pre-wrap">{message.content}</div>
+                    <div className={`mt-2 text-[11px] ${message.role === "assistant" ? "text-slate-400" : "text-white/65"}`}>
+                      {formatTime(message.createdAt, locale)}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
 
-              {typing ? (
-                <div className="max-w-[72%] rounded-2xl bg-slate-100 px-3.5 py-3 text-slate-500">
-                  <div className="mb-2 text-[11px] text-slate-400">
-                    {conversation?.assistantName ? `${conversation.assistantName} ${copy.typing}` : copy.typing}
+                {typing ? (
+                  <div className="max-w-[72%] rounded-2xl bg-slate-100 px-3.5 py-3 text-slate-500">
+                    <div className="mb-2 text-[11px] text-slate-400">
+                      {conversation?.assistantName ? `${conversation.assistantName} ${copy.typing}` : copy.typing}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400" />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400" />
+                ) : null}
+
+                {conversation?.supportFormRequired ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="mb-3 text-sm font-semibold text-slate-800">{copy.supportTitle}</div>
+                    <div className="grid gap-2">
+                      <input
+                        value={supportForm.phone}
+                        onChange={(event) => setSupportForm((current) => ({ ...current, phone: event.target.value }))}
+                        placeholder={copy.phone}
+                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#1d3278]"
+                      />
+                      <input
+                        value={supportForm.email}
+                        onChange={(event) => setSupportForm((current) => ({ ...current, email: event.target.value }))}
+                        placeholder={copy.email}
+                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#1d3278]"
+                      />
+                      <input
+                        value={supportForm.cabinetVisionVersion}
+                        onChange={(event) =>
+                          setSupportForm((current) => ({ ...current, cabinetVisionVersion: event.target.value }))
+                        }
+                        placeholder={copy.cvVersion}
+                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#1d3278]"
+                      />
+                      <input
+                        value={supportForm.country}
+                        onChange={(event) => setSupportForm((current) => ({ ...current, country: event.target.value }))}
+                        placeholder={copy.country}
+                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#1d3278]"
+                      />
+                      <input
+                        value={supportForm.deviceCount}
+                        onChange={(event) => setSupportForm((current) => ({ ...current, deviceCount: event.target.value }))}
+                        placeholder={copy.deviceCount}
+                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#1d3278]"
+                      />
+                      <Button type="button" className="mt-1 h-10 rounded-xl" disabled={supportBusy} onClick={() => void handleSupportSubmit()}>
+                        {supportBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : copy.submitSupport}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
               </div>
             </div>
 
             <div className="border-t border-slate-100 bg-white px-3 py-3">
               {error ? <div className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div> : null}
+              <div className="mb-3 flex justify-end">
+                <button
+                  type="button"
+                  className="text-xs font-medium text-[#1d3278] transition hover:opacity-80"
+                  onClick={() => void handleNewChat()}
+                  disabled={busy || supportBusy}
+                >
+                  {copy.newChat}
+                </button>
+              </div>
               <div className="flex items-end gap-3">
                 <Textarea
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
-                  placeholder={inputLocked ? copy.locked : copy.placeholder}
+                  placeholder={inputLocked || conversation?.supportFormRequired ? copy.locked : copy.placeholder}
                   className="min-h-[50px] resize-none rounded-2xl border-slate-200 text-sm"
                   rows={2}
-                  disabled={inputLocked}
+                  disabled={inputLocked || conversation?.supportFormRequired}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
@@ -312,7 +514,7 @@ export default function ChatWidget() {
                 <Button
                   type="button"
                   className="h-11 w-11 rounded-2xl px-0"
-                  disabled={busy || inputLocked || !draft.trim()}
+                  disabled={busy || inputLocked || conversation?.supportFormRequired || !draft.trim()}
                   onClick={() => void handleSend(draft)}
                 >
                   {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

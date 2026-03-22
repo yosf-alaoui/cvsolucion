@@ -158,6 +158,20 @@ export default function ConversationsPanel({
                 </div>
               </div>
 
+              {selected.supportIntake ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm font-semibold text-slate-900">{copy.supportDetails || "Support details"}</div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <StatPill label={copy.phone || "Phone"} value={selected.supportIntake.phone} />
+                    <StatPill label={copy.email} value={selected.supportIntake.email} />
+                    <StatPill label={copy.cvVersion || "CV version"} value={selected.supportIntake.cabinetVisionVersion} />
+                    <StatPill label={copy.country || "Country"} value={selected.supportIntake.country} />
+                    <StatPill label={copy.deviceCount || "Devices"} value={selected.supportIntake.deviceCount} />
+                    <StatPill label={copy.submittedAt || "Submitted"} value={formatDate(selected.supportIntake.submittedAt, locale)} />
+                  </div>
+                </div>
+              ) : null}
+
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-slate-900">{copy.messages}</h3>
                 {selected.messages.length ? (

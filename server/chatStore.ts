@@ -14,6 +14,15 @@ export type ChatMessageRecord = {
 
 export type ChatConversationStatus = "open" | "waiting_client" | "needs_human";
 
+export type ChatSupportIntake = {
+  phone: string;
+  email: string;
+  cabinetVisionVersion: string;
+  country: string;
+  deviceCount: string;
+  submittedAt: string;
+};
+
 export type ChatConversationRecord = {
   id: string;
   visitorId: string;
@@ -30,6 +39,8 @@ export type ChatConversationRecord = {
   latestResponseId: string | null;
   messageCount: number;
   leadScore: number;
+  supportFormRequired: boolean;
+  supportIntake: ChatSupportIntake | null;
   messages: ChatMessageRecord[];
 };
 
@@ -52,6 +63,8 @@ export type ChatConversationSnapshot = {
   latestResponseId: string | null;
   messageCount: number;
   leadScore: number;
+  supportFormRequired: boolean;
+  supportIntake: ChatSupportIntake | null;
   messages: ChatMessageRecord[];
   visitor: {
     id: string;
@@ -237,6 +250,8 @@ export function createConversation(input: {
     latestResponseId: null,
     messageCount: 0,
     leadScore: 0,
+    supportFormRequired: false,
+    supportIntake: null,
     messages: [],
   };
 
@@ -324,6 +339,7 @@ export function updateConversationMeta(input: {
   status?: ChatConversationStatus;
   path?: string | null;
   visitor?: VisitorRecord | null;
+  supportFormRequired?: boolean;
 }) {
   const db = loadDb();
   const conversation = db.conversations.find((item) => item.id === input.conversationId);
@@ -339,6 +355,41 @@ export function updateConversationMeta(input: {
   if (typeof input.status !== "undefined") {
     conversation.status = input.status;
   }
+  if (typeof input.supportFormRequired !== "undefined") {
+    conversation.supportFormRequired = input.supportFormRequired;
+  }
+  conversation.leadScore = computeLeadScore(conversation, input.visitor);
+  saveDb(db);
+  return conversation;
+}
+
+export function saveConversationSupportIntake(input: {
+  conversationId: string;
+  phone: string;
+  email: string;
+  cabinetVisionVersion: string;
+  country: string;
+  deviceCount: string;
+  visitor?: VisitorRecord | null;
+}) {
+  const db = loadDb();
+  const conversation = db.conversations.find((item) => item.id === input.conversationId);
+  if (!conversation) {
+    throw new Error("Conversation not found.");
+  }
+
+  conversation.supportIntake = {
+    phone: input.phone.trim(),
+    email: input.email.trim(),
+    cabinetVisionVersion: input.cabinetVisionVersion.trim(),
+    country: input.country.trim(),
+    deviceCount: input.deviceCount.trim(),
+    submittedAt: nowIso(),
+  };
+  conversation.email = input.email.trim();
+  conversation.supportFormRequired = false;
+  conversation.status = "needs_human";
+  conversation.updatedAt = nowIso();
   conversation.leadScore = computeLeadScore(conversation, input.visitor);
   saveDb(db);
   return conversation;

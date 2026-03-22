@@ -143,6 +143,15 @@ export type AdminDashboardConversation = {
   latestResponseId: string | null;
   messageCount: number;
   leadScore: number;
+  supportFormRequired: boolean;
+  supportIntake: {
+    phone: string;
+    email: string;
+    cabinetVisionVersion: string;
+    country: string;
+    deviceCount: string;
+    submittedAt: string;
+  } | null;
   messages: AdminDashboardConversationMessage[];
   visitor: {
     id: string;
