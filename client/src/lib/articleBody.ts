@@ -84,6 +84,76 @@ const ALLOWED_BLOCK_TAGS = new Set(["P", "UL", "OL", "LI", "BLOCKQUOTE", "H1", "
 const INLINE_TAGS = new Set(["STRONG", "B", "EM", "I", "A", "BR", "SPAN"]);
 const BLOCK_CONTAINER_TAGS = new Set(["DIV", "SECTION", "ARTICLE", "MAIN", "HEADER", "FOOTER", "ASIDE", "FIGURE", "FIGCAPTION"]);
 
+function sanitizeStyleValue(property: string, value: string) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (!normalized) return "";
+
+  if (property === "font-family") {
+    return /^[a-z0-9"' ,_-]+$/i.test(normalized) ? normalized : "";
+  }
+
+  if (property === "font-size" || property === "margin-top" || property === "margin-bottom" || property === "letter-spacing") {
+    return /^-?\d+(?:\.\d+)?(px|em|rem|%)$/i.test(normalized) ? normalized : "";
+  }
+
+  if (property === "line-height") {
+    return /^(normal|-?\d+(?:\.\d+)?(?:px|em|rem|%)?)$/i.test(normalized) ? normalized : "";
+  }
+
+  if (property === "font-weight") {
+    return /^(normal|bold|[1-9]00)$/i.test(normalized) ? normalized : "";
+  }
+
+  if (property === "font-style") {
+    return /^(normal|italic|oblique)$/i.test(normalized) ? normalized : "";
+  }
+
+  if (property === "text-align") {
+    return /^(left|right|center|justify|start|end)$/i.test(normalized) ? normalized : "";
+  }
+
+  if (property === "text-decoration") {
+    return /^(none|underline|line-through|overline)(\s+(solid|double|dotted|dashed|wavy))?$/i.test(normalized) ? normalized : "";
+  }
+
+  return "";
+}
+
+function sanitizeStyleAttribute(node: HTMLElement) {
+  const rawStyle = node.getAttribute("style") || "";
+  if (!rawStyle.trim()) return "";
+
+  const allowedProperties = new Set([
+    "font-family",
+    "font-size",
+    "line-height",
+    "font-weight",
+    "font-style",
+    "text-align",
+    "text-decoration",
+    "margin-top",
+    "margin-bottom",
+    "letter-spacing",
+  ]);
+
+  const sanitizedRules = rawStyle
+    .split(";")
+    .map((rule) => rule.trim())
+    .filter(Boolean)
+    .map((rule) => {
+      const separatorIndex = rule.indexOf(":");
+      if (separatorIndex === -1) return "";
+      const property = rule.slice(0, separatorIndex).trim().toLowerCase();
+      const value = rule.slice(separatorIndex + 1).trim();
+      if (!allowedProperties.has(property)) return "";
+      const safeValue = sanitizeStyleValue(property, value);
+      return safeValue ? `${property}: ${safeValue}` : "";
+    })
+    .filter(Boolean);
+
+  return sanitizedRules.length ? ` style="${escapeHtml(sanitizedRules.join("; "))}"` : "";
+}
+
 function sanitizeInlineNode(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) {
     return escapeHtml(node.textContent || "");
@@ -101,19 +171,22 @@ function sanitizeInlineNode(node: Node): string {
     const href = node.getAttribute("href") || "";
     const safeHref = /^https?:\/\//i.test(href) ? escapeHtml(href) : "";
     const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("");
+    const style = sanitizeStyleAttribute(node);
     if (!content.trim()) return "";
     if (!safeHref) return content;
-    return `<a href="${safeHref}" target="_blank" rel="noreferrer">${content}</a>`;
+    return `<a href="${safeHref}" target="_blank" rel="noreferrer"${style}>${content}</a>`;
   }
 
   if (node.tagName === "STRONG" || node.tagName === "B") {
     const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("");
-    return content.trim() ? `<strong>${content}</strong>` : "";
+    const style = sanitizeStyleAttribute(node);
+    return content.trim() ? `<strong${style}>${content}</strong>` : "";
   }
 
   if (node.tagName === "EM" || node.tagName === "I") {
     const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("");
-    return content.trim() ? `<em>${content}</em>` : "";
+    const style = sanitizeStyleAttribute(node);
+    return content.trim() ? `<em${style}>${content}</em>` : "";
   }
 
   return Array.from(node.childNodes).map(sanitizeInlineNode).join("");
@@ -142,7 +215,8 @@ export function sanitizeArticleHtml(input: string) {
       const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("").trim();
       if (!content) return "";
       const tag = node.tagName.toLowerCase();
-      return `<${tag}>${content}</${tag}>`;
+      const style = sanitizeStyleAttribute(node);
+      return `<${tag}${style}>${content}</${tag}>`;
     }
 
     if (BLOCK_CONTAINER_TAGS.has(node.tagName)) {
@@ -156,13 +230,14 @@ export function sanitizeArticleHtml(input: string) {
 
       const inlineContent = Array.from(node.childNodes).map(sanitizeInlineNode).join("").trim();
       if (!inlineContent) return "";
+      const style = sanitizeStyleAttribute(node);
 
       const plainText = node.textContent?.replace(/\s+/g, " ").trim() || "";
       if (isLikelyHeading(plainText) && !/<a\b/i.test(inlineContent)) {
-        return `<h2>${inlineContent}</h2>`;
+        return `<h2${style}>${inlineContent}</h2>`;
       }
 
-      return `<p>${inlineContent}</p>`;
+      return `<p${style}>${inlineContent}</p>`;
     }
 
     return Array.from(node.childNodes).map(sanitizeNode).join("");
