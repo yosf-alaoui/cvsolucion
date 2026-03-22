@@ -67,27 +67,29 @@ export default function Articles() {
           {loading ? (
             <div className="mt-12 text-center text-sm text-slate-500">Loading...</div>
           ) : articles.length ? (
-            <div className="mt-14 grid gap-8 lg:grid-cols-2">
-              {articles.map((article) => (
-                <GlassCard key={article.id} className="rounded-[32px] p-0">
-                  <article className="overflow-hidden rounded-[32px]">
-                    {article.imageUrl ? (
-                      <img src={article.imageUrl} alt={article.title} className="h-64 w-full object-cover" />
-                    ) : null}
-                    <div className="p-8">
-                      <div className="text-sm font-medium text-slate-500">{formatDate(article.publishedAt, locale)}</div>
-                      <h2 className="mt-4 text-2xl font-bold leading-tight text-slate-900">{article.title}</h2>
-                      <p className="mt-4 text-base leading-8 text-slate-600">{article.excerpt}</p>
-                      <Link
-                        href={`${articleBase}/${article.slug}`}
-                        className="mt-6 inline-flex items-center rounded-full border border-slate-300 bg-white/70 px-5 py-2.5 text-sm font-semibold text-slate-900 transition hover:border-primary/40 hover:text-primary"
-                      >
-                        {copy.readMore}
-                      </Link>
-                    </div>
-                  </article>
-                </GlassCard>
-              ))}
+            <div className="mx-auto mt-14 max-w-[1140px]">
+              <div className="grid gap-8 xl:grid-cols-2">
+                {articles.map((article) => (
+                  <GlassCard key={article.id} className="h-full rounded-[32px] p-0">
+                    <article className="flex h-full flex-col overflow-hidden rounded-[32px]">
+                      {article.imageUrl ? (
+                        <img src={article.imageUrl} alt={article.title} className="h-64 w-full object-cover" />
+                      ) : null}
+                      <div className="flex flex-1 flex-col p-8">
+                        <div className="text-sm font-medium text-slate-500">{formatDate(article.publishedAt, locale)}</div>
+                        <h2 className="mt-4 text-2xl font-bold leading-tight text-slate-900">{article.title}</h2>
+                        <p className="mt-4 line-clamp-5 text-base leading-8 text-slate-600">{article.excerpt}</p>
+                        <Link
+                          href={`${articleBase}/${article.slug}`}
+                          className="mt-6 inline-flex items-center self-start rounded-full border border-slate-300 bg-white/70 px-5 py-2.5 text-sm font-semibold text-slate-900 transition hover:border-primary/40 hover:text-primary"
+                        >
+                          {copy.readMore}
+                        </Link>
+                      </div>
+                    </article>
+                  </GlassCard>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="mt-16 rounded-[28px] border border-dashed border-slate-300 bg-white/55 px-8 py-16 text-center text-slate-500">
