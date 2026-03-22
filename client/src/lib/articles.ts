@@ -93,10 +93,13 @@ async function normalizeArticleImage(file: File) {
     throw new Error("Image processing is not supported in this browser.");
   }
 
+  // Flatten onto white so large PNG photos can be converted to JPEG efficiently.
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
   context.drawImage(image, 0, 0, width, height);
 
-  const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
-  const qualities = outputType === "image/png" ? [undefined] : [0.86, 0.78, 0.7, 0.62];
+  const outputType = "image/jpeg";
+  const qualities = [0.86, 0.78, 0.7, 0.62, 0.54];
 
   for (const quality of qualities) {
     const blob = await new Promise<Blob | null>((resolve) => {
@@ -106,7 +109,7 @@ async function normalizeArticleImage(file: File) {
     if (!blob) continue;
 
     if (blob.size <= MAX_IMAGE_UPLOAD_TARGET_BYTES || quality === qualities[qualities.length - 1]) {
-      const extension = outputType === "image/png" ? ".png" : ".jpg";
+      const extension = ".jpg";
       return new File([blob], file.name.replace(/\.[a-z0-9]+$/i, extension), { type: outputType });
     }
   }
