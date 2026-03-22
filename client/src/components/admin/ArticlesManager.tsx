@@ -187,9 +187,15 @@ export default function ArticlesManager({ locale }: { locale: string }) {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const normalizedBody = htmlToArticleHtml(editorRef.current?.innerHTML || body);
+      setBody(normalizedBody);
+      if (editorRef.current && editorRef.current.innerHTML !== normalizedBody) {
+        editorRef.current.innerHTML = normalizedBody;
+      }
+
       const payload = {
         title,
-        body,
+        body: normalizedBody,
         imageUrl: imageUrl || null,
         publishedAt: toIsoFromInput(publishedAt),
       };
@@ -238,7 +244,7 @@ export default function ArticlesManager({ locale }: { locale: string }) {
   const handleBodyPaste = (event: any) => {
     const html = event.clipboardData?.getData("text/html") || "";
     const plain = event.clipboardData?.getData("text/plain") || "";
-    const nextHtml = html ? htmlToArticleHtml(html) : plainTextToArticleHtml(plain);
+    const nextHtml = html || plainTextToArticleHtml(plain);
 
     if (!nextHtml) return;
 
@@ -349,7 +355,7 @@ export default function ArticlesManager({ locale }: { locale: string }) {
               suppressContentEditableWarning
               onInput={handleBodyInput}
               onPaste={handleBodyPaste}
-              className="min-h-[320px] rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:border-ring md:text-sm"
+              className="article-content min-h-[320px] rounded-md border border-input bg-white/30 px-4 py-3 text-base shadow-xs outline-none focus-visible:border-ring md:text-sm"
             />
             <p className="text-xs text-slate-500">{copy.bodyHint}</p>
           </div>
