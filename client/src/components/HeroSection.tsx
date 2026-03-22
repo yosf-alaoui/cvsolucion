@@ -14,10 +14,10 @@ export default function HeroSection() {
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Background Image */}
-      <div className="absolute inset-0 bg-[url('/images/hero-bg.jpg')] bg-cover bg-center bg-no-repeat bg-scroll md:bg-fixed" />
+      <div className="absolute inset-0 bg-[url('/images/Header-CVsolucion.png')] bg-cover bg-center bg-no-repeat bg-scroll md:bg-fixed" />
       
       {/* Overlay */}
-      <div className="absolute inset-0 bg-black/40" />
+      <div className="absolute inset-0 bg-black/30" />
 
       {/* Content */}
       <div className="container relative z-10 mx-auto px-4 py-20 text-center">

@@ -828,7 +828,7 @@ export default function AdminDashboard() {
   const stats = data?.stats;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="site-page min-h-screen flex flex-col bg-transparent">
       <Header />
       <main className="flex-1 pt-28 pb-16">
         <div className="container mx-auto px-4">

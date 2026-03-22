@@ -4,9 +4,9 @@ import { TermsContent } from "@/content/legal";
 
 export default function Terms() {
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="site-page min-h-screen flex flex-col bg-transparent">
       <Header />
-      <main className="flex-1 container mx-auto px-4 py-16">
+      <main className="flex-1 mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16 py-16">
         <div className="max-w-4xl mx-auto space-y-6">
           <header className="space-y-2">
             <p className="text-sm text-slate-500 uppercase tracking-wide">Legal</p>
@@ -16,7 +16,7 @@ export default function Terms() {
             </p>
           </header>
 
-          <section className="bg-white rounded-2xl shadow-md border border-slate-100 p-8">
+          <section className="glass-card-strong rounded-2xl p-8">
             <div className="prose max-w-none prose-slate prose-headings:mt-8 prose-headings:font-semibold">
               <TermsContent />
             </div>

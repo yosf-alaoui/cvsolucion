@@ -118,13 +118,13 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="site-page min-h-screen flex flex-col bg-transparent">
       <Header />
 
       <main className="flex-1 pt-28 pb-16">
         <div className="container mx-auto px-4">
           <div className="max-w-md mx-auto">
-            <Card className="p-8 shadow-lg rounded-2xl">
+            <Card className="glass-card-strong rounded-2xl p-8">
               <h1 className="text-2xl font-bold text-primary">
                 {t(mode === "signup" ? "auth.signUp" : mode === "magic" ? "auth.magic" : "auth.signIn")}
               </h1>

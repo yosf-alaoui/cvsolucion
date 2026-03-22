@@ -60,13 +60,13 @@ export default function DesignPricing() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="site-page min-h-screen flex flex-col bg-transparent">
       <Header />
 
       <main className="flex-1 pt-28">
         <section className="pb-12">
-          <div className="container mx-auto px-4">
-            <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg px-3 sm:px-6">
+          <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
+            <div className="glass-card-strong relative overflow-hidden rounded-3xl px-3 sm:px-6">
               <div className="absolute -right-32 -top-32 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
               <div className="absolute -left-24 bottom-0 h-56 w-56 rounded-full bg-emerald-400/10 blur-3xl" />
 
@@ -76,10 +76,10 @@ export default function DesignPricing() {
                     <Factory className="h-4 w-4" />
                     {t("designPricingPage.badge")}
                   </span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+                  <span className="glass-chip rounded-full px-3 py-1 text-slate-600">
                     {t("designPricingPage.remote")}
                   </span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+                  <span className="glass-chip rounded-full px-3 py-1 text-slate-600">
                     {t("designPricingPage.factoryReady")}
                   </span>
                 </div>
@@ -101,7 +101,7 @@ export default function DesignPricing() {
                       {t("designPricingPage.cta")}
                     </Button>
                   </a>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+                  <div className="glass-chip inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm text-slate-600">
                     <Ruler className="h-4 w-4 text-primary" />
                     {t("designPricingPage.note")}
                   </div>
@@ -112,7 +112,7 @@ export default function DesignPricing() {
         </section>
 
         <section className="pb-12">
-          <div className="container mx-auto px-4">
+          <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
             <h2
               className="text-2xl font-bold text-primary text-center"
               style={{ fontFamily: "Playfair Display" }}
@@ -122,11 +122,11 @@ export default function DesignPricing() {
             <p className="mt-2 text-muted-foreground text-center max-w-3xl mx-auto">
               {t("designPricingPage.scopeSubtitle")}
             </p>
-            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
+            <div className="card-stage mt-8 grid max-w-5xl mx-auto gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {scope.map((item) => (
                 <div
                   key={item}
-                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
+                  className="glass-card flex items-center gap-3 rounded-2xl px-4 py-4"
                 >
                   <Package className="h-5 w-5 text-primary" />
                   <span className="text-sm font-semibold text-slate-700">{item}</span>
@@ -137,19 +137,21 @@ export default function DesignPricing() {
         </section>
 
         <section className="pb-12">
-          <div className="container mx-auto px-4">
-            <div className="grid gap-6 md:grid-cols-2">
+          <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
+            <div className="card-stage grid gap-6 md:grid-cols-2">
               {infoBlocks.map((block) => (
-                <div key={block.title} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div key={block.title} className="glass-card rounded-2xl p-6">
                   <div className="flex items-center gap-3">
                     <block.icon className="h-5 w-5 text-primary" />
                     <h3 className="text-lg font-semibold">{block.title}</h3>
                   </div>
-                  <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                  <ul className="card-list mt-4 text-sm">
                     {block.items.map((item) => (
-                      <li key={item} className="flex items-start gap-2">
-                        <Check className="mt-0.5 h-4 w-4 text-primary" />
-                        <span>{item}</span>
+                      <li key={item} className="card-list-item">
+                        <span className="card-list-icon">
+                          <Check />
+                        </span>
+                        <span className="card-list-text">{item}</span>
                       </li>
                     ))}
                   </ul>
@@ -160,25 +162,27 @@ export default function DesignPricing() {
         </section>
 
         <section className="pb-12">
-          <div className="container mx-auto px-4">
+          <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
             <h2
               className="text-2xl font-bold text-primary text-center"
               style={{ fontFamily: "Playfair Display" }}
             >
               {t("designPricingPage.detailsTitle")}
             </h2>
-            <div className="mt-8 grid gap-6 md:grid-cols-3">
+            <div className="card-stage mt-8 grid gap-6 md:grid-cols-3">
               {detailBlocks.map((block) => (
-                <div key={block.title} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div key={block.title} className="glass-card rounded-2xl p-6">
                   <div className="flex items-center gap-3">
                     <block.icon className="h-5 w-5 text-primary" />
                     <h3 className="text-lg font-semibold">{block.title}</h3>
                   </div>
-                  <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                  <ul className="card-list mt-4 text-sm">
                     {block.items.map((item) => (
-                      <li key={item} className="flex items-start gap-2">
-                        <Check className="mt-0.5 h-4 w-4 text-primary" />
-                        <span>{item}</span>
+                      <li key={item} className="card-list-item">
+                        <span className="card-list-icon">
+                          <Check />
+                        </span>
+                        <span className="card-list-text">{item}</span>
                       </li>
                     ))}
                   </ul>
@@ -189,33 +193,37 @@ export default function DesignPricing() {
         </section>
 
         <section className="pb-12">
-          <div className="container mx-auto px-4">
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
+            <div className="card-stage grid gap-6 md:grid-cols-2">
+              <div className="glass-card rounded-2xl p-6">
                 <div className="flex items-center gap-3">
                   <ClipboardList className="h-5 w-5 text-primary" />
                   <h3 className="text-lg font-semibold">{t("designPricingPage.whoForTitle")}</h3>
                 </div>
-                <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                <ul className="card-list mt-4 text-sm">
                   {whoFor.map((item) => (
-                    <li key={item} className="flex items-start gap-2">
-                      <Check className="mt-0.5 h-4 w-4 text-primary" />
-                      <span>{item}</span>
+                    <li key={item} className="card-list-item">
+                      <span className="card-list-icon">
+                        <Check />
+                      </span>
+                      <span className="card-list-text">{item}</span>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="glass-card rounded-2xl p-6">
                 <div className="flex items-center gap-3">
                   <Settings className="h-5 w-5 text-primary" />
                   <h3 className="text-lg font-semibold">{t("designPricingPage.requirementsTitle")}</h3>
                 </div>
-                <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                <ul className="card-list mt-4 text-sm">
                   {requirements.map((item) => (
-                    <li key={item} className="flex items-start gap-2">
-                      <Check className="mt-0.5 h-4 w-4 text-primary" />
-                      <span>{item}</span>
+                    <li key={item} className="card-list-item">
+                      <span className="card-list-icon">
+                        <Check />
+                      </span>
+                      <span className="card-list-text">{item}</span>
                     </li>
                   ))}
                 </ul>
@@ -225,17 +233,17 @@ export default function DesignPricing() {
         </section>
 
         <section className="pb-12">
-          <div className="container mx-auto px-4">
-            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+          <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
+            <div className="glass-card-strong rounded-3xl p-8">
               <div className="flex flex-wrap items-center gap-3">
                 <Package className="h-6 w-6 text-primary" />
                 <h3 className="text-2xl font-bold text-primary">
                   {t("designPricingPage.workflowTitle")}
                 </h3>
               </div>
-              <div className="mt-6 grid gap-4 md:grid-cols-3">
+              <div className="card-stage mt-6 grid gap-4 md:grid-cols-3">
                 {workflow.map((step, index) => (
-                  <div key={step} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div key={step} className="glass-card rounded-2xl p-5">
                     <div className="text-sm font-semibold text-primary">
                       {t("designPricingPage.stepLabel")} {index + 1}
                     </div>
@@ -249,7 +257,7 @@ export default function DesignPricing() {
 
         <section className="pb-16">
           <div className="container mx-auto px-4">
-            <div className="rounded-3xl border border-primary/20 bg-primary/5 p-8 text-center shadow-sm">
+            <div className="glass-card-strong rounded-3xl p-8 text-center">
               <h3 className="text-2xl font-bold text-primary" style={{ fontFamily: "Playfair Display" }}>
                 {t("designPricingPage.finalTitle")}
               </h3>
@@ -262,7 +270,7 @@ export default function DesignPricing() {
                     {t("designPricingPage.cta")}
                   </Button>
                 </a>
-                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+                <div className="glass-chip inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm text-slate-600">
                   <FileText className="h-4 w-4 text-primary" />
                   {t("designPricingPage.deliveryNote")}
                 </div>

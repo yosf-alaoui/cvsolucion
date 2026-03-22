@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, MessageCircle, Sparkles } from "lucide-react";
@@ -24,13 +25,13 @@ export default function Training() {
   const deliveryModes = (t("trainingPage.deliveryModes") as string[]) || [];
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="site-page min-h-screen flex flex-col bg-transparent">
       <Header />
 
       <main className="flex-1 pt-28">
         <section className="pb-12">
-          <div className="container mx-auto px-4">
-            <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg px-3 sm:px-6">
+          <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
+            <div className="glass-card-strong relative overflow-hidden rounded-3xl px-3 sm:px-6">
               <div className="absolute -right-32 -top-32 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
               <div className="absolute -left-24 bottom-0 h-56 w-56 rounded-full bg-emerald-400/10 blur-3xl" />
 
@@ -41,7 +42,7 @@ export default function Training() {
                     {t("trainingPage.title")}
                   </span>
                   {deliveryModes.map((mode) => (
-                    <span key={mode} className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+                    <span key={mode} className="glass-chip rounded-full px-3 py-1 text-slate-600">
                       {mode}
                     </span>
                   ))}
@@ -78,7 +79,7 @@ export default function Training() {
         </section>
 
         <section className="pb-12">
-          <div className="container mx-auto px-4">
+          <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
             <h2
               className="text-2xl font-bold text-primary text-center"
               style={{ fontFamily: "Playfair Display" }}
@@ -86,27 +87,32 @@ export default function Training() {
               {t("trainingPage.tracksTitle")}
             </h2>
 
-            <div className="mt-6 grid gap-6 md:grid-cols-3">
+            <div className="card-stage mt-6 grid gap-6 md:grid-cols-3">
               {tracks.map((trk, idx) => (
-                <Card key={idx} className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <GlassCard key={idx} className="rounded-[28px]">
                   <CardHeader>
                     <CardTitle className="text-xl text-center font-bold">{trk.title}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ul className="list-disc pr-5 pl-5 space-y-2 text-muted-foreground">
+                    <ul className="card-list text-sm">
                       {(trk.bullets || []).map((b: string, j: number) => (
-                        <li key={j}>{b}</li>
+                        <li key={j} className="card-list-item">
+                          <span className="card-list-icon">
+                            <Check />
+                          </span>
+                          <span className="card-list-text">{b}</span>
+                        </li>
                       ))}
                     </ul>
                   </CardContent>
-                </Card>
+                </GlassCard>
               ))}
             </div>
           </div>
         </section>
 
         <section className="pb-12">
-          <div className="container mx-auto px-4">
+          <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
             <h2
               className="text-2xl font-bold text-primary text-center"
               style={{ fontFamily: "Playfair Display" }}
@@ -114,18 +120,15 @@ export default function Training() {
               {t("trainingPage.packagesTitle")}
             </h2>
             <p className="mt-2 text-muted-foreground text-center">{t("trainingPage.packagesSubtitle")}</p>
-            <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto items-start">
+            <div className="card-stage mt-8 grid max-w-6xl mx-auto items-start gap-6 md:grid-cols-2 lg:grid-cols-3">
               {packages.map((pkg: any, idx: number) => {
                 const expanded = openPackage === idx;
                 const pkgWhatsapp = buildWhatsAppLink("+1 438 807 8747", pkg.whatsappMessage || t("whatsapp.needHelp"));
                 return (
-                  <Card
+                  <GlassCard
                     key={idx}
-                    className={`self-start p-8 transition-all duration-300 ${
-                      pkg.highlight
-                        ? "border-primary shadow-lg scale-[1.02] bg-primary/5"
-                        : "border-border hover:shadow-lg hover:-translate-y-1 hover:scale-[1.02] bg-white"
-                    }`}
+                    strong={pkg.highlight}
+                    className="self-start rounded-[28px] p-8"
                   >
                     <div className="text-center mb-6">
                       <h3 className="text-2xl font-bold text-primary mb-1">{pkg.title}</h3>
@@ -137,11 +140,13 @@ export default function Training() {
 
                     <div className="text-sm text-foreground/80">{pkg.summary}</div>
                     {(pkg.preview || []).length ? (
-                      <ul className="mt-4 space-y-2 text-sm text-foreground/80">
+                      <ul className="card-list mt-4 text-sm">
                         {(pkg.preview || []).map((item: string, j: number) => (
-                          <li key={j} className="flex items-start gap-2">
-                            <Check className="mt-0.5 h-4 w-4 text-primary" />
-                            <span>{item}</span>
+                          <li key={j} className="card-list-item">
+                            <span className="card-list-icon">
+                              <Check />
+                            </span>
+                            <span className="card-list-text">{item}</span>
                           </li>
                         ))}
                       </ul>
@@ -155,11 +160,13 @@ export default function Training() {
                         </div>
                         <div>
                           <div className="text-xs font-semibold uppercase tracking-wide text-foreground">{skillsLabel}</div>
-                          <ul className="mt-2 space-y-2">
+                          <ul className="card-list mt-2 text-sm">
                             {(pkg.skills || []).map((skill: string, j: number) => (
-                              <li key={j} className="flex items-start gap-2">
-                                <Check className="mt-0.5 h-4 w-4 text-primary" />
-                                <span>{skill}</span>
+                              <li key={j} className="card-list-item">
+                                <span className="card-list-icon">
+                                  <Check />
+                                </span>
+                                <span className="card-list-text">{skill}</span>
                               </li>
                             ))}
                           </ul>
@@ -187,7 +194,7 @@ export default function Training() {
                         </Button>
                       </a>
                     </div>
-                  </Card>
+                  </GlassCard>
                 );
               })}
             </div>
@@ -195,22 +202,27 @@ export default function Training() {
         </section>
 
         <section className="pb-16">
-          <div className="container mx-auto px-4">
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="rounded-2xl shadow-sm">
+          <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
+            <div className="card-stage grid gap-6 md:grid-cols-2">
+              <GlassCard className="rounded-2xl">
                 <CardHeader>
                   <CardTitle className="text-xl">{t("trainingPage.formatTitle")}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                  <ul className="card-list text-sm">
                     {formatBullets.map((b: string, i: number) => (
-                      <li key={i}>{b}</li>
+                      <li key={i} className="card-list-item">
+                        <span className="card-list-icon">
+                          <Check />
+                        </span>
+                        <span className="card-list-text">{b}</span>
+                      </li>
                     ))}
                   </ul>
                 </CardContent>
-              </Card>
+              </GlassCard>
 
-              <Card className="rounded-2xl shadow-sm">
+              <GlassCard className="rounded-2xl">
                 <CardHeader>
                   <CardTitle className="text-xl">{t("trainingPage.ctaTitle")}</CardTitle>
                 </CardHeader>
@@ -225,7 +237,7 @@ export default function Training() {
                     </a>
                   </div>
                 </CardContent>
-              </Card>
+              </GlassCard>
             </div>
           </div>
         </section>

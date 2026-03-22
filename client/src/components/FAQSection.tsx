@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card } from '@/components/ui/card';
+import GlassCard from "@/components/GlassCard";
 import { ChevronDown } from 'lucide-react';
 import { useI18n } from "@/i18n/i18n";
 
@@ -15,8 +15,8 @@ export default function FAQSection() {
   const faqs = t("faq.items") as { question: string; answer: string }[];
 
   return (
-    <section id="faq" className="py-20 bg-white scroll-mt-28">
-      <div className="container mx-auto px-4">
+    <section id="faq" className="py-20 bg-transparent scroll-mt-28">
+      <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 
@@ -29,15 +29,15 @@ export default function FAQSection() {
         </div>
 
         {/* FAQ Accordion */}
-        <div className="max-w-3xl mx-auto space-y-4">
+        <div className="card-stage mx-auto max-w-3xl space-y-4">
           {faqs.map((faq, index) => (
-            <Card 
+            <GlassCard
               key={index}
-              className="border-border overflow-hidden transition-all duration-300"
+              className="overflow-hidden rounded-2xl"
             >
               <button
                 onClick={() => setOpenIndex(openIndex === index ? null : index)}
-                className="w-full px-6 py-4 flex items-center justify-between hover:bg-secondary/50 transition-colors"
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-white/25 transition-colors"
               >
                 <h3 
                   className="text-lg font-semibold text-foreground text-left"
@@ -54,13 +54,13 @@ export default function FAQSection() {
 
               {/* Answer */}
               {openIndex === index && (
-                <div className="px-6 py-4 bg-secondary/20 border-t border-border">
+                <div className="border-t border-white/20 bg-white/18 px-6 py-4">
                   <p className="text-foreground/80 leading-relaxed">
                     {faq.answer}
                   </p>
                 </div>
               )}
-            </Card>
+            </GlassCard>
           ))}
         </div>
       </div>

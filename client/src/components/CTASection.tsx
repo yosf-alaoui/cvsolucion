@@ -20,7 +20,7 @@ export default function CTASection() {
       <div className="absolute inset-0 bg-black/50" />
 
       {/* Content */}
-      <div className="container relative z-10 mx-auto px-4 text-center">
+      <div className="relative z-10 mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16 text-center">
         <h2 
           className="text-4xl md:text-5xl font-bold text-white mb-4"
           style={{ fontFamily: 'Playfair Display' }}

@@ -123,6 +123,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-color: #ffffff;
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -194,10 +195,114 @@
       max-width: 1280px; /* Standard content width */
     }
   }
+
+  .site-page {
+    position: relative;
+    background: transparent;
+    isolation: isolate;
+  }
+
+  .card-glass,
+  .glass-card {
+    position: relative;
+    overflow: visible;
+    border: 1px solid rgba(37, 99, 235, 0.28);
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.08);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .card-glass::before,
+  .glass-card::before {
+    content: none;
+  }
+
+  .card-glass::after,
+  .glass-card::after {
+    content: none;
+  }
+
+  .card-glass > *,
+  .glass-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .card-glass-strong,
+  .glass-card-strong {
+    position: relative;
+    overflow: visible;
+    border: 1px solid rgba(30, 64, 175, 0.34);
+    background: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 0 1px rgba(30, 64, 175, 0.1);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .card-glass-strong::before,
+  .glass-card-strong::before {
+    content: none;
+  }
+
+  .card-glass-strong::after,
+  .glass-card-strong::after {
+    content: none;
+  }
+
+  .card-glass-strong > *,
+  .glass-card-strong > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .glass-chip {
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 24px rgba(30, 58, 138, 0.06);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .card-list-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    color: rgb(71 85 105 / 0.95);
+  }
+
+  .card-list-icon {
+    display: inline-flex;
+    height: 1.5rem;
+    width: 1.5rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid rgba(37, 99, 235, 0.24);
+    background: rgba(239, 246, 255, 0.92);
+    color: rgb(37 99 235);
+  }
+
+  .card-list-icon > svg {
+    height: 0.875rem;
+    width: 0.875rem;
+  }
+
+  .card-list-text {
+    flex: 1;
+    line-height: 1.6;
+  }
+
 }
 /* Arabic font only */
 html[lang="ar"] body,
 html[dir="rtl"] body {
   font-family: "Cairo", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
-

@@ -13,6 +13,7 @@ import DesignPricing from "./pages/DesignPricing";
 import AdminDashboard from "./pages/AdminDashboard";
 import Analytics from "./components/Analytics";
 import ChatWidget from "./components/ChatWidget";
+import DotWaveBackground from "./components/DotWaveBackground";
 import { I18nProvider } from "@/i18n/i18n";
 import { AuthProvider } from "./contexts/AuthContext";
 
@@ -65,6 +66,7 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
+            <DotWaveBackground />
             <Analytics />
             <ChatWidget />
             <Router />

@@ -1,4 +1,4 @@
-import { Card } from '@/components/ui/card';
+import GlassCard from "@/components/GlassCard";
 import { 
   Brain, 
   CheckCircle2, 
@@ -20,8 +20,8 @@ export default function BenefitsSection() {
   const icons = [Brain, CheckCircle2, DollarSign, Headphones, Lightbulb, TrendingUp];
 
   return (
-    <section className="py-20 bg-secondary/30">
-      <div className="container mx-auto px-4">
+    <section className="py-20 bg-transparent">
+      <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 
@@ -36,13 +36,13 @@ export default function BenefitsSection() {
         </div>
 
         {/* Benefits Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="card-stage grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
           {benefits.map((benefit, index) => {
             const Icon = icons[index];
             return (
-              <Card 
+              <GlassCard
                 key={index}
-                className="p-8 hover:shadow-lg hover:border-primary transition-all duration-300 border-border bg-white"
+                className="p-8"
               >
                 <div className="mb-4">
                   <Icon className="w-10 h-10 text-primary" />
@@ -56,7 +56,7 @@ export default function BenefitsSection() {
                 <p className="text-foreground/80 leading-relaxed">
                   {benefit.description}
                 </p>
-              </Card>
+              </GlassCard>
             );
           })}
         </div>
