@@ -1166,7 +1166,9 @@ async function startServer() {
       lastModified: true,
       setHeaders: (res, filePath) => {
         res.setHeader("X-Content-Type-Options", "nosniff");
-        if (filePath.endsWith(".js")) {
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+        } else if (filePath.endsWith(".js")) {
           res.setHeader("Content-Type", "application/javascript; charset=UTF-8");
         } else if (filePath.endsWith(".css")) {
           res.setHeader("Content-Type", "text/css; charset=UTF-8");
@@ -1189,6 +1191,7 @@ async function startServer() {
         const dir = wantsAr ? ' dir="rtl"' : "";
         const patched = html.replace(/<html\s+lang="[^"]*"/i, `<html lang="${lang}"${dir}`);
         res.setHeader("Content-Type", "text/html; charset=UTF-8");
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
         res.status(200);
         return res.end(patched);
       } catch {
@@ -1196,6 +1199,7 @@ async function startServer() {
       }
     }
 
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     return res.sendFile(indexPath);
   });
 
