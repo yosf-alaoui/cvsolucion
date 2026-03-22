@@ -69,6 +69,23 @@ function htmlToArticleText(html: string) {
       return "\n";
     }
 
+    if (node.tagName === "A") {
+      const text = normalizePastedText(readChildren(node, listDepth));
+      const href = node.getAttribute("href")?.trim();
+      if (!text) return "";
+      return href ? `[${text}](${href})` : text;
+    }
+
+    if (node.tagName === "STRONG" || node.tagName === "B") {
+      const text = normalizePastedText(readChildren(node, listDepth));
+      return text ? `**${text}**` : "";
+    }
+
+    if (node.tagName === "EM" || node.tagName === "I") {
+      const text = normalizePastedText(readChildren(node, listDepth));
+      return text ? `*${text}*` : "";
+    }
+
     if (node.tagName === "UL" || node.tagName === "OL") {
       const items = Array.from(node.children)
         .filter((child) => child.tagName === "LI")
@@ -88,7 +105,9 @@ function htmlToArticleText(html: string) {
     }
 
     if (/^H[1-6]$/.test(node.tagName)) {
-      return `${normalizePastedText(inlineText)}\n\n`;
+      const level = Number(node.tagName.slice(1));
+      const prefix = "#".repeat(Number.isFinite(level) ? level : 2);
+      return `${prefix} ${normalizePastedText(inlineText)}\n\n`;
     }
 
     return inlineText;
