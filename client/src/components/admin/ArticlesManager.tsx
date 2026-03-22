@@ -1,8 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import Color from "@tiptap/extension-color";
+import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
+import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
-import { Bold, Heading2, Italic, Link2, List, ListOrdered, Loader2, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { TextStyle } from "@tiptap/extension-text-style";
+import Underline from "@tiptap/extension-underline";
+import {
+  Bold,
+  Code2,
+  ImagePlus,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
+  Loader2,
+  MessageSquareQuote,
+  PaintBucket,
+  Pencil,
+  Plus,
+  Trash2,
+  Underline as UnderlineIcon,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   createAdminArticle,
@@ -18,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { bodyToHtml, htmlToArticleHtml } from "@/lib/articleBody";
+import { FontSize } from "@/lib/tiptap/fontSize";
 
 function formatDateInput(value: string | null) {
   if (!value) return "";
@@ -103,6 +125,13 @@ export default function ArticlesManager({ locale }: { locale: string }) {
       create: "Publish article",
       delete: "Delete",
       edit: "Edit",
+      paragraph: "Paragraph",
+      heading: "Heading",
+      quote: "Quote",
+      fontSize: "Size",
+      textColor: "Text color",
+      addLink: "Link",
+      addImage: "Image",
       empty: "No articles yet.",
       imageHint: "Upload an image or paste a direct image URL.",
       bodyHint: "Write the article here. Leave a blank line between paragraphs for clean reading.",
@@ -121,6 +150,8 @@ export default function ArticlesManager({ locale }: { locale: string }) {
   const [body, setBody] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [publishedAt, setPublishedAt] = useState("");
+  const [textColor, setTextColor] = useState("#111827");
+  const [fontSize, setFontSize] = useState("16px");
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -128,6 +159,10 @@ export default function ArticlesManager({ locale }: { locale: string }) {
           levels: [2, 3, 4],
         },
       }),
+      TextStyle,
+      Color,
+      FontSize,
+      Underline,
       Link.configure({
         openOnClick: false,
         autolink: true,
@@ -136,6 +171,13 @@ export default function ArticlesManager({ locale }: { locale: string }) {
           target: "_blank",
           rel: "noreferrer",
         },
+      }),
+      Image.configure({
+        inline: false,
+        allowBase64: false,
+      }),
+      Placeholder.configure({
+        placeholder: copy.bodyHint,
       }),
     ],
     immediatelyRender: false,
@@ -187,6 +229,13 @@ export default function ArticlesManager({ locale }: { locale: string }) {
       editor.commands.setContent(nextContent || "<p></p>", { emitUpdate: false });
     }
   }, [body, editor]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const attributes = editor.getAttributes("textStyle");
+    setTextColor(attributes.color || "#111827");
+    setFontSize(attributes.fontSize || "16px");
+  }, [editor, body]);
 
   const handleSelect = (article: ArticleSummary) => {
     setSelectedId(article.id);
@@ -276,57 +325,27 @@ export default function ArticlesManager({ locale }: { locale: string }) {
     editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
   };
 
-  const editorActions = [
-    {
-      key: "paragraph",
-      active: editor?.isActive("paragraph") ?? false,
-      icon: null,
-      label: "P",
-      onClick: () => editor?.chain().focus().setParagraph().run(),
-    },
-    {
-      key: "heading",
-      active: editor?.isActive("heading", { level: 2 }) ?? false,
-      icon: <Heading2 className="h-4 w-4" />,
-      label: "H2",
-      onClick: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
-    },
-    {
-      key: "bold",
-      active: editor?.isActive("bold") ?? false,
-      icon: <Bold className="h-4 w-4" />,
-      label: "Bold",
-      onClick: () => editor?.chain().focus().toggleBold().run(),
-    },
-    {
-      key: "italic",
-      active: editor?.isActive("italic") ?? false,
-      icon: <Italic className="h-4 w-4" />,
-      label: "Italic",
-      onClick: () => editor?.chain().focus().toggleItalic().run(),
-    },
-    {
-      key: "bulletList",
-      active: editor?.isActive("bulletList") ?? false,
-      icon: <List className="h-4 w-4" />,
-      label: "List",
-      onClick: () => editor?.chain().focus().toggleBulletList().run(),
-    },
-    {
-      key: "orderedList",
-      active: editor?.isActive("orderedList") ?? false,
-      icon: <ListOrdered className="h-4 w-4" />,
-      label: "Ordered",
-      onClick: () => editor?.chain().focus().toggleOrderedList().run(),
-    },
-    {
-      key: "link",
-      active: editor?.isActive("link") ?? false,
-      icon: <Link2 className="h-4 w-4" />,
-      label: "Link",
-      onClick: handleSetLink,
-    },
-  ];
+  const handleInsertImage = () => {
+    if (!editor) return;
+    const source = window.prompt("Enter image URL", imageUrl || "");
+    if (!source) return;
+    editor.chain().focus().setImage({ src: source.trim() }).run();
+  };
+
+  const handleFontSizeChange = (value: string) => {
+    setFontSize(value);
+    if (!editor) return;
+    if (value === "16px") {
+      editor.chain().focus().unsetFontSize().run();
+      return;
+    }
+    editor.chain().focus().setFontSize(value).run();
+  };
+
+  const handleColorChange = (value: string) => {
+    setTextColor(value);
+    editor?.chain().focus().setColor(value).run();
+  };
 
   return (
     <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
@@ -423,7 +442,101 @@ export default function ArticlesManager({ locale }: { locale: string }) {
             <Label htmlFor="article-body">{copy.body}</Label>
             <div id="article-body" className="tiptap-editor rounded-2xl border border-slate-200 bg-white/70 shadow-xs">
               <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-3">
-                {editorActions.map((action) => (
+                <select
+                  value={
+                    editor?.isActive("heading", { level: 2 })
+                      ? "h2"
+                      : editor?.isActive("blockquote")
+                        ? "quote"
+                        : "paragraph"
+                  }
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (!editor) return;
+                    if (value === "h2") {
+                      editor.chain().focus().toggleHeading({ level: 2 }).run();
+                    } else if (value === "quote") {
+                      editor.chain().focus().toggleBlockquote().run();
+                    } else {
+                      editor.chain().focus().setParagraph().run();
+                    }
+                  }}
+                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
+                >
+                  <option value="paragraph">{copy.paragraph}</option>
+                  <option value="h2">{copy.heading}</option>
+                  <option value="quote">{copy.quote}</option>
+                </select>
+
+                <select
+                  value={fontSize}
+                  onChange={(event) => handleFontSizeChange(event.target.value)}
+                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
+                >
+                  <option value="14px">14px</option>
+                  <option value="16px">16px</option>
+                  <option value="18px">18px</option>
+                  <option value="20px">20px</option>
+                  <option value="24px">24px</option>
+                  <option value="28px">28px</option>
+                </select>
+
+                {[
+                  {
+                    key: "bold",
+                    active: editor?.isActive("bold") ?? false,
+                    icon: <Bold className="h-4 w-4" />,
+                    onClick: () => editor?.chain().focus().toggleBold().run(),
+                  },
+                  {
+                    key: "italic",
+                    active: editor?.isActive("italic") ?? false,
+                    icon: <Italic className="h-4 w-4" />,
+                    onClick: () => editor?.chain().focus().toggleItalic().run(),
+                  },
+                  {
+                    key: "underline",
+                    active: editor?.isActive("underline") ?? false,
+                    icon: <UnderlineIcon className="h-4 w-4" />,
+                    onClick: () => editor?.chain().focus().toggleUnderline().run(),
+                  },
+                  {
+                    key: "bulletList",
+                    active: editor?.isActive("bulletList") ?? false,
+                    icon: <List className="h-4 w-4" />,
+                    onClick: () => editor?.chain().focus().toggleBulletList().run(),
+                  },
+                  {
+                    key: "orderedList",
+                    active: editor?.isActive("orderedList") ?? false,
+                    icon: <ListOrdered className="h-4 w-4" />,
+                    onClick: () => editor?.chain().focus().toggleOrderedList().run(),
+                  },
+                  {
+                    key: "blockquote",
+                    active: editor?.isActive("blockquote") ?? false,
+                    icon: <MessageSquareQuote className="h-4 w-4" />,
+                    onClick: () => editor?.chain().focus().toggleBlockquote().run(),
+                  },
+                  {
+                    key: "codeBlock",
+                    active: editor?.isActive("codeBlock") ?? false,
+                    icon: <Code2 className="h-4 w-4" />,
+                    onClick: () => editor?.chain().focus().toggleCodeBlock().run(),
+                  },
+                  {
+                    key: "link",
+                    active: editor?.isActive("link") ?? false,
+                    icon: <Link2 className="h-4 w-4" />,
+                    onClick: handleSetLink,
+                  },
+                  {
+                    key: "image",
+                    active: false,
+                    icon: <ImagePlus className="h-4 w-4" />,
+                    onClick: handleInsertImage,
+                  },
+                ].map((action) => (
                   <Button
                     key={action.key}
                     type="button"
@@ -431,12 +544,23 @@ export default function ArticlesManager({ locale }: { locale: string }) {
                     size="sm"
                     onClick={action.onClick}
                     disabled={!editor}
-                    className="h-9 gap-2"
+                    className="h-9 w-9 px-0"
+                    title={action.key}
                   >
                     {action.icon}
-                    <span>{action.icon ? null : action.label}</span>
                   </Button>
                 ))}
+
+                <label className="flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700">
+                  <PaintBucket className="h-4 w-4" />
+                  <input
+                    type="color"
+                    value={textColor}
+                    onChange={(event) => handleColorChange(event.target.value)}
+                    className="h-5 w-8 cursor-pointer border-0 bg-transparent p-0"
+                    title={copy.textColor}
+                  />
+                </label>
               </div>
               <EditorContent editor={editor} className="article-content min-h-[320px] px-4 py-4" />
             </div>
