@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import type { RouteComponentProps } from "wouter";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
@@ -13,12 +13,16 @@ function formatDate(value: string, locale: string) {
   }).format(new Date(value));
 }
 
-export default function ArticleDetailPage() {
-  const [location] = useLocation();
+type ArticleDetailParams = {
+  slug?: string;
+};
+
+export default function ArticleDetailPage({ params }: RouteComponentProps<ArticleDetailParams>) {
   const { locale } = useI18n();
   const [article, setArticle] = useState<ArticleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const articleHtml = useMemo(() => (article ? bodyToHtml(article.body) : ""), [article]);
+  const slug = (params?.slug || "").replace(/\/+$/, "").trim();
 
   const copy = useMemo(() => {
     if (locale === "ar") {
@@ -31,18 +35,17 @@ export default function ArticleDetailPage() {
   }, [locale]);
 
   useEffect(() => {
-    const cleaned = location.replace(/^\/(fr|ar)/, "");
-    const slug = cleaned.replace(/^\/articles\//, "").replace(/\/+$/, "");
-
     if (!slug) {
       setLoading(false);
       return;
     }
 
+    setLoading(true);
     getArticle(slug)
       .then((response) => setArticle(response.article))
+      .catch(() => setArticle(null))
       .finally(() => setLoading(false));
-  }, [location]);
+  }, [slug]);
 
   const articlesHref = locale === "en" ? "/articles" : `/${locale}/articles`;
 

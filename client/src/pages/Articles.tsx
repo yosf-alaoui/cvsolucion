@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
@@ -77,12 +78,12 @@ export default function Articles() {
                       <div className="text-sm font-medium text-slate-500">{formatDate(article.publishedAt, locale)}</div>
                       <h2 className="mt-4 text-2xl font-bold leading-tight text-slate-900">{article.title}</h2>
                       <p className="mt-4 text-base leading-8 text-slate-600">{article.excerpt}</p>
-                      <a
+                      <Link
                         href={`${articleBase}/${article.slug}`}
                         className="mt-6 inline-flex items-center rounded-full border border-slate-300 bg-white/70 px-5 py-2.5 text-sm font-semibold text-slate-900 transition hover:border-primary/40 hover:text-primary"
                       >
                         {copy.readMore}
-                      </a>
+                      </Link>
                     </div>
                   </article>
                 </GlassCard>
