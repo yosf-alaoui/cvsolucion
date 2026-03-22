@@ -82,9 +82,11 @@ export default function Header() {
 
   const trainingHref = locale === "en" ? "/training" : `/${locale}/training`;
   const designPricingHref = locale === "en" ? "/design-pricing" : `/${locale}/design-pricing`;
+  const articlesHref = locale === "en" ? "/articles" : `/${locale}/articles`;
   const dashboardHref = locale === "en" ? "/dashboard" : `/${locale}/dashboard`;
   const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
   const isAuthed = Boolean(user?.id);
+  const articlesLabel = locale === "ar" ? "المقالات" : locale === "fr" ? "Articles" : "Articles";
 
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
@@ -130,6 +132,11 @@ export default function Header() {
                 href={designPricingHref}
                 className="text-foreground hover:text-primary transition-colors font-semibold"
               >{t("nav.designPricing")}</a>
+
+              <a
+                href={articlesHref}
+                className="text-foreground hover:text-primary transition-colors font-semibold"
+              >{articlesLabel}</a>
 
               {isAuthed && isAdmin ? (
                 <a
@@ -327,6 +334,14 @@ export default function Header() {
                   Dashboard
                 </a>
               ) : null}
+
+              <a
+                href={articlesHref}
+                className="text-foreground hover:text-primary transition-colors font-semibold"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {articlesLabel}
+              </a>
 
               <button
                 onClick={() => scrollToSection("services")}

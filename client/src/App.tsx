@@ -11,6 +11,8 @@ import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import DesignPricing from "./pages/DesignPricing";
 import AdminDashboard from "./pages/AdminDashboard";
+import Articles from "./pages/Articles";
+import ArticleDetailPage from "./pages/ArticleDetail";
 import Analytics from "./components/Analytics";
 import ChatWidget from "./components/ChatWidget";
 import DotWaveBackground from "./components/DotWaveBackground";
@@ -37,6 +39,12 @@ function Router() {
       <Route path={"/dashboard"} component={AdminDashboard} />
       <Route path={"/fr/dashboard"} component={AdminDashboard} />
       <Route path={"/ar/dashboard"} component={AdminDashboard} />
+      <Route path={"/articles"} component={Articles} />
+      <Route path={"/fr/articles"} component={Articles} />
+      <Route path={"/ar/articles"} component={Articles} />
+      <Route path={"/articles/:slug"} component={ArticleDetailPage} />
+      <Route path={"/fr/articles/:slug"} component={ArticleDetailPage} />
+      <Route path={"/ar/articles/:slug"} component={ArticleDetailPage} />
       {/* Legal */}
       <Route path={"/privacy"} component={Privacy} />
       <Route path={"/terms"} component={Terms} />

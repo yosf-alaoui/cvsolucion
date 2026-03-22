@@ -19,6 +19,7 @@ import {
   type AdminDashboardVisitor,
 } from "@/lib/admin";
 import ConversationsPanel from "@/components/admin/ConversationsPanel";
+import ArticlesManager from "@/components/admin/ArticlesManager";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -402,6 +403,8 @@ export default function AdminDashboard() {
       deleteError: "Failed to delete user.",
     };
   }, [locale]);
+
+  const articlesLabel = locale === "ar" ? "المقالات" : locale === "fr" ? "Articles" : "Articles";
 
   const ga4Copy = useMemo(() => {
     if (locale === "fr") {
@@ -1061,10 +1064,11 @@ export default function AdminDashboard() {
                 </Card>
 
                 <Tabs defaultValue="overview" className="space-y-6">
-                  <TabsList className="grid w-full grid-cols-6">
+                  <TabsList className="grid w-full grid-cols-7">
                     <TabsTrigger value="overview">{copy.overview}</TabsTrigger>
                     <TabsTrigger value="users">{copy.users}</TabsTrigger>
                     <TabsTrigger value="visitors">{copy.visitors}</TabsTrigger>
+                    <TabsTrigger value="articles">{articlesLabel}</TabsTrigger>
                     <TabsTrigger value="conversations">{conversationCopy.conversations}</TabsTrigger>
                     <TabsTrigger value="sessions">{copy.sessions}</TabsTrigger>
                     <TabsTrigger value="events">{copy.events}</TabsTrigger>
@@ -1111,6 +1115,10 @@ export default function AdminDashboard() {
                       />
                       <VisitorDetailPanel copy={copy} locale={locale} visitor={selectedVisitor} />
                     </div>
+                  </TabsContent>
+
+                  <TabsContent value="articles">
+                    <ArticlesManager locale={locale} />
                   </TabsContent>
 
                   <TabsContent value="conversations">

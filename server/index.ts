@@ -40,6 +40,15 @@ import {
   upsertConversationForVisitor,
 } from "./chatStore";
 import { getVisitorById } from "./visitorStore";
+import {
+  createArticle,
+  deleteArticle,
+  getArticleBySlug,
+  listAdminArticles,
+  listPublishedArticles,
+  saveArticleImage,
+  updateArticle,
+} from "./articleStore";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,6 +82,12 @@ function localePrefix(locale?: string | null) {
   const resolvedLocale = normalizeAuthLocale(locale);
   if (resolvedLocale === "fr" || resolvedLocale === "ar") return `/${resolvedLocale}`;
   return "";
+}
+
+function summarizeArticle(body: string, maxLength = 180) {
+  const normalized = body.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength).trimEnd()}...`;
 }
 
 function setSessionCookie(res: express.Response, sessionId: string) {
@@ -223,7 +238,7 @@ async function startServer() {
 
   app.set("trust proxy", true);
   app.disable("x-powered-by");
-  app.use(express.json());
+  app.use(express.json({ limit: "15mb" }));
 
   app.use((_req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -1030,6 +1045,115 @@ async function startServer() {
     }
   });
 
+  app.get("/api/articles", (req, res) => {
+    const articles = listPublishedArticles().map((item) => ({
+      ...item,
+      excerpt: summarizeArticle(item.body),
+    }));
+    return res.json({ articles });
+  });
+
+  app.get("/api/articles/:slug", (req, res) => {
+    const slug = String(req.params.slug || "").trim();
+    const article = getArticleBySlug(slug);
+    if (!article) {
+      return res.status(404).json({ error: "Article not found." });
+    }
+
+    return res.json({
+      article: {
+        ...article,
+        excerpt: summarizeArticle(article.body),
+      },
+    });
+  });
+
+  app.get("/api/admin/articles", rateLimit({ key: "admin-articles", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+    const articles = listAdminArticles().map((item) => ({
+      ...item,
+      excerpt: summarizeArticle(item.body),
+    }));
+    return res.json({ articles });
+  });
+
+  app.post("/api/admin/article-images", rateLimit({ key: "admin-article-images", windowMs: 1000 * 60 * 5, limit: 40 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const filename = String(req.body?.filename || "").trim();
+      const contentType = String(req.body?.contentType || "").trim().toLowerCase();
+      const base64 = String(req.body?.base64 || "").trim();
+
+      if (!contentType || !base64) {
+        return res.status(400).json({ error: "Image content is required." });
+      }
+
+      const image = saveArticleImage({ filename, contentType, base64 });
+      return res.json({ ok: true, image });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post("/api/admin/articles", rateLimit({ key: "admin-articles-create", windowMs: 1000 * 60 * 5, limit: 40 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const title = String(req.body?.title || "").trim();
+      const body = String(req.body?.body || "").trim();
+      const imageUrl = typeof req.body?.imageUrl === "string" ? req.body.imageUrl : null;
+      const publishedAt = typeof req.body?.publishedAt === "string" ? req.body.publishedAt : null;
+
+      if (!title || !body) {
+        return res.status(400).json({ error: "Title and article body are required." });
+      }
+
+      const article = createArticle({ title, body, imageUrl, publishedAt });
+      return res.json({ ok: true, article: { ...article, excerpt: summarizeArticle(article.body) } });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.patch("/api/admin/articles/:articleId", rateLimit({ key: "admin-articles-update", windowMs: 1000 * 60 * 5, limit: 80 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const articleId = String(req.params.articleId || "").trim();
+      const title = String(req.body?.title || "").trim();
+      const body = String(req.body?.body || "").trim();
+      const imageUrl = typeof req.body?.imageUrl === "string" ? req.body.imageUrl : null;
+      const publishedAt = typeof req.body?.publishedAt === "string" ? req.body.publishedAt : null;
+
+      if (!title || !body) {
+        return res.status(400).json({ error: "Title and article body are required." });
+      }
+
+      const article = updateArticle(articleId, { title, body, imageUrl, publishedAt });
+      return res.json({ ok: true, article: { ...article, excerpt: summarizeArticle(article.body) } });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.delete("/api/admin/articles/:articleId", rateLimit({ key: "admin-articles-delete", windowMs: 1000 * 60 * 5, limit: 40 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const articleId = String(req.params.articleId || "").trim();
+      deleteArticle(articleId);
+      return res.json({ ok: true });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
   const staticPath =
     process.env.NODE_ENV === "production"
       ? path.resolve(__dirname, "public")
@@ -1050,6 +1174,8 @@ async function startServer() {
       },
     })
   );
+
+  app.use("/uploads", express.static(path.resolve(process.cwd(), "data", "uploads"), { maxAge: "30d", etag: true, lastModified: true }));
 
   app.get("*", (req, res) => {
     const indexPath = path.join(staticPath, "index.html");
