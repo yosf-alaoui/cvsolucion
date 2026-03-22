@@ -391,6 +391,44 @@
     font-style: italic;
   }
 
+  .tiptap-editor .ProseMirror {
+    min-height: 320px;
+    outline: none;
+  }
+
+  .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: rgb(148 163 184);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+
+  .tiptap-editor .ProseMirror h2,
+  .tiptap-editor .ProseMirror h3,
+  .tiptap-editor .ProseMirror h4 {
+    margin-top: 1.25rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .tiptap-editor .ProseMirror ul,
+  .tiptap-editor .ProseMirror ol {
+    list-style-position: outside;
+    padding-left: 1.5rem;
+  }
+
+  .tiptap-editor .ProseMirror ul {
+    list-style-type: disc;
+  }
+
+  .tiptap-editor .ProseMirror ol {
+    list-style-type: decimal;
+  }
+
+  .tiptap-editor .ProseMirror li {
+    display: list-item;
+  }
+
 }
 /* Arabic font only */
 html[lang="ar"] body,

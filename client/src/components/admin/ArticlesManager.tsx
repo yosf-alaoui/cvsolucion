@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { EditorContent, useEditor } from "@tiptap/react";
+import Link from "@tiptap/extension-link";
+import StarterKit from "@tiptap/starter-kit";
+import { Bold, Heading2, Italic, Link2, List, ListOrdered, Loader2, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   createAdminArticle,
@@ -14,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { htmlToArticleHtml, plainTextToArticleHtml } from "@/lib/articleBody";
+import { bodyToHtml, htmlToArticleHtml } from "@/lib/articleBody";
 
 function formatDateInput(value: string | null) {
   if (!value) return "";
@@ -118,7 +121,29 @@ export default function ArticlesManager({ locale }: { locale: string }) {
   const [body, setBody] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [publishedAt, setPublishedAt] = useState("");
-  const editorRef = useRef<HTMLDivElement | null>(null);
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: {
+          levels: [2, 3, 4],
+        },
+      }),
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        defaultProtocol: "https",
+        HTMLAttributes: {
+          target: "_blank",
+          rel: "noreferrer",
+        },
+      }),
+    ],
+    immediatelyRender: false,
+    content: "",
+    onUpdate: ({ editor: currentEditor }) => {
+      setBody(currentEditor.getHTML());
+    },
+  });
 
   const selectedArticle = articles.find((item) => item.id === selectedId) ?? null;
 
@@ -156,11 +181,12 @@ export default function ArticlesManager({ locale }: { locale: string }) {
   }, []);
 
   useEffect(() => {
-    if (!editorRef.current) return;
-    if (editorRef.current.innerHTML !== body) {
-      editorRef.current.innerHTML = body;
+    if (!editor) return;
+    const nextContent = bodyToHtml(body);
+    if (editor.getHTML() !== nextContent) {
+      editor.commands.setContent(nextContent || "<p></p>", { emitUpdate: false });
     }
-  }, [body]);
+  }, [body, editor]);
 
   const handleSelect = (article: ArticleSummary) => {
     setSelectedId(article.id);
@@ -187,10 +213,10 @@ export default function ArticlesManager({ locale }: { locale: string }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const normalizedBody = htmlToArticleHtml(editorRef.current?.innerHTML || body);
+      const normalizedBody = htmlToArticleHtml(editor?.getHTML() || body);
       setBody(normalizedBody);
-      if (editorRef.current && editorRef.current.innerHTML !== normalizedBody) {
-        editorRef.current.innerHTML = normalizedBody;
+      if (editor && editor.getHTML() !== normalizedBody) {
+        editor.commands.setContent(normalizedBody || "<p></p>", { emitUpdate: false });
       }
 
       const payload = {
@@ -237,23 +263,70 @@ export default function ArticlesManager({ locale }: { locale: string }) {
     }
   };
 
-  const handleBodyInput = (event: any) => {
-    setBody(event.currentTarget.innerHTML);
-  };
-
-  const handleBodyPaste = (event: any) => {
-    const html = event.clipboardData?.getData("text/html") || "";
-    const plain = event.clipboardData?.getData("text/plain") || "";
-    const nextHtml = html || plainTextToArticleHtml(plain);
-
-    if (!nextHtml) return;
-
-    event.preventDefault();
-    document.execCommand("insertHTML", false, nextHtml);
-    if (editorRef.current) {
-      setBody(editorRef.current.innerHTML);
+  const handleSetLink = () => {
+    if (!editor) return;
+    const previousUrl = editor.getAttributes("link").href || "";
+    const url = window.prompt("Enter link URL", previousUrl);
+    if (url === null) return;
+    const trimmed = url.trim();
+    if (!trimmed) {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
     }
+    editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
   };
+
+  const editorActions = [
+    {
+      key: "paragraph",
+      active: editor?.isActive("paragraph") ?? false,
+      icon: null,
+      label: "P",
+      onClick: () => editor?.chain().focus().setParagraph().run(),
+    },
+    {
+      key: "heading",
+      active: editor?.isActive("heading", { level: 2 }) ?? false,
+      icon: <Heading2 className="h-4 w-4" />,
+      label: "H2",
+      onClick: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
+    },
+    {
+      key: "bold",
+      active: editor?.isActive("bold") ?? false,
+      icon: <Bold className="h-4 w-4" />,
+      label: "Bold",
+      onClick: () => editor?.chain().focus().toggleBold().run(),
+    },
+    {
+      key: "italic",
+      active: editor?.isActive("italic") ?? false,
+      icon: <Italic className="h-4 w-4" />,
+      label: "Italic",
+      onClick: () => editor?.chain().focus().toggleItalic().run(),
+    },
+    {
+      key: "bulletList",
+      active: editor?.isActive("bulletList") ?? false,
+      icon: <List className="h-4 w-4" />,
+      label: "List",
+      onClick: () => editor?.chain().focus().toggleBulletList().run(),
+    },
+    {
+      key: "orderedList",
+      active: editor?.isActive("orderedList") ?? false,
+      icon: <ListOrdered className="h-4 w-4" />,
+      label: "Ordered",
+      onClick: () => editor?.chain().focus().toggleOrderedList().run(),
+    },
+    {
+      key: "link",
+      active: editor?.isActive("link") ?? false,
+      icon: <Link2 className="h-4 w-4" />,
+      label: "Link",
+      onClick: handleSetLink,
+    },
+  ];
 
   return (
     <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
@@ -348,15 +421,25 @@ export default function ArticlesManager({ locale }: { locale: string }) {
 
           <div className="space-y-2">
             <Label htmlFor="article-body">{copy.body}</Label>
-            <div
-              id="article-body"
-              ref={editorRef}
-              contentEditable
-              suppressContentEditableWarning
-              onInput={handleBodyInput}
-              onPaste={handleBodyPaste}
-              className="article-content min-h-[320px] rounded-md border border-input bg-white/30 px-4 py-3 text-base shadow-xs outline-none focus-visible:border-ring md:text-sm"
-            />
+            <div id="article-body" className="tiptap-editor rounded-2xl border border-slate-200 bg-white/70 shadow-xs">
+              <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-3">
+                {editorActions.map((action) => (
+                  <Button
+                    key={action.key}
+                    type="button"
+                    variant={action.active ? "default" : "outline"}
+                    size="sm"
+                    onClick={action.onClick}
+                    disabled={!editor}
+                    className="h-9 gap-2"
+                  >
+                    {action.icon}
+                    <span>{action.icon ? null : action.label}</span>
+                  </Button>
+                ))}
+              </div>
+              <EditorContent editor={editor} className="article-content min-h-[320px] px-4 py-4" />
+            </div>
             <p className="text-xs text-slate-500">{copy.bodyHint}</p>
           </div>
 
