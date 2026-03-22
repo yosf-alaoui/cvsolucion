@@ -38,6 +38,65 @@ function formatDate(value: string, locale: string) {
   }).format(new Date(value));
 }
 
+function normalizePastedText(value: string) {
+  return value
+    .replace(/\r\n/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function htmlToArticleText(html: string) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  const readChildren = (parent: Node, listDepth = 0): string =>
+    Array.from(parent.childNodes)
+      .map((child) => readNode(child, listDepth))
+      .join("");
+
+  const readNode = (node: Node, listDepth = 0): string => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent?.replace(/\s+/g, " ") || "";
+    }
+
+    if (!(node instanceof HTMLElement)) {
+      return "";
+    }
+
+    if (node.tagName === "BR") {
+      return "\n";
+    }
+
+    if (node.tagName === "UL" || node.tagName === "OL") {
+      const items = Array.from(node.children)
+        .filter((child) => child.tagName === "LI")
+        .map((child, index) => {
+          const prefix = node.tagName === "OL" ? `${index + 1}. ` : "- ";
+          const text = normalizePastedText(readChildren(child, listDepth + 1));
+          return `${"  ".repeat(listDepth)}${prefix}${text}`;
+        });
+
+      return `${items.join("\n")}\n\n`;
+    }
+
+    const inlineText = readChildren(node, listDepth);
+
+    if (["P", "DIV", "SECTION", "ARTICLE", "BLOCKQUOTE"].includes(node.tagName)) {
+      return `${normalizePastedText(inlineText)}\n\n`;
+    }
+
+    if (/^H[1-6]$/.test(node.tagName)) {
+      return `${normalizePastedText(inlineText)}\n\n`;
+    }
+
+    return inlineText;
+  };
+
+  return normalizePastedText(readChildren(doc.body));
+}
+
 export default function ArticlesManager({ locale }: { locale: string }) {
   const copy = useMemo(() => {
     if (locale === "ar") {
@@ -223,6 +282,21 @@ export default function ArticlesManager({ locale }: { locale: string }) {
     }
   };
 
+  const handleBodyPaste = (event: any) => {
+    const html = event.clipboardData?.getData("text/html") || "";
+    const plain = event.clipboardData?.getData("text/plain") || "";
+    const nextChunk = html ? htmlToArticleText(html) : normalizePastedText(plain);
+
+    if (!nextChunk) return;
+
+    event.preventDefault();
+
+    const start = event.currentTarget.selectionStart ?? body.length;
+    const end = event.currentTarget.selectionEnd ?? body.length;
+    const nextBody = `${body.slice(0, start)}${nextChunk}${body.slice(end)}`;
+    setBody(nextBody);
+  };
+
   return (
     <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <Card>
@@ -320,6 +394,7 @@ export default function ArticlesManager({ locale }: { locale: string }) {
               id="article-body"
               value={body}
               onChange={(event) => setBody(event.target.value)}
+              onPaste={handleBodyPaste}
               className="min-h-[320px] resize-y"
             />
             <p className="text-xs text-slate-500">{copy.bodyHint}</p>
