@@ -303,57 +303,68 @@
     line-height: 1.6;
   }
 
+  .article-content {
+    color: rgb(30 41 59);
+    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+
   .article-content h1,
   .article-content h2,
   .article-content h3,
   .article-content h4,
   .article-content h5,
   .article-content h6 {
-    margin-top: 2.5rem;
-    margin-bottom: 1rem;
+    margin-top: 1.75rem;
+    margin-bottom: 0.75rem;
     color: rgb(15 23 42);
+    font-family: inherit;
     font-weight: 700;
-    line-height: 1.25;
+    line-height: 1.28;
   }
 
   .article-content h1,
   .article-content h2 {
-    font-size: 2rem;
+    font-size: 1.125rem;
   }
 
   .article-content h3 {
-    font-size: 1.625rem;
+    font-size: 1.0625rem;
   }
 
   .article-content h4,
   .article-content h5,
   .article-content h6 {
-    font-size: 1.25rem;
+    font-size: 1rem;
   }
 
   .article-content p,
   .article-content blockquote {
-    margin: 1.75rem 0;
-    color: rgb(51 65 85);
-    font-size: 1.125rem;
-    line-height: 2;
+    margin: 0 0 0.9rem;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
   }
 
   .article-content ul,
   .article-content ol {
-    margin: 1.75rem 0;
+    margin: 0 0 0.9rem;
     padding-left: 1.5rem;
-    color: rgb(51 65 85);
-    font-size: 1.125rem;
-    line-height: 2;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
   }
 
   .article-content li {
-    margin: 0.65rem 0;
+    margin: 0.3rem 0;
   }
 
   .article-content a {
     color: rgb(30 58 138);
+    font-family: inherit;
     font-weight: 600;
     text-decoration: underline;
     text-underline-offset: 4px;
@@ -361,10 +372,12 @@
 
   .article-content strong {
     color: rgb(15 23 42);
+    font-family: inherit;
     font-weight: 700;
   }
 
   .article-content em {
+    font-family: inherit;
     font-style: italic;
   }
 
