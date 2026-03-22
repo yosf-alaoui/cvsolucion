@@ -67,10 +67,10 @@ export default function Articles() {
           {loading ? (
             <div className="mt-12 text-center text-sm text-slate-500">Loading...</div>
           ) : articles.length ? (
-            <div className="mx-auto mt-14 max-w-[1140px]">
-              <div className="grid gap-8 xl:grid-cols-2">
+            <div className="mx-auto mt-14 max-w-[1220px]">
+              <div className="flex flex-wrap justify-center gap-8">
                 {articles.map((article) => (
-                  <GlassCard key={article.id} className="h-full rounded-[32px] p-0">
+                  <GlassCard key={article.id} className="w-full max-w-[560px] rounded-[32px] p-0">
                     <article className="flex h-full flex-col overflow-hidden rounded-[32px]">
                       {article.imageUrl ? (
                         <img src={article.imageUrl} alt={article.title} className="h-64 w-full object-cover" />
