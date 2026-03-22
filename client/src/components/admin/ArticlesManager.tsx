@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { htmlToArticleHtml, plainTextToArticleHtml } from "@/lib/articleBody";
 
 function formatDateInput(value: string | null) {
   if (!value) return "";
@@ -36,84 +36,6 @@ function formatDate(value: string, locale: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function normalizePastedText(value: string) {
-  return value
-    .replace(/\r\n/g, "\n")
-    .replace(/\u00a0/g, " ")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-function htmlToArticleText(html: string) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-
-  const readChildren = (parent: Node, listDepth = 0): string =>
-    Array.from(parent.childNodes)
-      .map((child) => readNode(child, listDepth))
-      .join("");
-
-  const readNode = (node: Node, listDepth = 0): string => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      return node.textContent?.replace(/\s+/g, " ") || "";
-    }
-
-    if (!(node instanceof HTMLElement)) {
-      return "";
-    }
-
-    if (node.tagName === "BR") {
-      return "\n";
-    }
-
-    if (node.tagName === "A") {
-      const text = normalizePastedText(readChildren(node, listDepth));
-      const href = node.getAttribute("href")?.trim();
-      if (!text) return "";
-      return href ? `[${text}](${href})` : text;
-    }
-
-    if (node.tagName === "STRONG" || node.tagName === "B") {
-      const text = normalizePastedText(readChildren(node, listDepth));
-      return text ? `**${text}**` : "";
-    }
-
-    if (node.tagName === "EM" || node.tagName === "I") {
-      const text = normalizePastedText(readChildren(node, listDepth));
-      return text ? `*${text}*` : "";
-    }
-
-    if (node.tagName === "UL" || node.tagName === "OL") {
-      const items = Array.from(node.children)
-        .filter((child) => child.tagName === "LI")
-        .map((child, index) => {
-          const prefix = node.tagName === "OL" ? `${index + 1}. ` : "- ";
-          const text = normalizePastedText(readChildren(child, listDepth + 1));
-          return `${"  ".repeat(listDepth)}${prefix}${text}`;
-        });
-
-      return `${items.join("\n")}\n\n`;
-    }
-
-    const inlineText = readChildren(node, listDepth);
-
-    if (["P", "DIV", "SECTION", "ARTICLE", "BLOCKQUOTE"].includes(node.tagName)) {
-      return `${normalizePastedText(inlineText)}\n\n`;
-    }
-
-    if (/^H[1-6]$/.test(node.tagName)) {
-      const level = Number(node.tagName.slice(1));
-      const prefix = "#".repeat(Number.isFinite(level) ? level : 2);
-      return `${prefix} ${normalizePastedText(inlineText)}\n\n`;
-    }
-
-    return inlineText;
-  };
-
-  return normalizePastedText(readChildren(doc.body));
 }
 
 export default function ArticlesManager({ locale }: { locale: string }) {
@@ -196,6 +118,7 @@ export default function ArticlesManager({ locale }: { locale: string }) {
   const [body, setBody] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [publishedAt, setPublishedAt] = useState("");
+  const editorRef = useRef<HTMLDivElement | null>(null);
 
   const selectedArticle = articles.find((item) => item.id === selectedId) ?? null;
 
@@ -231,6 +154,13 @@ export default function ArticlesManager({ locale }: { locale: string }) {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+    if (editorRef.current.innerHTML !== body) {
+      editorRef.current.innerHTML = body;
+    }
+  }, [body]);
 
   const handleSelect = (article: ArticleSummary) => {
     setSelectedId(article.id);
@@ -301,19 +231,22 @@ export default function ArticlesManager({ locale }: { locale: string }) {
     }
   };
 
+  const handleBodyInput = (event: any) => {
+    setBody(event.currentTarget.innerHTML);
+  };
+
   const handleBodyPaste = (event: any) => {
     const html = event.clipboardData?.getData("text/html") || "";
     const plain = event.clipboardData?.getData("text/plain") || "";
-    const nextChunk = html ? htmlToArticleText(html) : normalizePastedText(plain);
+    const nextHtml = html ? htmlToArticleHtml(html) : plainTextToArticleHtml(plain);
 
-    if (!nextChunk) return;
+    if (!nextHtml) return;
 
     event.preventDefault();
-
-    const start = event.currentTarget.selectionStart ?? body.length;
-    const end = event.currentTarget.selectionEnd ?? body.length;
-    const nextBody = `${body.slice(0, start)}${nextChunk}${body.slice(end)}`;
-    setBody(nextBody);
+    document.execCommand("insertHTML", false, nextHtml);
+    if (editorRef.current) {
+      setBody(editorRef.current.innerHTML);
+    }
   };
 
   return (
@@ -409,12 +342,14 @@ export default function ArticlesManager({ locale }: { locale: string }) {
 
           <div className="space-y-2">
             <Label htmlFor="article-body">{copy.body}</Label>
-            <Textarea
+            <div
               id="article-body"
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
+              ref={editorRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={handleBodyInput}
               onPaste={handleBodyPaste}
-              className="min-h-[320px] resize-y"
+              className="min-h-[320px] rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:border-ring md:text-sm"
             />
             <p className="text-xs text-slate-500">{copy.bodyHint}</p>
           </div>

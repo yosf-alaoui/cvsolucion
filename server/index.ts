@@ -86,7 +86,10 @@ function localePrefix(locale?: string | null) {
 }
 
 function summarizeArticle(body: string, maxLength = 180) {
-  const normalized = body.replace(/\s+/g, " ").trim();
+  const normalized = body
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, maxLength).trimEnd()}...`;
 }
