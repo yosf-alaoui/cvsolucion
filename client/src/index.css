@@ -205,13 +205,13 @@
   .glass-card {
     position: relative;
     overflow: visible;
-    border: 1px solid rgba(59, 130, 246, 0.28);
-    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.02);
     box-shadow:
-      0 0 0 1px rgba(147, 197, 253, 0.12),
+      0 0 0 1px rgba(59, 130, 246, 0.14),
       0 10px 30px rgba(15, 23, 42, 0.08);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(30px) saturate(170%);
+    -webkit-backdrop-filter: blur(30px) saturate(170%);
   }
 
   .card-glass::before,
@@ -234,13 +234,13 @@
   .glass-card-strong {
     position: relative;
     overflow: visible;
-    border: 1px solid rgba(37, 99, 235, 0.34);
-    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    background: rgba(255, 255, 255, 0.025);
     box-shadow:
-      0 0 0 1px rgba(96, 165, 250, 0.14),
+      0 0 0 1px rgba(37, 99, 235, 0.16),
       0 12px 34px rgba(15, 23, 42, 0.1);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(34px) saturate(180%);
+    -webkit-backdrop-filter: blur(34px) saturate(180%);
   }
 
   .card-glass-strong::before,
