@@ -192,6 +192,56 @@ function sanitizeInlineNode(node: Node): string {
   return Array.from(node.childNodes).map(sanitizeInlineNode).join("");
 }
 
+function splitListItemSegments(node: HTMLElement) {
+  const segments: string[] = [];
+  let currentSegment = "";
+
+  const flushSegment = () => {
+    const normalized = currentSegment.trim();
+    if (normalized) {
+      segments.push(normalized);
+    }
+    currentSegment = "";
+  };
+
+  Array.from(node.childNodes).forEach((child) => {
+    if (child.nodeType === Node.TEXT_NODE) {
+      const text = escapeHtml(child.textContent || "").trim();
+      if (text) {
+        currentSegment += `${currentSegment ? " " : ""}${text}`;
+      }
+      return;
+    }
+
+    if (!(child instanceof HTMLElement)) {
+      return;
+    }
+
+    if (child.tagName === "BR") {
+      flushSegment();
+      return;
+    }
+
+    const isBlockLike = ALLOWED_BLOCK_TAGS.has(child.tagName) || BLOCK_CONTAINER_TAGS.has(child.tagName);
+    if (isBlockLike) {
+      const content = Array.from(child.childNodes).map(sanitizeInlineNode).join("").trim();
+      if (content) {
+        flushSegment();
+        segments.push(content);
+      }
+      return;
+    }
+
+    const inlineContent = sanitizeInlineNode(child).trim();
+    if (inlineContent) {
+      currentSegment += `${currentSegment ? " " : ""}${inlineContent}`;
+    }
+  });
+
+  flushSegment();
+  return segments;
+}
+
 export function sanitizeArticleHtml(input: string) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(input, "text/html");
@@ -212,6 +262,16 @@ export function sanitizeArticleHtml(input: string) {
     }
 
     if (ALLOWED_BLOCK_TAGS.has(node.tagName)) {
+      if (node.tagName === "LI") {
+        const style = sanitizeStyleAttribute(node);
+        const segments = splitListItemSegments(node);
+        if (!segments.length) return "";
+        if (segments.length === 1) {
+          return `<li${style}>${segments[0]}</li>`;
+        }
+        return segments.map((segment) => `<li${style}>${segment}</li>`).join("");
+      }
+
       const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("").trim();
       if (!content) return "";
       const tag = node.tagName.toLowerCase();
