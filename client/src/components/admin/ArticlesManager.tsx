@@ -301,7 +301,10 @@ export default function ArticlesManager({ locale }: { locale: string }) {
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
                 className="hidden"
-                onChange={(event) => handleUpload(event.target.files?.[0] || null)}
+                onChange={(event) => {
+                  handleUpload(event.target.files?.[0] || null);
+                  event.currentTarget.value = "";
+                }}
               />
             </label>
             {imageUrl ? (
