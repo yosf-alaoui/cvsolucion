@@ -1,3 +1,5 @@
+import DOMPurify from "dompurify";
+
 export function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -80,230 +82,67 @@ export function markdownishToHtml(body: string) {
     .join("");
 }
 
-const ALLOWED_BLOCK_TAGS = new Set(["P", "UL", "OL", "LI", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
-const INLINE_TAGS = new Set(["STRONG", "B", "EM", "I", "A", "BR", "SPAN"]);
-const BLOCK_CONTAINER_TAGS = new Set(["DIV", "SECTION", "ARTICLE", "MAIN", "HEADER", "FOOTER", "ASIDE", "FIGURE", "FIGCAPTION"]);
-
-function sanitizeStyleValue(property: string, value: string) {
-  const normalized = value.trim().replace(/\s+/g, " ");
-  if (!normalized) return "";
-
-  if (property === "font-family") {
-    return /^[a-z0-9"' ,_-]+$/i.test(normalized) ? normalized : "";
-  }
-
-  if (property === "font-size" || property === "margin-top" || property === "margin-bottom" || property === "letter-spacing") {
-    return /^-?\d+(?:\.\d+)?(px|em|rem|%)$/i.test(normalized) ? normalized : "";
-  }
-
-  if (property === "line-height") {
-    return /^(normal|-?\d+(?:\.\d+)?(?:px|em|rem|%)?)$/i.test(normalized) ? normalized : "";
-  }
-
-  if (property === "font-weight") {
-    return /^(normal|bold|[1-9]00)$/i.test(normalized) ? normalized : "";
-  }
-
-  if (property === "font-style") {
-    return /^(normal|italic|oblique)$/i.test(normalized) ? normalized : "";
-  }
-
-  if (property === "text-align") {
-    return /^(left|right|center|justify|start|end)$/i.test(normalized) ? normalized : "";
-  }
-
-  if (property === "text-decoration") {
-    return /^(none|underline|line-through|overline)(\s+(solid|double|dotted|dashed|wavy))?$/i.test(normalized) ? normalized : "";
-  }
-
-  return "";
-}
-
-function sanitizeStyleAttribute(node: HTMLElement) {
-  const rawStyle = node.getAttribute("style") || "";
-  if (!rawStyle.trim()) return "";
-
-  const allowedProperties = new Set([
-    "font-family",
-    "font-size",
-    "line-height",
-    "font-weight",
-    "font-style",
-    "text-align",
-    "text-decoration",
-    "margin-top",
-    "margin-bottom",
-    "letter-spacing",
-  ]);
-
-  const sanitizedRules = rawStyle
-    .split(";")
-    .map((rule) => rule.trim())
-    .filter(Boolean)
-    .map((rule) => {
-      const separatorIndex = rule.indexOf(":");
-      if (separatorIndex === -1) return "";
-      const property = rule.slice(0, separatorIndex).trim().toLowerCase();
-      const value = rule.slice(separatorIndex + 1).trim();
-      if (!allowedProperties.has(property)) return "";
-      const safeValue = sanitizeStyleValue(property, value);
-      return safeValue ? `${property}: ${safeValue}` : "";
-    })
-    .filter(Boolean);
-
-  return sanitizedRules.length ? ` style="${escapeHtml(sanitizedRules.join("; "))}"` : "";
-}
-
-function sanitizeInlineNode(node: Node): string {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return escapeHtml(node.textContent || "");
-  }
-
-  if (!(node instanceof HTMLElement)) {
-    return "";
-  }
-
-  if (node.tagName === "BR") {
-    return "<br>";
-  }
-
-  if (node.tagName === "A") {
-    const href = node.getAttribute("href") || "";
-    const safeHref = /^https?:\/\//i.test(href) ? escapeHtml(href) : "";
-    const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("");
-    const style = sanitizeStyleAttribute(node);
-    if (!content.trim()) return "";
-    if (!safeHref) return content;
-    return `<a href="${safeHref}" target="_blank" rel="noreferrer"${style}>${content}</a>`;
-  }
-
-  if (node.tagName === "STRONG" || node.tagName === "B") {
-    const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("");
-    const style = sanitizeStyleAttribute(node);
-    return content.trim() ? `<strong${style}>${content}</strong>` : "";
-  }
-
-  if (node.tagName === "EM" || node.tagName === "I") {
-    const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("");
-    const style = sanitizeStyleAttribute(node);
-    return content.trim() ? `<em${style}>${content}</em>` : "";
-  }
-
-  return Array.from(node.childNodes).map(sanitizeInlineNode).join("");
-}
-
-function splitListItemSegments(node: HTMLElement) {
-  const segments: string[] = [];
-  let currentSegment = "";
-
-  const flushSegment = () => {
-    const normalized = currentSegment.trim();
-    if (normalized) {
-      segments.push(normalized);
-    }
-    currentSegment = "";
-  };
-
-  Array.from(node.childNodes).forEach((child) => {
-    if (child.nodeType === Node.TEXT_NODE) {
-      const text = escapeHtml(child.textContent || "").trim();
-      if (text) {
-        currentSegment += `${currentSegment ? " " : ""}${text}`;
-      }
-      return;
-    }
-
-    if (!(child instanceof HTMLElement)) {
-      return;
-    }
-
-    if (child.tagName === "BR") {
-      flushSegment();
-      return;
-    }
-
-    const isBlockLike = ALLOWED_BLOCK_TAGS.has(child.tagName) || BLOCK_CONTAINER_TAGS.has(child.tagName);
-    if (isBlockLike) {
-      const content = Array.from(child.childNodes).map(sanitizeInlineNode).join("").trim();
-      if (content) {
-        flushSegment();
-        segments.push(content);
-      }
-      return;
-    }
-
-    const inlineContent = sanitizeInlineNode(child).trim();
-    if (inlineContent) {
-      currentSegment += `${currentSegment ? " " : ""}${inlineContent}`;
-    }
-  });
-
-  flushSegment();
-  return segments;
-}
+const SANITIZE_CONFIG = {
+  ALLOWED_TAGS: [
+    "p",
+    "br",
+    "strong",
+    "b",
+    "em",
+    "i",
+    "u",
+    "a",
+    "ul",
+    "ol",
+    "li",
+    "blockquote",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "span",
+    "div",
+    "img",
+    "code",
+    "pre",
+  ],
+  ALLOWED_ATTR: ["href", "target", "rel", "style", "src", "alt"],
+  FORBID_TAGS: ["script", "style"],
+  KEEP_CONTENT: true,
+};
 
 export function sanitizeArticleHtml(input: string) {
+  const sanitized = DOMPurify.sanitize(input, SANITIZE_CONFIG);
   const parser = new DOMParser();
-  const doc = parser.parseFromString(input, "text/html");
+  const doc = parser.parseFromString(`<div>${sanitized}</div>`, "text/html");
+  const root = doc.body.firstElementChild as HTMLElement | null;
 
-  const sanitizeNode = (node: Node): string => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent?.trim() || "";
-      return text ? `<p>${escapeHtml(text)}</p>` : "";
+  if (!root) return "";
+
+  root.querySelectorAll("a").forEach((anchor) => {
+    const href = anchor.getAttribute("href") || "";
+    if (!/^(https?:\/\/|\/)/i.test(href)) {
+      anchor.replaceWith(...Array.from(anchor.childNodes));
+      return;
     }
 
-    if (!(node instanceof HTMLElement)) {
-      return "";
+    anchor.setAttribute("target", "_blank");
+    anchor.setAttribute("rel", "noreferrer");
+  });
+
+  root.querySelectorAll("img").forEach((image) => {
+    const src = image.getAttribute("src") || "";
+    if (!/^(https?:\/\/|\/)/i.test(src)) {
+      image.remove();
+      return;
     }
 
-    if (INLINE_TAGS.has(node.tagName)) {
-      const inlineContent = sanitizeInlineNode(node).trim();
-      return inlineContent ? `<p>${inlineContent}</p>` : "";
-    }
+    image.setAttribute("alt", image.getAttribute("alt") || "");
+  });
 
-    if (ALLOWED_BLOCK_TAGS.has(node.tagName)) {
-      if (node.tagName === "LI") {
-        const style = sanitizeStyleAttribute(node);
-        const segments = splitListItemSegments(node);
-        if (!segments.length) return "";
-        if (segments.length === 1) {
-          return `<li${style}>${segments[0]}</li>`;
-        }
-        return segments.map((segment) => `<li${style}>${segment}</li>`).join("");
-      }
-
-      const content = Array.from(node.childNodes).map(sanitizeInlineNode).join("").trim();
-      if (!content) return "";
-      const tag = node.tagName.toLowerCase();
-      const style = sanitizeStyleAttribute(node);
-      return `<${tag}${style}>${content}</${tag}>`;
-    }
-
-    if (BLOCK_CONTAINER_TAGS.has(node.tagName)) {
-      const hasNestedBlocks = Array.from(node.children).some(
-        (child) => ALLOWED_BLOCK_TAGS.has(child.tagName) || BLOCK_CONTAINER_TAGS.has(child.tagName)
-      );
-
-      if (hasNestedBlocks) {
-        return Array.from(node.childNodes).map(sanitizeNode).join("");
-      }
-
-      const inlineContent = Array.from(node.childNodes).map(sanitizeInlineNode).join("").trim();
-      if (!inlineContent) return "";
-      const style = sanitizeStyleAttribute(node);
-
-      const plainText = node.textContent?.replace(/\s+/g, " ").trim() || "";
-      if (isLikelyHeading(plainText) && !/<a\b/i.test(inlineContent)) {
-        return `<h2${style}>${inlineContent}</h2>`;
-      }
-
-      return `<p${style}>${inlineContent}</p>`;
-    }
-
-    return Array.from(node.childNodes).map(sanitizeNode).join("");
-  };
-
-  return Array.from(doc.body.childNodes).map(sanitizeNode).join("").trim();
+  return root.innerHTML.trim();
 }
 
 export function bodyToHtml(body: string) {

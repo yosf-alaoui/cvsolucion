@@ -189,12 +189,19 @@ export default function ArticlesManager({ locale }: { locale: string }) {
 
   const selectedArticle = articles.find((item) => item.id === selectedId) ?? null;
 
+  const applyEditorBody = (nextBody: string) => {
+    if (!editor) return;
+    const normalized = bodyToHtml(nextBody);
+    editor.commands.setContent(normalized || "<p></p>", { emitUpdate: false });
+  };
+
   const resetForm = () => {
     setSelectedId(null);
     setTitle("");
     setBody("");
     setImageUrl("");
     setPublishedAt("");
+    applyEditorBody("");
   };
 
   const load = async () => {
@@ -224,18 +231,19 @@ export default function ArticlesManager({ locale }: { locale: string }) {
 
   useEffect(() => {
     if (!editor) return;
-    const nextContent = bodyToHtml(body);
-    if (editor.getHTML() !== nextContent) {
-      editor.commands.setContent(nextContent || "<p></p>", { emitUpdate: false });
-    }
-  }, [body, editor]);
-
-  useEffect(() => {
-    if (!editor) return;
     const attributes = editor.getAttributes("textStyle");
     setTextColor(attributes.color || "#111827");
     setFontSize(attributes.fontSize || "16px");
   }, [editor, body]);
+
+  useEffect(() => {
+    if (!editor) return;
+    if (!selectedArticle) {
+      applyEditorBody("");
+      return;
+    }
+    applyEditorBody(selectedArticle.body);
+  }, [editor, selectedArticle?.id]);
 
   const handleSelect = (article: ArticleSummary) => {
     setSelectedId(article.id);
@@ -243,6 +251,7 @@ export default function ArticlesManager({ locale }: { locale: string }) {
     setBody(article.body);
     setImageUrl(article.imageUrl || "");
     setPublishedAt(formatDateInput(article.publishedAt));
+    applyEditorBody(article.body);
   };
 
   const handleUpload = async (file: File | null) => {
@@ -264,9 +273,6 @@ export default function ArticlesManager({ locale }: { locale: string }) {
     try {
       const normalizedBody = htmlToArticleHtml(editor?.getHTML() || body);
       setBody(normalizedBody);
-      if (editor && editor.getHTML() !== normalizedBody) {
-        editor.commands.setContent(normalizedBody || "<p></p>", { emitUpdate: false });
-      }
 
       const payload = {
         title,
