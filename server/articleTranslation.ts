@@ -98,16 +98,18 @@ Rules:
 
   const json = await callResponsesApi({
     model: getModel(),
-    max_output_tokens: 20000,
+    max_output_tokens: 24000,
+    reasoning: { effort: "low" },
+    text: { verbosity: "low" },
     instructions,
-    input: JSON.stringify({
+    input: `Return JSON only. ${JSON.stringify({
       sourceLocale: input.sourceLocale,
       targetLocale: input.targetLocale,
       article: {
         title: input.title,
         body: input.body,
       },
-    }),
+    })}`,
   });
 
   const text = extractOutputText(json);
