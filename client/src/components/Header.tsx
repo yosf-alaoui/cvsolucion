@@ -1,17 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Menu, MessageCircle, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CalendarDays, ChevronDown, Mail, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
 import { useAuth } from "@/contexts/AuthContext";
+import { useI18n } from "@/i18n/i18n";
+import { getBookingHref } from "@/lib/site";
 
-/**
- * Header Component - CV Solucion
- *
- * - Floating transparent header
- * - Centered menu items (Services / Packages / FAQ)
- * - Desktop: Language switch + WhatsApp on the right
- * - Mobile: Language switch inside the opened menu only
- */
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLangOpen, setIsLangOpen] = useState(false);
@@ -42,7 +35,6 @@ export default function Header() {
     };
   }, [isLangOpen]);
 
-  // Build locale href while keeping pathname + search + hash
   const getLocaleHref = (target: "en" | "fr" | "ar") => {
     if (typeof window === "undefined") {
       if (target === "fr") return "/fr";
@@ -52,49 +44,49 @@ export default function Header() {
 
     const { pathname, search, hash } = window.location;
 
-    const stripLocale = (p: string) => {
-      if (p === "/fr" || p === "/ar") return "/";
-      if (p.startsWith("/fr/")) return p.replace(/^\/fr/, "") || "/";
-      if (p.startsWith("/ar/")) return p.replace(/^\/ar/, "") || "/";
-      return p;
+    const stripLocale = (value: string) => {
+      if (value === "/fr" || value === "/ar") return "/";
+      if (value.startsWith("/fr/")) return value.replace(/^\/fr/, "") || "/";
+      if (value.startsWith("/ar/")) return value.replace(/^\/ar/, "") || "/";
+      return value;
     };
 
-    const addLocale = (p: string, loc: "en" | "fr" | "ar") => {
-      const clean = stripLocale(p);
-      if (loc === "en") return clean;
-      const prefix = loc === "fr" ? "/fr" : "/ar";
+    const addLocale = (value: string, nextLocale: "en" | "fr" | "ar") => {
+      const clean = stripLocale(value);
+      if (nextLocale === "en") return clean;
+      const prefix = nextLocale === "fr" ? "/fr" : "/ar";
       return clean === "/" ? prefix : `${prefix}${clean}`;
     };
 
-    const base = stripLocale(pathname);
-    const nextPath = addLocale(base, target);
-
-    return `${nextPath}${search}${hash}`;
+    return `${addLocale(pathname, target)}${search}${hash}`;
   };
 
   const enHref = getLocaleHref("en");
   const frHref = getLocaleHref("fr");
   const arHref = getLocaleHref("ar");
-
-  const whatsappHref = useMemo(() => {
-    return buildWhatsAppLink("+1 438 807 8747", t("whatsapp.needHelp"));
-  }, [t]);
-
-  const trainingHref = locale === "en" ? "/training" : `/${locale}/training`;
-  const designPricingHref = locale === "en" ? "/design-pricing" : `/${locale}/design-pricing`;
-  const articlesHref = locale === "en" ? "/articles" : `/${locale}/articles`;
-  const dashboardHref = locale === "en" ? "/dashboard" : `/${locale}/dashboard`;
-  const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
+  const prefix = locale === "en" ? "" : `/${locale}`;
+  const homeHref = prefix || "/";
+  const trainingHref = `${prefix}/training`;
+  const designPricingHref = `${prefix}/design-pricing`;
+  const articlesHref = `${prefix}/articles`;
+  const aboutHref = `${prefix}/about`;
+  const dashboardHref = `${prefix}/dashboard`;
+  const loginHref = `${prefix}/login`;
+  const contactHref = `${homeHref}#contact`;
+  const bookingHref = getBookingHref();
   const isAuthed = Boolean(user?.id);
-  const articlesLabel = locale === "ar" ? "المقالات" : locale === "fr" ? "Articles" : "Articles";
+
+  const articlesLabel = locale === "ar" ? "المقالات" : "Articles";
+  const aboutLabel = locale === "ar" ? "من نحن" : locale === "fr" ? "A propos" : "About";
+  const contactLabel = locale === "ar" ? "تواصل" : locale === "fr" ? "Contact" : "Contact";
+  const bookLabel = locale === "ar" ? "احجز استشارة" : locale === "fr" ? "Reserver" : "Book";
 
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {
       element.scrollIntoView({ behavior: "smooth" });
     } else if (typeof window !== "undefined") {
-      const base = locale === "en" ? "/" : `/${locale}`;
-      window.location.href = `${base}#${sectionId}`;
+      window.location.href = `${homeHref}#${sectionId}`;
     }
     setIsMenuOpen(false);
   };
@@ -105,104 +97,106 @@ export default function Header() {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50">
+    <header className="fixed left-0 right-0 top-0 z-50">
       <div className="container mx-auto px-4">
-        <div className="mt-3 rounded-2xl border border-white/25 bg-white/85 backdrop-blur-xl shadow-xl">
+        <div className="mt-3 rounded-2xl border border-white/25 bg-white/85 shadow-xl backdrop-blur-xl">
           <div className="flex items-center justify-between px-4 py-3">
-            {/* Logo */}
-            <a
-              href={locale === "en" ? "/" : `/${locale}` }
-              className="flex items-center hover:opacity-90 transition-opacity"
-            >
+            <a href={homeHref} className="flex items-center transition-opacity hover:opacity-90">
               <img
                 src="/logo.png"
                 alt="CV Solucion Logo"
-                className="h-10 sm:h-11 md:h-12 w-auto drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]"
+                className="h-10 w-auto drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)] sm:h-11 md:h-12"
               />
             </a>
 
-            {/* Desktop Navigation (center) */}
-            <nav className="hidden md:flex flex-1 items-center justify-center gap-8">
-              <a
-                href={trainingHref}
-                className="text-foreground hover:text-primary transition-colors font-semibold"
-              >{t("nav.training")}</a>
-
-              <a
-                href={designPricingHref}
-                className="text-foreground hover:text-primary transition-colors font-semibold"
-              >{t("nav.designPricing")}</a>
-
-              <a
-                href={articlesHref}
-                className="text-foreground hover:text-primary transition-colors font-semibold"
-              >{articlesLabel}</a>
-
+            <nav className="hidden flex-1 items-center justify-center gap-8 md:flex">
+              <a href={trainingHref} className="font-semibold text-foreground transition-colors hover:text-primary">
+                {t("nav.training")}
+              </a>
+              <a href={designPricingHref} className="font-semibold text-foreground transition-colors hover:text-primary">
+                {t("nav.designPricing")}
+              </a>
+              <a href={articlesHref} className="font-semibold text-foreground transition-colors hover:text-primary">
+                {articlesLabel}
+              </a>
+              <a href={aboutHref} className="font-semibold text-foreground transition-colors hover:text-primary">
+                {aboutLabel}
+              </a>
               {isAuthed && isAdmin ? (
-                <a
-                  href={dashboardHref}
-                  className="text-foreground hover:text-primary transition-colors font-semibold"
-                >
+                <a href={dashboardHref} className="font-semibold text-foreground transition-colors hover:text-primary">
                   Dashboard
                 </a>
               ) : null}
-
               <button
                 onClick={() => scrollToSection("services")}
-                className="text-foreground hover:text-primary transition-colors font-semibold"
-              >{t("nav.services")}</button>
+                className="font-semibold text-foreground transition-colors hover:text-primary"
+              >
+                {t("nav.services")}
+              </button>
               <button
                 onClick={() => scrollToSection("packages")}
-                className="text-foreground hover:text-primary transition-colors font-semibold"
-              >{t("nav.packages")}</button>
+                className="font-semibold text-foreground transition-colors hover:text-primary"
+              >
+                {t("nav.packages")}
+              </button>
               <button
                 onClick={() => scrollToSection("faq")}
-                className="text-foreground hover:text-primary transition-colors font-semibold"
-              >{t("nav.faq")}</button>
+                className="font-semibold text-foreground transition-colors hover:text-primary"
+              >
+                {t("nav.faq")}
+              </button>
             </nav>
 
-            {/* Desktop Right: Language + Account + WhatsApp */}
-            <div className="hidden md:flex items-center justify-end gap-3">
-              {!isAuthed ? (
+            <div className="hidden items-center justify-end gap-3 md:flex">
+              <Button asChild variant="outline" size="sm" className="rounded-full border-slate-200 bg-white/75 backdrop-blur">
+                <a href={contactHref}>
+                  <Mail className="h-4 w-4" />
+                  {contactLabel}
+                </a>
+              </Button>
+
+              <Button asChild size="sm" className="rounded-full bg-primary text-white shadow-sm hover:bg-primary/90">
                 <a
-                  href={loginHref}
-                  className="text-foreground hover:text-primary transition-colors font-semibold"
+                  href={bookingHref}
+                  target={bookingHref.startsWith("http") ? "_blank" : undefined}
+                  rel={bookingHref.startsWith("http") ? "noopener noreferrer" : undefined}
                 >
+                  <CalendarDays className="h-4 w-4" />
+                  {bookLabel}
+                </a>
+              </Button>
+
+              {!isAuthed ? (
+                <a href={loginHref} className="font-semibold text-foreground transition-colors hover:text-primary">
                   {t("auth.signInUp")}
                 </a>
               ) : (
                 <button
                   type="button"
-                  className="text-foreground hover:text-primary transition-colors font-semibold"
+                  className="font-semibold text-foreground transition-colors hover:text-primary"
                   onClick={handleSignOut}
                 >
                   {t("auth.signOut")}
                 </button>
               )}
 
-              <div
-                data-testid="lang-switch-desktop"
-                className="relative"
-                ref={langMenuRef}
-              >
+              <div data-testid="lang-switch-desktop" className="relative" ref={langMenuRef}>
                 <button
                   type="button"
-                  onClick={() => setIsLangOpen((v) => !v)}
-                  className="inline-flex items-center gap-2 rounded-full border border-border bg-white/70 px-4 py-1 text-sm font-semibold text-foreground backdrop-blur hover:bg-white/80 transition-colors"
+                  onClick={() => setIsLangOpen((value) => !value)}
+                  className="inline-flex items-center gap-2 rounded-full border border-border bg-white/70 px-4 py-1 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:bg-white/80"
                   aria-haspopup="menu"
                   aria-expanded={isLangOpen}
                 >
                   {t("nav.languageLabel")}
                   <ChevronDown className="h-4 w-4" />
                 </button>
-                {isLangOpen && (
-                  <div className="absolute right-0 mt-2 w-40 rounded-xl border border-border bg-white/95 shadow-lg backdrop-blur p-1">
+                {isLangOpen ? (
+                  <div className="absolute right-0 mt-2 w-40 rounded-xl border border-border bg-white/95 p-1 shadow-lg backdrop-blur">
                     <a
                       href={enHref}
                       className={`block rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                        locale === "en"
-                          ? "bg-primary text-white"
-                          : "text-foreground hover:bg-white/80"
+                        locale === "en" ? "bg-primary text-white" : "text-foreground hover:bg-white/80"
                       }`}
                       onClick={() => setIsLangOpen(false)}
                     >
@@ -211,9 +205,7 @@ export default function Header() {
                     <a
                       href={frHref}
                       className={`block rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                        locale === "fr"
-                          ? "bg-primary text-white"
-                          : "text-foreground hover:bg-white/80"
+                        locale === "fr" ? "bg-primary text-white" : "text-foreground hover:bg-white/80"
                       }`}
                       onClick={() => setIsLangOpen(false)}
                     >
@@ -222,56 +214,46 @@ export default function Header() {
                     <a
                       href={arHref}
                       className={`block rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                        locale === "ar"
-                          ? "bg-primary text-white"
-                          : "text-foreground hover:bg-white/80"
+                        locale === "ar" ? "bg-primary text-white" : "text-foreground hover:bg-white/80"
                       }`}
                       onClick={() => setIsLangOpen(false)}
                     >
                       {t("nav.arabic")}
                     </a>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
 
-            {/* Mobile Menu Button */}
             <button
-              onClick={() => setIsMenuOpen((v) => !v)}
-              className="md:hidden p-2 rounded-xl hover:bg-white/30 transition-colors"
+              onClick={() => setIsMenuOpen((value) => !value)}
+              className="rounded-xl p-2 transition-colors hover:bg-white/30 md:hidden"
               aria-label="Toggle menu"
             >
-              {isMenuOpen ? (
-                <X className="w-6 h-6 text-foreground" />
-              ) : (
-                <Menu className="w-6 h-6 text-foreground" />
-              )}
+              {isMenuOpen ? <X className="h-6 w-6 text-foreground" /> : <Menu className="h-6 w-6 text-foreground" />}
             </button>
           </div>
 
-          {/* Mobile Navigation */}
-          {isMenuOpen && (
-            <div className="md:hidden border-t border-white/20 px-4 py-4 space-y-2">
-              <div data-testid="lang-switch-mobile" className="pt-1 pb-2">
+          {isMenuOpen ? (
+            <div className="space-y-2 border-t border-white/20 px-4 py-4 md:hidden">
+              <div data-testid="lang-switch-mobile" className="pb-2 pt-1">
                 <div className="relative" ref={mobileLangMenuRef}>
                   <button
                     type="button"
-                    onClick={() => setIsLangOpen((v) => !v)}
-                    className="inline-flex w-full items-center justify-between rounded-lg border border-border bg-white/70 px-3 py-2 text-sm font-semibold text-foreground backdrop-blur hover:bg-white/80 transition-colors"
+                    onClick={() => setIsLangOpen((value) => !value)}
+                    className="inline-flex w-full items-center justify-between rounded-lg border border-border bg-white/70 px-3 py-2 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:bg-white/80"
                     aria-haspopup="menu"
                     aria-expanded={isLangOpen}
                   >
                     {t("nav.languageLabel")}
                     <ChevronDown className="h-4 w-4" />
                   </button>
-                  {isLangOpen && (
-                    <div className="mt-2 w-full rounded-xl border border-border bg-white/95 shadow-lg backdrop-blur p-1">
+                  {isLangOpen ? (
+                    <div className="mt-2 w-full rounded-xl border border-border bg-white/95 p-1 shadow-lg backdrop-blur">
                       <a
                         href={enHref}
                         className={`block rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                          locale === "en"
-                            ? "bg-primary text-white"
-                            : "text-foreground hover:bg-white/80"
+                          locale === "en" ? "bg-primary text-white" : "text-foreground hover:bg-white/80"
                         }`}
                         onClick={() => {
                           setIsLangOpen(false);
@@ -283,9 +265,7 @@ export default function Header() {
                       <a
                         href={frHref}
                         className={`block rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                          locale === "fr"
-                            ? "bg-primary text-white"
-                            : "text-foreground hover:bg-white/80"
+                          locale === "fr" ? "bg-primary text-white" : "text-foreground hover:bg-white/80"
                         }`}
                         onClick={() => {
                           setIsLangOpen(false);
@@ -297,9 +277,7 @@ export default function Header() {
                       <a
                         href={arHref}
                         className={`block rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                          locale === "ar"
-                            ? "bg-primary text-white"
-                            : "text-foreground hover:bg-white/80"
+                          locale === "ar" ? "bg-primary text-white" : "text-foreground hover:bg-white/80"
                         }`}
                         onClick={() => {
                           setIsLangOpen(false);
@@ -309,57 +287,70 @@ export default function Header() {
                         {t("nav.arabic")}
                       </a>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
 
               <a
                 href={trainingHref}
-                className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/30 transition-colors font-semibold"
+                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
                 onClick={() => setIsMenuOpen(false)}
-              >{t("nav.training")}</a>
-
+              >
+                {t("nav.training")}
+              </a>
               <a
                 href={designPricingHref}
-                className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/30 transition-colors font-semibold"
+                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
                 onClick={() => setIsMenuOpen(false)}
-              >{t("nav.designPricing")}</a>
-
+              >
+                {t("nav.designPricing")}
+              </a>
+              <a
+                href={articlesHref}
+                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {articlesLabel}
+              </a>
+              <a
+                href={aboutHref}
+                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {aboutLabel}
+              </a>
               {isAuthed && isAdmin ? (
                 <a
                   href={dashboardHref}
-                  className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/30 transition-colors font-semibold"
+                  className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Dashboard
                 </a>
               ) : null}
-
-              <a
-                href={articlesHref}
-                className="text-foreground hover:text-primary transition-colors font-semibold"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {articlesLabel}
-              </a>
-
               <button
                 onClick={() => scrollToSection("services")}
-                className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/30 transition-colors font-semibold"
-              >{t("nav.services")}</button>
+                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
+              >
+                {t("nav.services")}
+              </button>
               <button
                 onClick={() => scrollToSection("packages")}
-                className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/30 transition-colors font-semibold"
-              >{t("nav.packages")}</button>
+                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
+              >
+                {t("nav.packages")}
+              </button>
               <button
                 onClick={() => scrollToSection("faq")}
-                className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/30 transition-colors font-semibold"
-              >{t("nav.faq")}</button>
+                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
+              >
+                {t("nav.faq")}
+              </button>
 
               {!isAuthed ? (
                 <a
                   href={loginHref}
-                  className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/30 transition-colors font-semibold"
+                  className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
                 >
                   {t("auth.signInUp")}
                 </a>
@@ -367,14 +358,33 @@ export default function Header() {
                 <button
                   type="button"
                   onClick={handleSignOut}
-                  className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/30 transition-colors font-semibold"
+                  className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
                 >
                   {t("auth.signOut")}
                 </button>
               )}
 
+              <div className="grid gap-2 pt-2">
+                <Button asChild variant="outline" className="w-full rounded-full bg-white/80">
+                  <a href={contactHref} onClick={() => setIsMenuOpen(false)}>
+                    <Mail className="h-4 w-4" />
+                    {contactLabel}
+                  </a>
+                </Button>
+                <Button asChild className="w-full rounded-full bg-primary text-white hover:bg-primary/90">
+                  <a
+                    href={bookingHref}
+                    target={bookingHref.startsWith("http") ? "_blank" : undefined}
+                    rel={bookingHref.startsWith("http") ? "noopener noreferrer" : undefined}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    {bookLabel}
+                  </a>
+                </Button>
+              </div>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </header>

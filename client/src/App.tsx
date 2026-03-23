@@ -13,6 +13,7 @@ import DesignPricing from "./pages/DesignPricing";
 import AdminDashboard from "./pages/AdminDashboard";
 import Articles from "./pages/Articles";
 import ArticleDetailPage from "./pages/ArticleDetail";
+import About from "./pages/About";
 import Analytics from "./components/Analytics";
 import ChatWidget from "./components/ChatWidget";
 import DotWaveBackground from "./components/DotWaveBackground";
@@ -45,6 +46,9 @@ function Router() {
       <Route path={"/articles/:slug"} component={ArticleDetailPage} />
       <Route path={"/fr/articles/:slug"} component={ArticleDetailPage} />
       <Route path={"/ar/articles/:slug"} component={ArticleDetailPage} />
+      <Route path={"/about"} component={About} />
+      <Route path={"/fr/about"} component={About} />
+      <Route path={"/ar/about"} component={About} />
       {/* Legal */}
       <Route path={"/privacy"} component={Privacy} />
       <Route path={"/terms"} component={Terms} />

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { RouteComponentProps } from "wouter";
-import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
-import { getArticle, type ArticleDetail } from "@/lib/articles";
+import Header from "@/components/Header";
+import Seo from "@/components/Seo";
 import { bodyToHtml } from "@/lib/articleBody";
+import { getArticle, type ArticleDetail } from "@/lib/articles";
 import { useI18n } from "@/i18n/i18n";
 
 function formatDate(value: string, locale: string) {
@@ -21,17 +22,26 @@ export default function ArticleDetailPage({ params }: RouteComponentProps<Articl
   const { locale } = useI18n();
   const [article, setArticle] = useState<ArticleDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const articleHtml = useMemo(() => (article ? bodyToHtml(article.body) : ""), [article]);
   const slug = (params?.slug || "").replace(/\/+$/, "").trim();
+  const articleHtml = useMemo(() => (article ? bodyToHtml(article.body) : ""), [article]);
 
   const copy = useMemo(() => {
     if (locale === "ar") {
-      return { back: "العودة إلى المقالات", notFound: "المقال غير موجود." };
+      return {
+        back: "العودة إلى المقالات",
+        notFound: "المقال غير موجود.",
+      };
     }
     if (locale === "fr") {
-      return { back: "Retour aux articles", notFound: "Article introuvable." };
+      return {
+        back: "Retour aux articles",
+        notFound: "Article introuvable.",
+      };
     }
-    return { back: "Back to articles", notFound: "Article not found." };
+    return {
+      back: "Back to articles",
+      notFound: "Article not found.",
+    };
   }, [locale]);
 
   useEffect(() => {
@@ -48,9 +58,37 @@ export default function ArticleDetailPage({ params }: RouteComponentProps<Articl
   }, [slug]);
 
   const articlesHref = locale === "en" ? "/articles" : `/${locale}/articles`;
+  const articleSchema =
+    article && typeof window !== "undefined"
+      ? {
+          "@context": "https://schema.org",
+          "@type": "Article",
+          headline: article.title,
+          description: article.excerpt,
+          datePublished: article.publishedAt,
+          dateModified: article.updatedAt,
+          mainEntityOfPage: window.location.href,
+          author: {
+            "@type": "Organization",
+            name: "CVsolucion",
+          },
+          publisher: {
+            "@type": "Organization",
+            name: "CVsolucion",
+          },
+          image: article.imageUrl ? [article.imageUrl] : undefined,
+        }
+      : null;
 
   return (
     <div className="site-page min-h-screen bg-transparent">
+      <Seo
+        title={article ? `${article.title} | CVsolucion` : "Article | CVsolucion"}
+        description={article?.excerpt || copy.notFound}
+        image={article?.imageUrl || undefined}
+        type="article"
+        structuredData={articleSchema}
+      />
       <Header />
       <main className="pt-32 pb-24">
         <section className="container">
@@ -77,10 +115,7 @@ export default function ArticleDetailPage({ params }: RouteComponentProps<Articl
                     </div>
                     <h1 className="mt-5 text-3xl font-bold leading-tight text-slate-950 sm:text-5xl">{article.title}</h1>
                     <div className="mt-10 border-t border-slate-200/70 pt-4" />
-                    <div
-                      className="article-content mx-auto max-w-3xl"
-                      dangerouslySetInnerHTML={{ __html: articleHtml }}
-                    />
+                    <div className="article-content mx-auto max-w-3xl" dangerouslySetInnerHTML={{ __html: articleHtml }} />
                   </div>
                 </article>
               </GlassCard>

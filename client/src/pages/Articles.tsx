@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
+import Header from "@/components/Header";
+import Seo from "@/components/Seo";
 import { getArticles, type ArticleSummary } from "@/lib/articles";
 import { useI18n } from "@/i18n/i18n";
 
@@ -24,21 +25,26 @@ export default function Articles() {
         subtitle: "مقالات منظمة بعرض مريح للعين لمتابعة الأفكار والخبرة التقنية بسلاسة.",
         empty: "لا توجد مقالات منشورة بعد.",
         readMore: "قراءة المقال",
+        seoTitle: "المقالات | CVsolucion",
       };
     }
+
     if (locale === "fr") {
       return {
         title: "Articles",
         subtitle: "Des articles structures pour lire facilement les idees, conseils et retours terrain.",
         empty: "Aucun article publie pour le moment.",
         readMore: "Lire l'article",
+        seoTitle: "Articles | CVsolucion",
       };
     }
+
     return {
       title: "Articles",
       subtitle: "Structured articles designed for smooth reading and clear ideas from real Cabinet Vision work.",
       empty: "No published articles yet.",
       readMore: "Read article",
+      seoTitle: "Articles | CVsolucion",
     };
   }, [locale]);
 
@@ -53,6 +59,7 @@ export default function Articles() {
 
   return (
     <div className="site-page min-h-screen bg-transparent">
+      <Seo title={copy.seoTitle} description={copy.subtitle} type="website" />
       <Header />
       <main className="pt-32 pb-20">
         <section className="container">

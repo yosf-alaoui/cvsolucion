@@ -50,6 +50,7 @@ import {
   saveArticleImageBuffer,
   updateArticle,
 } from "./articleStore";
+import { storeContactLead } from "./contactStore";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -92,6 +93,15 @@ function summarizeArticle(body: string, maxLength = 180) {
     .trim();
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, maxLength).trimEnd()}...`;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function setSessionCookie(res: express.Response, sessionId: string) {
@@ -687,6 +697,70 @@ async function startServer() {
         supportIntake: finalConversation.supportIntake,
       },
     });
+  });
+
+  app.post("/api/contact", rateLimit({ key: "contact", windowMs: 1000 * 60 * 10, limit: 20 }), async (req, res, next) => {
+    try {
+      const name = String(req.body?.name || "").trim();
+      const email = String(req.body?.email || "").trim();
+      const company = String(req.body?.company || "").trim();
+      const phone = String(req.body?.phone || "").trim();
+      const interest = String(req.body?.interest || "").trim();
+      const message = String(req.body?.message || "").trim();
+      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+
+      if (name.length < 2) {
+        return res.status(400).json({ error: "Name is required." });
+      }
+      if (!EMAIL_REGEX.test(email)) {
+        return res.status(400).json({ error: "A valid email is required." });
+      }
+      if (message.length < 10) {
+        return res.status(400).json({ error: "Please provide a little more context in your message." });
+      }
+
+      const lead = storeContactLead({ name, email, company, phone, interest, message });
+      const destination = (process.env.CONTACT_EMAIL || "contact@cvsolucion.com").trim();
+      const source = req.get("referer") || appOrigin(req);
+
+      const lines = [
+        `Lead ID: ${lead.id}`,
+        `Name: ${lead.name}`,
+        `Email: ${lead.email}`,
+        lead.company ? `Company: ${lead.company}` : null,
+        lead.phone ? `Phone: ${lead.phone}` : null,
+        lead.interest ? `Interest: ${lead.interest}` : null,
+        `Locale: ${locale}`,
+        `Source: ${source}`,
+        "",
+        lead.message,
+      ].filter(Boolean);
+
+      await sendAuthEmail({
+        to: destination,
+        subject: `New CVsolucion contact request - ${lead.name}`,
+        text: lines.join("\n"),
+        html: `
+          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+            <h2 style="margin:0 0 16px">New CVsolucion contact request</h2>
+            <p><strong>Lead ID:</strong> ${escapeHtml(lead.id)}</p>
+            <p><strong>Name:</strong> ${escapeHtml(lead.name)}</p>
+            <p><strong>Email:</strong> ${escapeHtml(lead.email)}</p>
+            ${lead.company ? `<p><strong>Company:</strong> ${escapeHtml(lead.company)}</p>` : ""}
+            ${lead.phone ? `<p><strong>Phone:</strong> ${escapeHtml(lead.phone)}</p>` : ""}
+            ${lead.interest ? `<p><strong>Interest:</strong> ${escapeHtml(lead.interest)}</p>` : ""}
+            <p><strong>Locale:</strong> ${escapeHtml(locale)}</p>
+            <p><strong>Source:</strong> ${escapeHtml(source)}</p>
+            <hr style="margin:24px 0;border:none;border-top:1px solid #cbd5e1" />
+            <p style="white-space:pre-wrap">${escapeHtml(lead.message)}</p>
+          </div>
+        `,
+      });
+
+      return res.status(201).json({ ok: true, leadId: lead.id });
+    } catch (error) {
+      return next(error);
+    }
   });
 
   app.post("/api/auth/signup", rateLimit({ key: "signup", windowMs: 1000 * 60 * 10, limit: 10 }), async (req, res, next) => {

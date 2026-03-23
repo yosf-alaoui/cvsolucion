@@ -7,7 +7,11 @@ import PackagesSection from "@/components/PackagesSection";
 import BenefitsSection from "@/components/BenefitsSection";
 import FAQSection from "@/components/FAQSection";
 import CTASection from "@/components/CTASection";
+import TestimonialsSection from "@/components/TestimonialsSection";
+import ContactSection from "@/components/ContactSection";
 import Footer from "@/components/Footer";
+import Seo from "@/components/Seo";
+import { useI18n } from "@/i18n/i18n";
 
 /**
  * Home Page - CV Solution
@@ -15,6 +19,8 @@ import Footer from "@/components/Footer";
  * Design: Modern professional layout with smooth scrolling
  */
 export default function Home() {
+  const { locale, t } = useI18n();
+
   useEffect(() => {
     const scrollToHash = () => {
       const hash = window.location.hash;
@@ -33,8 +39,31 @@ export default function Home() {
     };
   }, []);
 
+  const homeUrl =
+    typeof window !== "undefined"
+      ? window.location.href
+      : locale === "en"
+        ? "https://cvsolucion.com"
+        : `https://cvsolucion.com/${locale}`;
+
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "ProfessionalService",
+    name: "CVsolucion",
+    url: homeUrl,
+    description: t("meta.description"),
+    areaServed: ["Canada", "United States"],
+    serviceType: ["Cabinet Vision Consulting", "Cabinet Vision Training", "Cabinet Vision Support"],
+  };
+
   return (
     <div className="site-page min-h-screen flex flex-col bg-transparent">
+      <Seo
+        title={t("meta.title")}
+        description={t("meta.description")}
+        type="website"
+        structuredData={structuredData}
+      />
       {/* Header */}
       <Header />
 
@@ -52,11 +81,17 @@ export default function Home() {
         {/* Packages Section */}
         <PackagesSection />
 
+        {/* Social Proof Section */}
+        <TestimonialsSection />
+
         {/* Benefits Section */}
         <BenefitsSection />
 
         {/* FAQ Section */}
         <FAQSection />
+
+        {/* Contact Section */}
+        <ContactSection />
 
         {/* CTA Section */}
         <CTASection />

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
-import { Facebook, Instagram, Linkedin, Mail, MessageCircle, Twitter } from "lucide-react";
+import { Facebook, Instagram, Linkedin, Mail, MessageCircle } from "lucide-react";
 import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
+import { CONTACT_EMAIL } from "@/lib/site";
 
 /**
  * Footer Component - CV Solution
@@ -14,6 +15,12 @@ export default function Footer() {
   const trainingHref = locale === "en" ? "/training" : `/${locale}/training`;
   const designPricingHref = locale === "en" ? "/design-pricing" : `/${locale}/design-pricing`;
   const servicesHref = `${prefix}/#services`;
+  const aboutHref = `${prefix}/about`;
+  const articlesHref = `${prefix}/articles`;
+  const contactHref = `${prefix || "/"}#contact`;
+  const aboutLabel = locale === "ar" ? "من نحن" : locale === "fr" ? "A propos" : "About";
+  const articlesLabel = locale === "ar" ? "المقالات" : locale === "fr" ? "Articles" : "Articles";
+  const contactLabel = locale === "ar" ? "تواصل" : locale === "fr" ? "Contact" : "Contact";
 
   const whatsappHref = useMemo(() => buildWhatsAppLink("+1 438 807 8747", t("whatsapp.general")), [t]);
 
@@ -68,8 +75,8 @@ export default function Footer() {
             <ul className="space-y-3 text-sm text-white/80">
               <li className="flex items-center gap-2">
                 <Mail className="w-4 h-4" />
-                <a href="mailto:contact@cvsolucion.com" className="hover:text-white transition-colors">
-                  contact@cvsolucion.com
+                <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-white transition-colors">
+                  {CONTACT_EMAIL}
                 </a>
               </li>
               <li className="flex items-center gap-2">
@@ -154,6 +161,15 @@ export default function Footer() {
           <div className="flex flex-col md:flex-row justify-between items-center text-sm text-white/70">
             <p>&copy; {currentYear} CV Solution. {t("footer.rights")}</p>
             <div className="flex gap-6 mt-4 md:mt-0">
+              <a href={aboutHref} className="hover:text-white transition-colors">
+                {aboutLabel}
+              </a>
+              <a href={articlesHref} className="hover:text-white transition-colors">
+                {articlesLabel}
+              </a>
+              <a href={contactHref} className="hover:text-white transition-colors">
+                {contactLabel}
+              </a>
               <a href={designPricingHref} className="hover:text-white transition-colors">
                 {t("footer.designPricing")}
               </a>
