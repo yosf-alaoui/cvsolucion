@@ -74,6 +74,54 @@ function targetLocales(sourceLocale: ArticleLocale) {
   return (["en", "fr", "ar"] as ArticleLocale[]).filter((locale) => locale !== sourceLocale);
 }
 
+async function translateSingleLocale(input: {
+  sourceLocale: ArticleLocale;
+  targetLocale: ArticleLocale;
+  title: string;
+  body: string;
+}) {
+  const instructions = `
+You are a senior marketing translator for CVsolucion, a Cabinet Vision consulting and support company.
+Translate the provided article title and HTML body into the requested target locale.
+
+Rules:
+- Keep the meaning accurate, commercially credible, and technically natural.
+- Preserve the structure of the HTML body.
+- Preserve all tags such as headings, paragraphs, lists, blockquotes, emphasis, links, images, code blocks, and line breaks.
+- Preserve href, src, rel, target, and any URLs exactly as they are.
+- Translate only human-readable text.
+- Do not remove or merge paragraphs.
+- Return JSON only. No markdown fences. No commentary.
+- Use this exact JSON shape:
+{"title":"...","body":"..."}
+`;
+
+  const json = await callResponsesApi({
+    model: getModel(),
+    max_output_tokens: 20000,
+    instructions,
+    input: JSON.stringify({
+      sourceLocale: input.sourceLocale,
+      targetLocale: input.targetLocale,
+      article: {
+        title: input.title,
+        body: input.body,
+      },
+    }),
+  });
+
+  const text = extractOutputText(json);
+  const parsed = parseJsonPayload(text) as Partial<ArticleTranslationRecord>;
+  if (!parsed.title?.trim() || !parsed.body?.trim()) {
+    throw new Error(`OpenAI translation for ${input.targetLocale} was incomplete.`);
+  }
+
+  return {
+    title: parsed.title.trim(),
+    body: parsed.body.trim(),
+  };
+}
+
 export async function translateArticleContent(input: {
   sourceLocale: ArticleLocale;
   title: string;
@@ -90,48 +138,13 @@ export async function translateArticleContent(input: {
     return translations;
   }
 
-  const instructions = `
-You are a senior marketing translator for CVsolucion, a Cabinet Vision consulting and support company.
-Translate the provided article title and HTML body into the requested locales.
-
-Rules:
-- Keep the meaning accurate, commercially credible, and technically natural.
-- Preserve the structure of the HTML body.
-- Preserve all tags such as headings, paragraphs, lists, blockquotes, emphasis, links, images, code blocks, and line breaks.
-- Preserve href, src, rel, target, and any URLs exactly as they are.
-- Translate only human-readable text.
-- Do not remove or merge paragraphs.
-- Return JSON only. No markdown fences. No commentary.
-- Use this exact JSON shape:
-{"translations":{"fr":{"title":"...","body":"..."},"ar":{"title":"...","body":"..."}}}
-`;
-
-  const json = await callResponsesApi({
-    model: getModel(),
-    instructions,
-    input: JSON.stringify({
-      sourceLocale: input.sourceLocale,
-      targetLocales: targets,
-      article: {
-        title: input.title,
-        body: input.body,
-      },
-    }),
-  });
-
-  const text = extractOutputText(json);
-  const parsed = parseJsonPayload(text);
-
   for (const locale of targets) {
-    const translated = parsed.translations?.[locale];
-    if (!translated?.title?.trim() || !translated?.body?.trim()) {
-      throw new Error(`OpenAI translation for ${locale} was incomplete.`);
-    }
-
-    translations[locale] = {
-      title: translated.title.trim(),
-      body: translated.body.trim(),
-    };
+    translations[locale] = await translateSingleLocale({
+      sourceLocale: input.sourceLocale,
+      targetLocale: locale,
+      title: input.title,
+      body: input.body,
+    });
   }
 
   translations[input.sourceLocale] = {
