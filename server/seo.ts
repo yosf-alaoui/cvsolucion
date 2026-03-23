@@ -234,10 +234,101 @@ function linkLabel(locale: ArticleLocale, path: string) {
   return map[locale][path as keyof (typeof map)[typeof locale]];
 }
 
+function homeImplementationHeading(locale: ArticleLocale) {
+  const map = {
+    en: "Implementation details search engines should understand",
+    fr: "Points d'implementation importants a comprendre",
+    ar: "تفاصيل تنفيذ مهمة يجب أن تظهر لمحركات البحث",
+  } as const;
+
+  return map[locale];
+}
+
+function homeImplementationParagraph(locale: ArticleLocale) {
+  const map = {
+    en: "Many cabinet shops search for help only after quoting logic breaks, reports stop matching production, or CNC output becomes unreliable. CVsolucion works on the operational layer between design, engineering, pricing, reports, and machine-ready output. That is why the service is relevant for shops evaluating implementation support, emergency troubleshooting, structured training, or a cleaner long-term Cabinet Vision setup.",
+    fr: "Beaucoup d'ateliers cherchent de l'aide seulement quand la logique de devis se casse, que les rapports ne correspondent plus a la production, ou que la sortie CNC devient instable. CVsolucion travaille sur la couche operationnelle entre design, engineering, pricing, rapports et sortie machine. C'est pour cela que le service est pertinent pour les ateliers qui cherchent un support d'implementation, un troubleshooting urgent, une formation structuree, ou une mise en place Cabinet Vision plus fiable.",
+    ar: "تبحث كثير من الورشات عن المساعدة فقط عندما يتعطل منطق التسعير أو تصبح التقارير غير مطابقة للإنتاج أو تصبح مخرجات CNC غير مستقرة. تعمل CVsolucion على الطبقة التشغيلية بين التصميم والهندسة والتسعير والتقارير والمخرجات الجاهزة للماكينة. لذلك فهذه الخدمة مناسبة للورشات التي تحتاج دعماً في التنفيذ أو تشخيصاً عاجلاً أو تدريباً منظماً أو إعداداً أكثر استقراراً على المدى الطويل.",
+  } as const;
+
+  return map[locale];
+}
+
+function homeHighlights(locale: ArticleLocale) {
+  const map = {
+    en: [
+      {
+        title: "Cabinet Vision troubleshooting",
+        body: "Diagnose slow performance, crashes, broken reports, unstable libraries, and output errors before they become production downtime.",
+      },
+      {
+        title: "Library and pricing structure",
+        body: "Clean up materials, naming, rules, and quoting logic so the commercial side and production side stay aligned.",
+      },
+      {
+        title: "CNC-ready output",
+        body: "Verify post behavior, cutlist logic, report consistency, and operator trust so the shop floor can run files with fewer manual checks.",
+      },
+      {
+        title: "Training and controlled rollout",
+        body: "Train designers, engineers, and production teams with practical sessions tied to the actual workflow instead of generic demos.",
+      },
+    ],
+    fr: [
+      {
+        title: "Troubleshooting Cabinet Vision",
+        body: "Diagnostiquer lenteurs, plantages, rapports casses, bibliotheques instables et erreurs de sortie avant qu'ils ne bloquent la production.",
+      },
+      {
+        title: "Structure bibliotheque et pricing",
+        body: "Nettoyer matieres, noms, regles et logique de devis pour garder alignees la partie commerciale et la partie production.",
+      },
+      {
+        title: "Sortie prete pour le CNC",
+        body: "Verifier le comportement du post, la logique des cutlists, la coherence des rapports et la confiance operateur sur le terrain.",
+      },
+      {
+        title: "Formation et deploiement controle",
+        body: "Former designers, ingenieurs et production avec des sessions pratiques basees sur le workflow reel, pas sur des demos generiques.",
+      },
+    ],
+    ar: [
+      {
+        title: "تشخيص مشاكل Cabinet Vision",
+        body: "تشخيص البطء والأعطال والتقارير المعطلة والمكتبات غير المستقرة وأخطاء الإخراج قبل أن تتحول إلى توقف فعلي في الإنتاج.",
+      },
+      {
+        title: "هيكلة المكتبات والتسعير",
+        body: "تنظيف المواد والأسماء والقواعد ومنطق عروض الأسعار حتى يبقى الجانب التجاري متوافقاً مع جانب الإنتاج.",
+      },
+      {
+        title: "مخرجات جاهزة للـ CNC",
+        body: "التحقق من سلوك الـ post ومنطق القوائم والتقارير وثقة المشغل حتى يعمل المصنع بعدد أقل من الفحوص اليدوية.",
+      },
+      {
+        title: "تدريب وتطبيق مضبوط",
+        body: "تدريب المصممين والمهندسين وفرق الإنتاج بجلسات عملية مرتبطة بسير العمل الحقيقي لا بعروض عامة فقط.",
+      },
+    ],
+  } as const;
+
+  return map[locale];
+}
+
 function homeFallback(locale: ArticleLocale) {
   const copy = HOME_COPY[locale];
   const links = ["/training", "/design-pricing", "/articles", "/about", "/book", "/privacy", "/terms"]
     .map((path) => `<a href="${escapeHtml(localizePath(path, locale))}">${escapeHtml(linkLabel(locale, path) || path)}</a>`)
+    .join("");
+  const highlights = homeHighlights(locale)
+    .map(
+      (item) => `
+        <li>
+          <strong>${escapeHtml(item.title)}:</strong>
+          ${escapeHtml(item.body)}
+        </li>
+      `
+    )
     .join("");
 
   return `
@@ -261,6 +352,9 @@ function homeFallback(locale: ArticleLocale) {
           <li><a href="${escapeHtml(localizePath("/privacy", locale))}">${escapeHtml(linkLabel(locale, "/privacy") || "")}</a></li>
           <li><a href="${escapeHtml(localizePath("/terms", locale))}">${escapeHtml(linkLabel(locale, "/terms") || "")}</a></li>
         </ul>
+        <h2>${escapeHtml(homeImplementationHeading(locale))}</h2>
+        <p>${escapeHtml(homeImplementationParagraph(locale))}</p>
+        <ul>${highlights}</ul>
       </section>
     </main>
   `;
