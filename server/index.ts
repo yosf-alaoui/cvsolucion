@@ -1389,18 +1389,18 @@ async function startServer() {
   });
 
   const port = process.env.PORT || (process.env.NODE_ENV === "production" ? 3000 : 3001);
-  try {
-    const { translated } = await backfillArticleTranslations();
-    if (translated > 0) {
-      console.log(`[articles] backfilled translations for ${translated} article(s)`);
-    }
-  } catch (error) {
-    console.error("[articles] translation backfill failed", error);
-  }
-
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
     console.log("Security headers enabled");
+    void backfillArticleTranslations()
+      .then(({ translated }) => {
+        if (translated > 0) {
+          console.log(`[articles] backfilled translations for ${translated} article(s)`);
+        }
+      })
+      .catch((error) => {
+        console.error("[articles] translation backfill failed", error);
+      });
   });
 }
 
