@@ -15,6 +15,8 @@ export type ChatMessageRecord = {
 export type ChatConversationStatus = "open" | "waiting_client" | "needs_human";
 
 export type ChatSupportIntake = {
+  name: string;
+  country: string;
   phone: string;
   email: string;
   submittedAt: string;
@@ -362,6 +364,8 @@ export function updateConversationMeta(input: {
 
 export function saveConversationSupportIntake(input: {
   conversationId: string;
+  name: string;
+  country: string;
   phone: string;
   email: string;
   visitor?: VisitorRecord | null;
@@ -373,6 +377,8 @@ export function saveConversationSupportIntake(input: {
   }
 
   conversation.supportIntake = {
+    name: input.name.trim(),
+    country: input.country.trim(),
     phone: input.phone.trim(),
     email: input.email.trim(),
     submittedAt: nowIso(),

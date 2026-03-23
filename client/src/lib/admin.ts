@@ -145,6 +145,8 @@ export type AdminDashboardConversation = {
   leadScore: number;
   supportFormRequired: boolean;
   supportIntake: {
+    name: string;
+    country: string;
     phone: string;
     email: string;
     submittedAt: string;

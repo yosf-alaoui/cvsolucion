@@ -54,6 +54,134 @@ const SUPPORT_KEYWORDS = [
   "restauration",
 ];
 
+const SERVICE_CATEGORY_PATTERNS: Array<{
+  category: "support" | "training" | "design_pricing" | "consultation";
+  keywords: string[];
+}> = [
+  {
+    category: "support",
+    keywords: [
+      "support",
+      "problem",
+      "issue",
+      "error",
+      "bug",
+      "crash",
+      "not working",
+      "failed",
+      "urgent",
+      "install",
+      "backup",
+      "restore",
+      "s2m",
+      "xmachining",
+      "ucs",
+      "cnc",
+      "report",
+      "reports",
+      "library",
+      "libraries",
+      "hardware",
+      "post processor",
+      "post-processor",
+      "dxf",
+      "مشكل",
+      "مشكلة",
+      "عطل",
+      "خطأ",
+      "دعم",
+      "لا يعمل",
+      "تثبيت",
+      "نسخة احتياطية",
+      "استعادة",
+      "تقرير",
+      "تقارير",
+      "مكتبة",
+      "مكتبات",
+      "rapport",
+      "rapports",
+      "bibliothèque",
+      "bibliotheque",
+      "erreur",
+      "problème",
+      "probleme",
+      "installation",
+      "sauvegarde",
+      "restauration",
+      "materiau",
+      "matériau",
+    ],
+  },
+  {
+    category: "training",
+    keywords: [
+      "training",
+      "formation",
+      "learn",
+      "teach",
+      "course",
+      "coaching",
+      "mentor",
+      "mentoring",
+      "train my team",
+      "تدريب",
+      "تعلم",
+      "تعليم",
+      "دورة",
+      "فريقي",
+    ],
+  },
+  {
+    category: "design_pricing",
+    keywords: [
+      "design",
+      "pricing",
+      "estimate",
+      "estimating",
+      "quote",
+      "quoting",
+      "devis",
+      "prix",
+      "tarif",
+      "kitchen",
+      "closet",
+      "bathroom",
+      "bedroom",
+      "تصميم",
+      "تسعير",
+      "تقدير",
+      "عرض سعر",
+      "مطبخ",
+      "خزانة",
+      "حمام",
+      "غرفة نوم",
+    ],
+  },
+  {
+    category: "consultation",
+    keywords: [
+      "consultation",
+      "consulting",
+      "audit",
+      "fix day",
+      "diagnosis",
+      "diagnostic",
+      "workflow",
+      "optimization",
+      "optimisation",
+      "استشارة",
+      "تدقيق",
+      "تشخيص",
+      "سير العمل",
+      "تحسين",
+      "consultation",
+      "audit",
+      "diagnostic",
+      "optimisation",
+    ],
+  },
+];
+
 const OPENAI_API_URL = "https://api.openai.com/v1/responses";
 
 function getOpenAiKey() {
@@ -87,6 +215,51 @@ function isSupportIssue(text: string) {
   const normalized = text.trim().toLowerCase();
   if (!normalized) return false;
   return SUPPORT_KEYWORDS.some((keyword) => normalized.includes(keyword));
+}
+
+function detectServiceCategory(text: string) {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return null;
+
+  for (const pattern of SERVICE_CATEGORY_PATTERNS) {
+    if (pattern.keywords.some((keyword) => normalized.includes(keyword))) {
+      return pattern.category;
+    }
+  }
+
+  return null;
+}
+
+function buildSupportFormPrompt(locale: ChatLocale, category: NonNullable<ReturnType<typeof detectServiceCategory>>) {
+  const categoryLabel =
+    locale === "fr"
+      ? {
+          support: "support",
+          training: "formation",
+          design_pricing: "design et pricing",
+          consultation: "consultation",
+        }[category]
+      : locale === "ar"
+        ? {
+            support: "الدعم",
+            training: "التدريب",
+            design_pricing: "التصميم والتسعير",
+            consultation: "الاستشارة",
+          }[category]
+        : {
+            support: "support",
+            training: "training",
+            design_pricing: "design and pricing",
+            consultation: "consultation",
+          }[category];
+
+  if (locale === "fr") {
+    return `Votre besoin semble relever du service ${categoryLabel}. Merci de remplir maintenant votre nom, pays, email et telephone pour que l'equipe vous recontacte rapidement.`;
+  }
+  if (locale === "ar") {
+    return `يبدو أن طلبك يدخل ضمن خدمة ${categoryLabel}. يرجى الآن تعبئة الاسم والدولة والبريد الإلكتروني ورقم الهاتف ليقوم الفريق بمتابعة حالتك مباشرة.`;
+  }
+  return `This looks like a ${categoryLabel} request. Please fill in your name, country, email, and phone number now so the team can follow up directly.`;
 }
 
 function supportUserMessageCount(messages: ChatMessageRecord[]) {
@@ -180,6 +353,7 @@ function buildSystemPrompt(args: {
   const visitor = args.visitor;
   const replyLocale = detectMessageLocale(args.latestUserMessage, args.locale);
   const supportIssue = isSupportIssue(args.latestUserMessage);
+  const serviceCategory = detectServiceCategory(args.latestUserMessage);
   const supportTurns = supportUserMessageCount(args.conversation.messages);
   const supportStage = supportIssue ? (supportTurns <= 1 ? "clarify" : "qualify_or_handoff") : "normal";
   const acquisition = visitor
@@ -212,12 +386,9 @@ Core behavior:
 Very important sales rules:
 - Do NOT solve the client's technical problem inside the chat.
 - Do NOT provide step-by-step troubleshooting, fixes, scripts, settings, or implementation details.
-- If the client describes a technical issue, first understand it well with short smart questions.
-- Ask only one useful support question at a time.
-- Good support questions are things like: what exactly is failing, which module, exact error text, when it started, and what changed before it happened.
-- Do not jump to contact fields immediately after the first support message.
-- Only after the issue is clear enough for handoff, ask for the support intake form.
-- The support intake form must ask for email and phone only.
+- If the client clearly falls into a CVsolucion service category, move directly to the support intake form.
+- Do not keep asking follow-up questions once the service category is already clear.
+- The support intake form must ask for name, country, email, and phone.
 - When you are ready for the support intake form, append exactly this token at the very end of the reply: [[SUPPORT_FORM]]
 - Never mention the token itself to the user.
 - If the client asks how to fix something, do not teach the fix. Redirect toward the relevant paid service.
@@ -227,13 +398,12 @@ Very important sales rules:
 - If asked for exact pricing, direct the user to WhatsApp or website login when relevant.
 - Do not speak negatively about competitors.
 
+Detected service category from latest user message: ${serviceCategory ?? "unclear"}
 Current support stage: ${supportStage}
-- If support stage is "clarify", your next reply must be a clarification question only.
-- In "clarify", do not mention WhatsApp, remote support, support service, pricing, or handoff yet.
-- In "clarify", do not ask for contact fields yet.
-- In "clarify", do not list services.
+- If the service category is clear, ask for the support intake form immediately.
+- Only if the service category is still unclear, ask one short clarification question.
 - In "clarify", your whole reply should usually be one short question.
-${supportIssue ? buildSupportQuestionHint(args.latestUserMessage, replyLocale) : ""}
+${supportIssue && !serviceCategory ? buildSupportQuestionHint(args.latestUserMessage, replyLocale) : ""}
 
 Pricing rules:
 - Never give a direct price, numeric quote, range, or estimated cost in chat.
@@ -398,6 +568,16 @@ export async function generateAssistantReply(args: {
   visitor: VisitorRecord | null;
   latestUserMessage: string;
 }) {
+  const detectedCategory = detectServiceCategory(args.latestUserMessage);
+  if (detectedCategory && !args.conversation.supportIntake) {
+    return {
+      text: buildSupportFormPrompt(args.locale, detectedCategory),
+      responseId: null,
+      status: "needs_human",
+      supportFormRequired: true,
+    } satisfies AssistantResult;
+  }
+
   const model = getModel();
   const instructions = buildSystemPrompt({
     locale: args.locale,

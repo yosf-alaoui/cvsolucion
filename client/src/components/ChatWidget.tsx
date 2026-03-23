@@ -42,6 +42,8 @@ export default function ChatWidget() {
   const [inputLocked, setInputLocked] = useState(false);
   const [supportBusy, setSupportBusy] = useState(false);
   const [supportForm, setSupportForm] = useState({
+    name: "",
+    country: "",
     phone: "",
     email: "",
   });
@@ -70,10 +72,12 @@ export default function ChatWidget() {
         placeholder: "Ecrivez votre question...",
         empty: "Commencez ici.",
         error: "Impossible de charger le chat.",
-        formError: "Merci de renseigner l'email et le telephone.",
+        formError: "Merci de renseigner le nom, le pays, l'email et le telephone.",
         typing: "ecrit...",
         locked: "Attendez un instant...",
         supportTitle: "Details support",
+        name: "Nom",
+        country: "Pays",
         phone: "Telephone",
         email: "Email",
         submitSupport: "Envoyer",
@@ -92,11 +96,10 @@ export default function ChatWidget() {
         typing: "يكتب الآن...",
         locked: "انتظر قليلًا...",
         supportTitle: "بيانات الدعم",
+        name: "الاسم",
         phone: "رقم الهاتف",
         email: "البريد الإلكتروني",
-        cvVersion: "إصدار CABINET VISION",
         country: "الدولة",
-        deviceCount: "كم جهاز",
         submitSupport: "إرسال",
         newChat: "محادثة جديدة",
       };
@@ -108,10 +111,12 @@ export default function ChatWidget() {
       placeholder: "Type your question...",
       empty: "Start here.",
       error: "Failed to load the chat.",
-      formError: "Please provide your email and phone number.",
+      formError: "Please provide your name, country, email, and phone number.",
       typing: "is typing...",
       locked: "Please wait...",
       supportTitle: "Support details",
+      name: "Name",
+      country: "Country",
       phone: "Phone number",
       email: "Email",
       submitSupport: "Submit",
@@ -131,6 +136,8 @@ export default function ChatWidget() {
   useEffect(() => {
     if (conversation?.supportIntake) {
       setSupportForm({
+        name: conversation.supportIntake.name || "",
+        country: conversation.supportIntake.country || "",
         phone: conversation.supportIntake.phone || "",
         email: conversation.supportIntake.email || "",
       });
@@ -264,6 +271,8 @@ export default function ChatWidget() {
     if (!conversation || supportBusy) return;
 
     if (
+      !supportForm.name.trim() ||
+      !supportForm.country.trim() ||
       !supportForm.phone.trim() ||
       !supportForm.email.trim()
     ) {
@@ -279,6 +288,8 @@ export default function ChatWidget() {
         conversationId: conversation.id,
         locale,
         path: window.location.pathname + window.location.search + window.location.hash,
+        name: supportForm.name,
+        country: supportForm.country,
         phone: supportForm.phone,
         email: supportForm.email,
       });
@@ -304,6 +315,8 @@ export default function ChatWidget() {
       setInputLocked(false);
       setDraft("");
       setSupportForm({
+        name: "",
+        country: "",
         phone: "",
         email: conversation?.email || "",
       });
@@ -422,6 +435,18 @@ export default function ChatWidget() {
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                     <div className="mb-3 text-sm font-semibold text-slate-800">{copy.supportTitle}</div>
                     <div className="grid gap-2">
+                      <input
+                        value={supportForm.name}
+                        onChange={(event) => setSupportForm((current) => ({ ...current, name: event.target.value }))}
+                        placeholder={copy.name}
+                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#1d3278]"
+                      />
+                      <input
+                        value={supportForm.country}
+                        onChange={(event) => setSupportForm((current) => ({ ...current, country: event.target.value }))}
+                        placeholder={copy.country}
+                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#1d3278]"
+                      />
                       <input
                         value={supportForm.phone}
                         onChange={(event) => setSupportForm((current) => ({ ...current, phone: event.target.value }))}

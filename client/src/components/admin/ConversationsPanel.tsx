@@ -160,13 +160,15 @@ export default function ConversationsPanel({
 
               {selected.supportIntake ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-sm font-semibold text-slate-900">{copy.supportDetails || "Support details"}</div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <StatPill label={copy.phone || "Phone"} value={selected.supportIntake.phone} />
-                    <StatPill label={copy.email} value={selected.supportIntake.email} />
-                    <StatPill label={copy.submittedAt || "Submitted"} value={formatDate(selected.supportIntake.submittedAt, locale)} />
-                  </div>
+                <div className="text-sm font-semibold text-slate-900">{copy.supportDetails || "Support details"}</div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <StatPill label={copy.name || "Name"} value={selected.supportIntake.name || "-"} />
+                  <StatPill label={copy.country || "Country"} value={selected.supportIntake.country || "-"} />
+                  <StatPill label={copy.phone || "Phone"} value={selected.supportIntake.phone} />
+                  <StatPill label={copy.email} value={selected.supportIntake.email} />
+                  <StatPill label={copy.submittedAt || "Submitted"} value={formatDate(selected.supportIntake.submittedAt, locale)} />
                 </div>
+              </div>
               ) : null}
 
               <div className="space-y-3">

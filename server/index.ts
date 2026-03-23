@@ -690,6 +690,8 @@ async function startServer() {
 
   app.post("/api/chat/support-intake", rateLimit({ key: "chat-support-intake", windowMs: 1000 * 60 * 10, limit: 40 }), (req, res) => {
     const conversationId = String(req.body?.conversationId || "").trim();
+    const name = String(req.body?.name || "").trim();
+    const country = String(req.body?.country || "").trim();
     const phone = String(req.body?.phone || "").trim();
     const email = String(req.body?.email || "").trim();
     const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
@@ -698,11 +700,14 @@ async function startServer() {
     if (!conversationId) {
       return res.status(400).json({ error: "Conversation is required." });
     }
-    if (!phone || !email) {
-      return res.status(400).json({ error: "Phone and email are required." });
+    if (!name || !country || !phone || !email) {
+      return res.status(400).json({ error: "Name, country, phone, and email are required." });
     }
     if (!EMAIL_REGEX.test(email)) {
       return res.status(400).json({ error: "Valid email is required." });
+    }
+    if (phone.length < 6) {
+      return res.status(400).json({ error: "Valid phone number is required." });
     }
 
     const auth = getCurrentUser(req);
@@ -719,6 +724,8 @@ async function startServer() {
 
     const updatedConversation = saveConversationSupportIntake({
       conversationId,
+      name,
+      country,
       phone,
       email,
       visitor,

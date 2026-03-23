@@ -8,6 +8,8 @@ export type ChatMessage = {
 };
 
 export type ChatSupportIntake = {
+  name: string;
+  country: string;
   phone: string;
   email: string;
   submittedAt: string;
@@ -81,6 +83,8 @@ export function submitSupportIntake(payload: {
   conversationId: string;
   locale: string;
   path: string;
+  name: string;
+  country: string;
   phone: string;
   email: string;
 }) {
