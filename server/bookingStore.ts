@@ -129,6 +129,23 @@ function getHoursForPriority(priority: BookingPriority) {
   return priority === "express" ? EXPRESS_HOURS : STANDARD_HOURS;
 }
 
+function getBookableHoursForDate(priority: BookingPriority, date: string, startDate: string, currentHour: number) {
+  const hours = getHoursForPriority(priority);
+
+  if (priority === "express") {
+    if (date === startDate) {
+      return hours.filter((hour) => hour > currentHour && hour <= 21);
+    }
+    return date === addDays(startDate, 1) ? hours : [];
+  }
+
+  if (date === startDate) {
+    return hours.filter((hour) => hour > currentHour);
+  }
+
+  return hours;
+}
+
 function dateDayOfMonth(dateKey: string) {
   return dateKeyParts(dateKey).day;
 }
@@ -203,15 +220,7 @@ export function getBookingAvailability(priority: BookingPriority) {
     const weekdayIndex = getWeekdayIndex(date);
     if (priority === "standard" && weekdayIndex > 5) continue;
 
-    const hours =
-      priority === "express"
-        ? getHoursForPriority(priority).filter((hour) => {
-            if (date === quebecNow.dateKey) {
-              return hour > quebecNow.hour && hour <= 21;
-            }
-            return index === 1;
-          })
-        : getHoursForPriority(priority);
+    const hours = getBookableHoursForDate(priority, date, startDate, quebecNow.hour);
 
     const slots = hours
       .map((hour) => {
