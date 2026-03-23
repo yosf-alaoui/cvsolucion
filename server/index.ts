@@ -133,6 +133,10 @@ function getCurrentUser(req: express.Request) {
 
   const user = getUserById(session.userId);
   if (!user) return null;
+  if (!user.emailVerifiedAt) {
+    deleteSession(session.id);
+    return null;
+  }
 
   return { session, user };
 }
@@ -722,6 +726,9 @@ async function startServer() {
 
     if (!user || !verifyPassword(password, user)) {
       return res.status(401).json({ error: "Invalid login credentials." });
+    }
+    if (!user.emailVerifiedAt) {
+      return res.status(403).json({ error: "Please confirm your email before signing in." });
     }
 
     const session = createSession(user.id, ONE_YEAR_MS);

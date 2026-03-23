@@ -104,7 +104,10 @@ export default function Login() {
         setStatusTone("success");
       }
     } catch (err: any) {
-      setStatus(err?.message || t("auth.genericError"));
+      const message = err?.message === "Please confirm your email before signing in."
+        ? t("auth.unverifiedLogin")
+        : err?.message || t("auth.genericError");
+      setStatus(message);
       setStatusTone("error");
     } finally {
       setBusy(false);
