@@ -10,9 +10,6 @@ export type ChatMessage = {
 export type ChatSupportIntake = {
   phone: string;
   email: string;
-  cabinetVisionVersion: string;
-  country: string;
-  deviceCount: string;
   submittedAt: string;
 };
 
@@ -86,9 +83,6 @@ export function submitSupportIntake(payload: {
   path: string;
   phone: string;
   email: string;
-  cabinetVisionVersion: string;
-  country: string;
-  deviceCount: string;
 }) {
   return chatRequest<ChatSessionResponse>("/api/chat/support-intake", {
     method: "POST",

@@ -44,9 +44,6 @@ export default function ChatWidget() {
   const [supportForm, setSupportForm] = useState({
     phone: "",
     email: "",
-    cabinetVisionVersion: "",
-    country: "",
-    deviceCount: "",
   });
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const introTimersRef = useRef<number[]>([]);
@@ -73,15 +70,12 @@ export default function ChatWidget() {
         placeholder: "Ecrivez votre question...",
         empty: "Commencez ici.",
         error: "Impossible de charger le chat.",
-        formError: "Merci de remplir tous les champs.",
+        formError: "Merci de renseigner l'email et le telephone.",
         typing: "ecrit...",
         locked: "Attendez un instant...",
         supportTitle: "Details support",
         phone: "Telephone",
         email: "Email",
-        cvVersion: "Version CABINET VISION",
-        country: "Pays",
-        deviceCount: "Nombre de postes",
         submitSupport: "Envoyer",
         newChat: "Nouveau chat",
       };
@@ -114,15 +108,12 @@ export default function ChatWidget() {
       placeholder: "Type your question...",
       empty: "Start here.",
       error: "Failed to load the chat.",
-      formError: "Please fill all fields.",
+      formError: "Please provide your email and phone number.",
       typing: "is typing...",
       locked: "Please wait...",
       supportTitle: "Support details",
       phone: "Phone number",
       email: "Email",
-      cvVersion: "CABINET VISION version",
-      country: "Country",
-      deviceCount: "How many devices",
       submitSupport: "Submit",
       newChat: "New chat",
     };
@@ -142,9 +133,6 @@ export default function ChatWidget() {
       setSupportForm({
         phone: conversation.supportIntake.phone || "",
         email: conversation.supportIntake.email || "",
-        cabinetVisionVersion: conversation.supportIntake.cabinetVisionVersion || "",
-        country: conversation.supportIntake.country || "",
-        deviceCount: conversation.supportIntake.deviceCount || "",
       });
       return;
     }
@@ -277,10 +265,7 @@ export default function ChatWidget() {
 
     if (
       !supportForm.phone.trim() ||
-      !supportForm.email.trim() ||
-      !supportForm.cabinetVisionVersion.trim() ||
-      !supportForm.country.trim() ||
-      !supportForm.deviceCount.trim()
+      !supportForm.email.trim()
     ) {
       setError(copy.formError);
       return;
@@ -296,9 +281,6 @@ export default function ChatWidget() {
         path: window.location.pathname + window.location.search + window.location.hash,
         phone: supportForm.phone,
         email: supportForm.email,
-        cabinetVisionVersion: supportForm.cabinetVisionVersion,
-        country: supportForm.country,
-        deviceCount: supportForm.deviceCount,
       });
 
       setConversation(payload.conversation);
@@ -324,9 +306,6 @@ export default function ChatWidget() {
       setSupportForm({
         phone: "",
         email: conversation?.email || "",
-        cabinetVisionVersion: "",
-        country: "",
-        deviceCount: "",
       });
 
       const payload = await startNewChatSession({
@@ -453,26 +432,6 @@ export default function ChatWidget() {
                         value={supportForm.email}
                         onChange={(event) => setSupportForm((current) => ({ ...current, email: event.target.value }))}
                         placeholder={copy.email}
-                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#1d3278]"
-                      />
-                      <input
-                        value={supportForm.cabinetVisionVersion}
-                        onChange={(event) =>
-                          setSupportForm((current) => ({ ...current, cabinetVisionVersion: event.target.value }))
-                        }
-                        placeholder={copy.cvVersion}
-                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#1d3278]"
-                      />
-                      <input
-                        value={supportForm.country}
-                        onChange={(event) => setSupportForm((current) => ({ ...current, country: event.target.value }))}
-                        placeholder={copy.country}
-                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#1d3278]"
-                      />
-                      <input
-                        value={supportForm.deviceCount}
-                        onChange={(event) => setSupportForm((current) => ({ ...current, deviceCount: event.target.value }))}
-                        placeholder={copy.deviceCount}
                         className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#1d3278]"
                       />
                       <Button type="button" className="mt-1 h-10 rounded-xl" disabled={supportBusy} onClick={() => void handleSupportSubmit()}>

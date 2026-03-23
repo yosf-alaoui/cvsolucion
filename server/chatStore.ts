@@ -17,9 +17,6 @@ export type ChatConversationStatus = "open" | "waiting_client" | "needs_human";
 export type ChatSupportIntake = {
   phone: string;
   email: string;
-  cabinetVisionVersion: string;
-  country: string;
-  deviceCount: string;
   submittedAt: string;
 };
 
@@ -367,9 +364,6 @@ export function saveConversationSupportIntake(input: {
   conversationId: string;
   phone: string;
   email: string;
-  cabinetVisionVersion: string;
-  country: string;
-  deviceCount: string;
   visitor?: VisitorRecord | null;
 }) {
   const db = loadDb();
@@ -381,9 +375,6 @@ export function saveConversationSupportIntake(input: {
   conversation.supportIntake = {
     phone: input.phone.trim(),
     email: input.email.trim(),
-    cabinetVisionVersion: input.cabinetVisionVersion.trim(),
-    country: input.country.trim(),
-    deviceCount: input.deviceCount.trim(),
     submittedAt: nowIso(),
   };
   conversation.email = input.email.trim();

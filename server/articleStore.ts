@@ -1,10 +1,31 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { translateArticleContent } from "./articleTranslation";
+
+export const ARTICLE_LOCALES = ["en", "fr", "ar"] as const;
+export type ArticleLocale = (typeof ARTICLE_LOCALES)[number];
+
+export type ArticleTranslationRecord = {
+  title: string;
+  body: string;
+};
 
 export type ArticleRecord = {
   id: string;
   slug: string;
+  sourceLocale: ArticleLocale;
+  translations: Record<ArticleLocale, ArticleTranslationRecord>;
+  imageUrl: string | null;
+  publishedAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LocalizedArticleRecord = {
+  id: string;
+  slug: string;
+  sourceLocale: ArticleLocale;
   title: string;
   body: string;
   imageUrl: string | null;
@@ -15,6 +36,19 @@ export type ArticleRecord = {
 
 type ArticlesDb = {
   articles: ArticleRecord[];
+};
+
+type LegacyArticleRecord = {
+  id?: string;
+  slug?: string;
+  sourceLocale?: string;
+  title?: string;
+  body?: string;
+  translations?: Partial<Record<ArticleLocale, Partial<ArticleTranslationRecord>>>;
+  imageUrl?: string | null;
+  publishedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
@@ -34,24 +68,17 @@ function ensureStorage() {
   }
 }
 
-function loadDb(): ArticlesDb {
-  ensureStorage();
-  const parsed = JSON.parse(fs.readFileSync(ARTICLES_DB_PATH, "utf8")) as Partial<ArticlesDb>;
-  return {
-    articles: parsed.articles ?? [],
-  };
-}
-
-function saveDb(db: ArticlesDb) {
-  fs.writeFileSync(ARTICLES_DB_PATH, JSON.stringify(db, null, 2), "utf8");
-}
-
 function nowIso() {
   return new Date().toISOString();
 }
 
 function randomId(size = 16) {
   return crypto.randomBytes(size).toString("hex");
+}
+
+function normalizeArticleLocale(value: string | null | undefined): ArticleLocale {
+  if (value === "fr" || value === "ar") return value;
+  return "en";
 }
 
 function slugify(value: string) {
@@ -83,27 +110,134 @@ function sortArticles(items: ArticleRecord[]) {
   return [...items].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
 }
 
+function fallbackTranslation(raw: LegacyArticleRecord, locale: ArticleLocale) {
+  const existing = raw.translations?.[locale];
+  if (existing?.title?.trim() && existing?.body?.trim()) {
+    return {
+      title: existing.title.trim(),
+      body: existing.body.trim(),
+    };
+  }
+
+  const sourceLocale = normalizeArticleLocale(raw.sourceLocale);
+  const sourceExisting = raw.translations?.[sourceLocale];
+  if (sourceExisting?.title?.trim() && sourceExisting?.body?.trim()) {
+    return {
+      title: sourceExisting.title.trim(),
+      body: sourceExisting.body.trim(),
+    };
+  }
+
+  return {
+    title: String(raw.title || "").trim(),
+    body: String(raw.body || "").trim(),
+  };
+}
+
+function normalizeRecord(raw: LegacyArticleRecord, db: ArticlesDb): ArticleRecord | null {
+  const sourceLocale = normalizeArticleLocale(raw.sourceLocale);
+  const translations = {
+    en: fallbackTranslation(raw, "en"),
+    fr: fallbackTranslation(raw, "fr"),
+    ar: fallbackTranslation(raw, "ar"),
+  } satisfies Record<ArticleLocale, ArticleTranslationRecord>;
+
+  const source = translations[sourceLocale];
+  if (!source.title || !source.body) {
+    return null;
+  }
+
+  const englishTitle = translations.en.title || source.title;
+  return {
+    id: raw.id?.trim() || randomId(),
+    slug: raw.slug?.trim() || uniqueSlug(db, englishTitle),
+    sourceLocale,
+    translations,
+    imageUrl: typeof raw.imageUrl === "string" && raw.imageUrl.trim() ? raw.imageUrl.trim() : null,
+    publishedAt: raw.publishedAt?.trim() || nowIso(),
+    createdAt: raw.createdAt?.trim() || nowIso(),
+    updatedAt: raw.updatedAt?.trim() || raw.createdAt?.trim() || nowIso(),
+  };
+}
+
+function loadDb(): ArticlesDb {
+  ensureStorage();
+  const parsed = JSON.parse(fs.readFileSync(ARTICLES_DB_PATH, "utf8")) as Partial<ArticlesDb> & {
+    articles?: LegacyArticleRecord[];
+  };
+
+  const db: ArticlesDb = { articles: [] };
+  let changed = false;
+
+  for (const raw of parsed.articles ?? []) {
+    const normalized = normalizeRecord(raw, db);
+    if (!normalized) continue;
+    db.articles.push(normalized);
+
+    if (
+      !raw.translations ||
+      !raw.sourceLocale ||
+      raw.title !== undefined ||
+      raw.body !== undefined
+    ) {
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    fs.writeFileSync(ARTICLES_DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  }
+
+  return db;
+}
+
+function saveDb(db: ArticlesDb) {
+  fs.writeFileSync(ARTICLES_DB_PATH, JSON.stringify(db, null, 2), "utf8");
+}
+
+function localizeArticle(record: ArticleRecord, locale: ArticleLocale): LocalizedArticleRecord {
+  const translation = record.translations[locale] || record.translations[record.sourceLocale];
+  return {
+    id: record.id,
+    slug: record.slug,
+    sourceLocale: record.sourceLocale,
+    title: translation.title,
+    body: translation.body,
+    imageUrl: record.imageUrl,
+    publishedAt: record.publishedAt,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
+
+function canonicalSlugTitle(sourceLocale: ArticleLocale, translations: Record<ArticleLocale, ArticleTranslationRecord>) {
+  return (sourceLocale === "en" ? translations.en.title : translations.en.title || translations[sourceLocale].title).trim();
+}
+
 export function listAdminArticles() {
   const db = loadDb();
-  return sortArticles(db.articles);
+  return sortArticles(db.articles).map((item) => localizeArticle(item, item.sourceLocale));
 }
 
-export function listPublishedArticles() {
+export function listPublishedArticles(locale: ArticleLocale) {
   const db = loadDb();
-  return sortArticles(db.articles);
+  return sortArticles(db.articles).map((item) => localizeArticle(item, locale));
 }
 
-export function getArticleBySlug(slug: string) {
+export function getArticleBySlug(slug: string, locale: ArticleLocale) {
   const db = loadDb();
-  return db.articles.find((item) => item.slug === slug) ?? null;
+  const article = db.articles.find((item) => item.slug === slug) ?? null;
+  return article ? localizeArticle(article, locale) : null;
 }
 
 export function getArticleById(id: string) {
   const db = loadDb();
-  return db.articles.find((item) => item.id === id) ?? null;
+  const article = db.articles.find((item) => item.id === id) ?? null;
+  return article ? localizeArticle(article, article.sourceLocale) : null;
 }
 
-export function createArticle(input: {
+export async function createArticle(input: {
+  sourceLocale: ArticleLocale;
   title: string;
   body: string;
   imageUrl?: string | null;
@@ -111,11 +245,17 @@ export function createArticle(input: {
 }) {
   const db = loadDb();
   const timestamp = nowIso();
-  const article: ArticleRecord = {
-    id: randomId(),
-    slug: uniqueSlug(db, input.title),
+  const translations = await translateArticleContent({
+    sourceLocale: input.sourceLocale,
     title: input.title.trim(),
     body: input.body.trim(),
+  });
+
+  const article: ArticleRecord = {
+    id: randomId(),
+    slug: uniqueSlug(db, canonicalSlugTitle(input.sourceLocale, translations)),
+    sourceLocale: input.sourceLocale,
+    translations,
     imageUrl: input.imageUrl?.trim() || null,
     publishedAt: input.publishedAt?.trim() || timestamp,
     createdAt: timestamp,
@@ -124,12 +264,13 @@ export function createArticle(input: {
 
   db.articles.push(article);
   saveDb(db);
-  return article;
+  return localizeArticle(article, article.sourceLocale);
 }
 
-export function updateArticle(
+export async function updateArticle(
   id: string,
   input: {
+    sourceLocale: ArticleLocale;
     title: string;
     body: string;
     imageUrl?: string | null;
@@ -142,15 +283,21 @@ export function updateArticle(
     throw new Error("Article not found.");
   }
 
-  article.title = input.title.trim();
-  article.body = input.body.trim();
+  const translations = await translateArticleContent({
+    sourceLocale: input.sourceLocale,
+    title: input.title.trim(),
+    body: input.body.trim(),
+  });
+
+  article.sourceLocale = input.sourceLocale;
+  article.translations = translations;
   article.imageUrl = input.imageUrl?.trim() || null;
   article.publishedAt = input.publishedAt?.trim() || article.publishedAt;
-  article.slug = uniqueSlug(db, article.title, article.id);
+  article.slug = uniqueSlug(db, canonicalSlugTitle(input.sourceLocale, translations), article.id);
   article.updatedAt = nowIso();
 
   saveDb(db);
-  return article;
+  return localizeArticle(article, article.sourceLocale);
 }
 
 export function deleteArticle(id: string) {

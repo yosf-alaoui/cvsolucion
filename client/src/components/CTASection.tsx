@@ -11,7 +11,7 @@ import { CONTACT_EMAIL, getBookingHref } from "@/lib/site";
 export default function CTASection() {
   const { locale, t } = useI18n();
   const whatsappHref = buildWhatsAppLink("+1 438 807 8747", t("whatsapp.annualPlan"));
-  const bookingHref = getBookingHref();
+  const bookingHref = getBookingHref(locale);
   const contactHref = `${locale === "en" ? "/" : `/${locale}`}#contact`;
   const bookLabel = locale === "ar" ? "احجز استشارة" : locale === "fr" ? "Reserver une consultation" : "Book consultation";
   const contactLabel = locale === "ar" ? "نموذج التواصل" : locale === "fr" ? "Formulaire de contact" : "Contact form";

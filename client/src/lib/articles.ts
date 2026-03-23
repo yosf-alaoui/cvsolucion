@@ -1,6 +1,7 @@
 export type ArticleSummary = {
   id: string;
   slug: string;
+  sourceLocale: "en" | "fr" | "ar";
   title: string;
   excerpt: string;
   body: string;
@@ -117,12 +118,15 @@ async function normalizeArticleImage(file: File) {
   throw new Error("Failed to optimize image.");
 }
 
-export async function getArticles() {
-  return request<{ articles: ArticleSummary[] }>("/api/articles", { method: "GET" });
+export async function getArticles(locale: "en" | "fr" | "ar") {
+  return request<{ articles: ArticleSummary[] }>(`/api/articles?locale=${encodeURIComponent(locale)}`, { method: "GET" });
 }
 
-export async function getArticle(slug: string) {
-  return request<{ article: ArticleDetail }>(`/api/articles/${encodeURIComponent(slug)}`, { method: "GET" });
+export async function getArticle(slug: string, locale: "en" | "fr" | "ar") {
+  return request<{ article: ArticleDetail }>(
+    `/api/articles/${encodeURIComponent(slug)}?locale=${encodeURIComponent(locale)}`,
+    { method: "GET" }
+  );
 }
 
 export async function getAdminArticles() {
@@ -143,6 +147,7 @@ export async function uploadArticleImage(file: File) {
 }
 
 export function createAdminArticle(payload: {
+  sourceLocale: "en" | "fr" | "ar";
   title: string;
   body: string;
   imageUrl?: string | null;
@@ -157,6 +162,7 @@ export function createAdminArticle(payload: {
 export function updateAdminArticle(
   articleId: string,
   payload: {
+    sourceLocale: "en" | "fr" | "ar";
     title: string;
     body: string;
     imageUrl?: string | null;

@@ -14,6 +14,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Articles from "./pages/Articles";
 import ArticleDetailPage from "./pages/ArticleDetail";
 import About from "./pages/About";
+import Booking from "./pages/Booking";
 import Analytics from "./components/Analytics";
 import ChatWidget from "./components/ChatWidget";
 import DotWaveBackground from "./components/DotWaveBackground";
@@ -49,6 +50,9 @@ function Router() {
       <Route path={"/about"} component={About} />
       <Route path={"/fr/about"} component={About} />
       <Route path={"/ar/about"} component={About} />
+      <Route path={"/book"} component={Booking} />
+      <Route path={"/fr/book"} component={Booking} />
+      <Route path={"/ar/book"} component={Booking} />
       {/* Legal */}
       <Route path={"/privacy"} component={Privacy} />
       <Route path={"/terms"} component={Terms} />

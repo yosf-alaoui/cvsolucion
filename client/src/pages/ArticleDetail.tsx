@@ -51,11 +51,11 @@ export default function ArticleDetailPage({ params }: RouteComponentProps<Articl
     }
 
     setLoading(true);
-    getArticle(slug)
+    getArticle(slug, locale)
       .then((response) => setArticle(response.article))
       .catch(() => setArticle(null))
       .finally(() => setLoading(false));
-  }, [slug]);
+  }, [slug, locale]);
 
   const articlesHref = locale === "en" ? "/articles" : `/${locale}/articles`;
   const articleSchema =

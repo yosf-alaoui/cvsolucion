@@ -147,9 +147,6 @@ export type AdminDashboardConversation = {
   supportIntake: {
     phone: string;
     email: string;
-    cabinetVisionVersion: string;
-    country: string;
-    deviceCount: string;
     submittedAt: string;
   } | null;
   messages: AdminDashboardConversationMessage[];

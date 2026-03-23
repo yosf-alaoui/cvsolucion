@@ -1,0 +1,381 @@
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, Clock3, ShieldCheck, Zap } from "lucide-react";
+import Footer from "@/components/Footer";
+import GlassCard from "@/components/GlassCard";
+import Header from "@/components/Header";
+import Seo from "@/components/Seo";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { createBooking, getBookingAvailability, type BookingAvailabilityDay, type BookingAvailabilitySlot, type BookingPriority, type BookingServiceType } from "@/lib/bookings";
+import { useI18n } from "@/i18n/i18n";
+
+function dateLabel(date: string, locale: string) {
+  return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
+    timeZone: "UTC",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
+function timeLabel(hour: number, locale: string) {
+  return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
+    timeZone: "UTC",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(Date.UTC(2026, 0, 1, hour, 0, 0)));
+}
+
+function chunkDays(days: BookingAvailabilityDay[], size: number) {
+  const chunks: BookingAvailabilityDay[][] = [];
+  for (let index = 0; index < days.length; index += size) {
+    chunks.push(days.slice(index, index + size));
+  }
+  return chunks;
+}
+
+export default function Booking() {
+  const { locale } = useI18n();
+  const [priority, setPriority] = useState<BookingPriority>("standard");
+  const [serviceType, setServiceType] = useState<BookingServiceType>("consultation");
+  const [days, setDays] = useState<BookingAvailabilityDay[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<BookingAvailabilitySlot | null>(null);
+  const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    company: "",
+    notes: "",
+  });
+
+  const copy = useMemo(() => {
+    if (locale === "ar") {
+      return {
+        title: "حجز الاستشارة أو الدعم",
+        subtitle: "اختر موعدك حسب توقيت كيبيك. الحجز العادي متاح من 8:00 إلى 18:00 مع توقف بين 12:00 و13:00، والحجز السريع يعطي أولوية مع تكلفة إضافية وغالباً في الفترة الليلية.",
+        standardTitle: "حجز عادي",
+        standardText: "مناسب للاستشارة المنظمة أو الدعم غير الطارئ خلال ساعات العمل.",
+        expressTitle: "Express Priority",
+        expressText: "أولوية أعلى، برسوم إضافية، وغالباً في الفترات الليلية لتسريع التدخل.",
+        consultation: "استشارة",
+        support: "دعم",
+        timezone: "جميع المواعيد حسب توقيت كيبيك، كندا",
+        lunch: "توقف يومي: 12:00 - 13:00",
+        booked: "محجوز",
+        available: "متاح",
+        summary: "ملخص الحجز",
+        summaryEmpty: "اختر موعداً من الجدول أولاً.",
+        formTitle: "بيانات الحجز",
+        name: "الاسم",
+        email: "البريد الإلكتروني",
+        phone: "الهاتف / واتساب",
+        company: "الشركة",
+        notes: "ملاحظات",
+        submit: "تأكيد الحجز",
+        sending: "جارٍ التأكيد...",
+        success: "تم تسجيل الحجز بنجاح. ستصلك رسالة تأكيد عبر البريد.",
+        chooseSlot: "اختر موعداً صالحاً قبل الإرسال.",
+        seoTitle: "حجز استشارة أو دعم | CVsolucion",
+      };
+    }
+    if (locale === "fr") {
+      return {
+        title: "Reservation consultation ou support",
+        subtitle: "Choisissez votre horaire en heure du Quebec. Le booking standard est ouvert de 8h a 18h avec pause 12h-13h. Le mode express donne une priorite plus forte avec frais supplementaires, souvent en soiree.",
+        standardTitle: "Booking standard",
+        standardText: "Adapte a une consultation claire ou a un support non urgent pendant les heures normales.",
+        expressTitle: "Express Priority",
+        expressText: "Priorite renforcee, frais supplementaires, et plages souvent en soiree pour accelerer la prise en charge.",
+        consultation: "Consultation",
+        support: "Support",
+        timezone: "Tous les horaires sont affiches en heure du Quebec, Canada",
+        lunch: "Pause quotidienne : 12:00 - 13:00",
+        booked: "Reserve",
+        available: "Disponible",
+        summary: "Resume du booking",
+        summaryEmpty: "Choisissez d'abord un horaire dans le calendrier.",
+        formTitle: "Coordonnees du booking",
+        name: "Nom",
+        email: "Email",
+        phone: "Telephone / WhatsApp",
+        company: "Societe",
+        notes: "Notes",
+        submit: "Confirmer le booking",
+        sending: "Confirmation...",
+        success: "Le booking est enregistre. Un email de confirmation sera envoye.",
+        chooseSlot: "Choisissez un horaire valide avant de confirmer.",
+        seoTitle: "Reservation consultation ou support | CVsolucion",
+      };
+    }
+    return {
+      title: "Book a consultation or support session",
+      subtitle: "Choose your appointment in Quebec time. Standard booking runs from 8:00 to 18:00 with a 12:00-13:00 break. Express gives clear priority, adds an extra fee, and often opens night slots.",
+      standardTitle: "Standard booking",
+      standardText: "Best for planned consulting or non-urgent support during normal business hours.",
+      expressTitle: "Express Priority",
+      expressText: "Higher priority, additional fee, and usually available in evening slots for faster response.",
+      consultation: "Consultation",
+      support: "Support",
+      timezone: "All appointment times are shown in Quebec, Canada time",
+      lunch: "Daily pause: 12:00 - 13:00",
+      booked: "Booked",
+      available: "Available",
+      summary: "Booking summary",
+      summaryEmpty: "Choose a time slot from the schedule first.",
+      formTitle: "Booking details",
+      name: "Name",
+      email: "Email",
+      phone: "Phone / WhatsApp",
+      company: "Company",
+      notes: "Notes",
+      submit: "Confirm booking",
+      sending: "Confirming...",
+      success: "Booking recorded successfully. A confirmation email will be sent.",
+      chooseSlot: "Choose a valid slot before confirming.",
+      seoTitle: "Book a consultation or support session | CVsolucion",
+    };
+  }, [locale]);
+
+  useEffect(() => {
+    setLoading(true);
+    setSelectedSlot(null);
+    setStatus(null);
+    getBookingAvailability(priority)
+      .then((response) => setDays(response.days))
+      .catch((error: Error) => setStatus({ tone: "error", text: error.message }))
+      .finally(() => setLoading(false));
+  }, [priority]);
+
+  const weeks = useMemo(() => chunkDays(days, 5), [days]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedSlot) {
+      setStatus({ tone: "error", text: copy.chooseSlot });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setStatus(null);
+      await createBooking({
+        serviceType,
+        priority,
+        date: selectedSlot.date,
+        hour: selectedSlot.hour,
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        company: form.company,
+        notes: form.notes,
+        locale,
+      });
+
+      setStatus({ tone: "success", text: copy.success });
+      setForm({ name: "", email: "", phone: "", company: "", notes: "" });
+      setSelectedSlot(null);
+      const refreshed = await getBookingAvailability(priority);
+      setDays(refreshed.days);
+    } catch (error: any) {
+      setStatus({ tone: "error", text: error?.message || "Booking failed." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="site-page min-h-screen bg-transparent">
+      <Seo title={copy.seoTitle} description={copy.subtitle} type="website" />
+      <Header />
+      <main className="pt-32 pb-20">
+        <section className="container">
+          <div className="mx-auto max-w-4xl text-center">
+            <span className="glass-chip inline-flex rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
+              Quebec Schedule
+            </span>
+            <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">{copy.title}</h1>
+            <p className="mt-5 text-lg leading-8 text-slate-600">{copy.subtitle}</p>
+          </div>
+
+          <div className="mx-auto mt-10 grid max-w-6xl gap-6 lg:grid-cols-2">
+            <GlassCard className={`card-static rounded-[30px] p-6 ${priority === "standard" ? "ring-2 ring-primary/30" : ""}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-950">{copy.standardTitle}</h2>
+                  <p className="mt-3 text-base leading-7 text-slate-600">{copy.standardText}</p>
+                </div>
+                <Clock3 className="h-6 w-6 text-primary" />
+              </div>
+              <Button type="button" className="mt-5 rounded-full" onClick={() => setPriority("standard")}>
+                {copy.standardTitle}
+              </Button>
+            </GlassCard>
+
+            <GlassCard className={`card-static rounded-[30px] p-6 ${priority === "express" ? "ring-2 ring-amber-400/40" : ""}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-950">{copy.expressTitle}</h2>
+                  <p className="mt-3 text-base leading-7 text-slate-600">{copy.expressText}</p>
+                </div>
+                <Zap className="h-6 w-6 text-amber-500" />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-5 rounded-full border-amber-300 text-amber-700 hover:bg-amber-50"
+                onClick={() => setPriority("express")}
+              >
+                {copy.expressTitle}
+              </Button>
+            </GlassCard>
+          </div>
+
+          <div className="mx-auto mt-5 flex max-w-6xl flex-wrap items-center justify-center gap-3 text-sm text-slate-600">
+            <span className="glass-chip rounded-full px-4 py-2">{copy.timezone}</span>
+            <span className="glass-chip rounded-full px-4 py-2">{copy.lunch}</span>
+            <span className="glass-chip rounded-full px-4 py-2">{copy.booked}: 3+ / week</span>
+          </div>
+
+          <div className="mx-auto mt-12 grid max-w-7xl gap-8 xl:grid-cols-[1.25fr_0.75fr]">
+            <div className="space-y-6">
+              <GlassCard className="card-static rounded-[32px] p-7">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    type="button"
+                    variant={serviceType === "consultation" ? "default" : "outline"}
+                    className="rounded-full"
+                    onClick={() => setServiceType("consultation")}
+                  >
+                    {copy.consultation}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={serviceType === "support" ? "default" : "outline"}
+                    className="rounded-full"
+                    onClick={() => setServiceType("support")}
+                  >
+                    {copy.support}
+                  </Button>
+                </div>
+
+                {loading ? (
+                  <div className="mt-8 text-sm text-slate-500">Loading schedule...</div>
+                ) : (
+                  <div className="mt-8 space-y-8">
+                    {weeks.map((week, weekIndex) => (
+                      <div key={`week-${weekIndex}`} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {week.map((day) => (
+                          <div key={day.date} className="rounded-[24px] border border-slate-200 bg-white/60 p-4">
+                            <div className="text-sm font-semibold text-slate-500">{dateLabel(day.date, locale)}</div>
+                            <div className="mt-4 grid gap-2">
+                              {day.slots.map((slot) => {
+                                const selected = selectedSlot?.id === slot.id;
+                                const booked = slot.status === "booked";
+                                return (
+                                  <button
+                                    key={slot.id}
+                                    type="button"
+                                    disabled={booked}
+                                    onClick={() => setSelectedSlot(slot)}
+                                    className={`flex items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm transition ${
+                                      booked
+                                        ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                                        : selected
+                                          ? "border-primary bg-primary/10 text-primary"
+                                          : "border-slate-200 bg-white text-slate-700 hover:border-primary/35 hover:bg-primary/5"
+                                    }`}
+                                  >
+                                    <span>{timeLabel(slot.hour, locale)}</span>
+                                    <span className="text-xs font-semibold uppercase tracking-[0.18em]">
+                                      {booked ? copy.booked : copy.available}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </GlassCard>
+            </div>
+
+            <div className="space-y-6">
+              <GlassCard className="card-static rounded-[32px] p-7">
+                <h2 className="text-2xl font-bold text-slate-950">{copy.summary}</h2>
+                {selectedSlot ? (
+                  <div className="mt-5 space-y-3 text-slate-700">
+                    <div className="flex items-center gap-3">
+                      <CalendarDays className="h-5 w-5 text-primary" />
+                      <span>{dateLabel(selectedSlot.date, locale)}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Clock3 className="h-5 w-5 text-primary" />
+                      <span>{timeLabel(selectedSlot.hour, locale)}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <ShieldCheck className={`h-5 w-5 ${priority === "express" ? "text-amber-500" : "text-primary"}`} />
+                      <span>{priority === "express" ? copy.expressTitle : copy.standardTitle}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-5 text-base leading-7 text-slate-600">{copy.summaryEmpty}</p>
+                )}
+              </GlassCard>
+
+              <GlassCard className="card-static rounded-[32px] p-7">
+                <h2 className="text-2xl font-bold text-slate-950">{copy.formTitle}</h2>
+                <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+                  <div className="space-y-2">
+                    <Label htmlFor="booking-name">{copy.name}</Label>
+                    <Input id="booking-name" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="booking-email">{copy.email}</Label>
+                    <Input id="booking-email" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="booking-phone">{copy.phone}</Label>
+                    <Input id="booking-phone" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="booking-company">{copy.company}</Label>
+                    <Input id="booking-company" value={form.company} onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="booking-notes">{copy.notes}</Label>
+                    <Textarea id="booking-notes" className="min-h-28" value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} />
+                  </div>
+
+                  <Button type="submit" className="w-full rounded-full bg-primary text-white hover:bg-primary/90" disabled={saving}>
+                    {saving ? copy.sending : copy.submit}
+                  </Button>
+                </form>
+
+                {status ? (
+                  <div
+                    className={`mt-5 rounded-2xl border px-4 py-3 text-sm ${
+                      status.tone === "success"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-rose-200 bg-rose-50 text-rose-700"
+                    }`}
+                  >
+                    {status.text}
+                  </div>
+                ) : null}
+              </GlassCard>
+            </div>
+          </div>
+        </section>
+      </main>
+      <Footer />
+    </div>
+  );
+}

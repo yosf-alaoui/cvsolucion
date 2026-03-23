@@ -117,7 +117,7 @@ export default function ContactSection() {
   }, [locale]);
 
   const whatsappHref = useMemo(() => buildWhatsAppLink(WHATSAPP_PHONE, t("whatsapp.needHelp")), [t]);
-  const bookingHref = getBookingHref();
+  const bookingHref = getBookingHref(locale);
   const emailHref = getContactMailHref("Cabinet Vision support request");
 
   const onChange = (field: keyof typeof form, value: string) => {

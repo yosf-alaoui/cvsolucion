@@ -49,11 +49,12 @@ export default function Articles() {
   }, [locale]);
 
   useEffect(() => {
-    getArticles()
+    setLoading(true);
+    getArticles(locale)
       .then((response) => setArticles(Array.isArray(response.articles) ? response.articles : []))
       .catch(() => setArticles([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [locale]);
 
   const articleBase = locale === "en" ? "/articles" : `/${locale}/articles`;
 

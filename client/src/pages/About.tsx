@@ -12,7 +12,7 @@ export default function About() {
   const prefix = locale === "en" ? "" : `/${locale}`;
   const trainingHref = `${prefix}/training`;
   const articlesHref = `${prefix}/articles`;
-  const bookingHref = getBookingHref();
+  const bookingHref = getBookingHref(locale);
   const whatsappHref = buildWhatsAppLink(WHATSAPP_PHONE, t("whatsapp.needHelp"));
 
   const copy =

@@ -164,9 +164,6 @@ export default function ConversationsPanel({
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <StatPill label={copy.phone || "Phone"} value={selected.supportIntake.phone} />
                     <StatPill label={copy.email} value={selected.supportIntake.email} />
-                    <StatPill label={copy.cvVersion || "CV version"} value={selected.supportIntake.cabinetVisionVersion} />
-                    <StatPill label={copy.country || "Country"} value={selected.supportIntake.country} />
-                    <StatPill label={copy.deviceCount || "Devices"} value={selected.supportIntake.deviceCount} />
                     <StatPill label={copy.submittedAt || "Submitted"} value={formatDate(selected.supportIntake.submittedAt, locale)} />
                   </div>
                 </div>

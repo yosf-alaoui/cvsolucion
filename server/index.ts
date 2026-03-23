@@ -49,7 +49,9 @@ import {
   saveArticleImage,
   saveArticleImageBuffer,
   updateArticle,
+  type ArticleLocale,
 } from "./articleStore";
+import { createBooking, getBookingAvailability, type BookingPriority } from "./bookingStore";
 import { storeContactLead } from "./contactStore";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -625,17 +627,14 @@ async function startServer() {
     const conversationId = String(req.body?.conversationId || "").trim();
     const phone = String(req.body?.phone || "").trim();
     const email = String(req.body?.email || "").trim();
-    const cabinetVisionVersion = String(req.body?.cabinetVisionVersion || "").trim();
-    const country = String(req.body?.country || "").trim();
-    const deviceCount = String(req.body?.deviceCount || "").trim();
     const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
     const pathValue = typeof req.body?.path === "string" ? req.body.path : "/";
 
     if (!conversationId) {
       return res.status(400).json({ error: "Conversation is required." });
     }
-    if (!phone || !email || !cabinetVisionVersion || !country || !deviceCount) {
-      return res.status(400).json({ error: "All support fields are required." });
+    if (!phone || !email) {
+      return res.status(400).json({ error: "Phone and email are required." });
     }
     if (!EMAIL_REGEX.test(email)) {
       return res.status(400).json({ error: "Valid email is required." });
@@ -657,9 +656,6 @@ async function startServer() {
       conversationId,
       phone,
       email,
-      cabinetVisionVersion,
-      country,
-      deviceCount,
       visitor,
     });
 
@@ -758,6 +754,114 @@ async function startServer() {
       });
 
       return res.status(201).json({ ok: true, leadId: lead.id });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.get("/api/bookings/availability", rateLimit({ key: "booking-availability", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    const priority = String(req.query.priority || "standard").trim() === "express" ? "express" : "standard";
+    return res.json(getBookingAvailability(priority));
+  });
+
+  app.post("/api/bookings", rateLimit({ key: "bookings-create", windowMs: 1000 * 60 * 10, limit: 20 }), async (req, res, next) => {
+    try {
+      const serviceType = String(req.body?.serviceType || "consultation").trim() === "support" ? "support" : "consultation";
+      const priority = String(req.body?.priority || "standard").trim() === "express" ? "express" : "standard";
+      const date = String(req.body?.date || "").trim();
+      const hour = Number(req.body?.hour);
+      const name = String(req.body?.name || "").trim();
+      const email = String(req.body?.email || "").trim();
+      const phone = String(req.body?.phone || "").trim();
+      const company = String(req.body?.company || "").trim();
+      const notes = String(req.body?.notes || "").trim();
+      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+
+      if (name.length < 2) {
+        return res.status(400).json({ error: "Name is required." });
+      }
+      if (!EMAIL_REGEX.test(email)) {
+        return res.status(400).json({ error: "A valid email is required." });
+      }
+      if (phone.length < 6) {
+        return res.status(400).json({ error: "A valid phone number is required." });
+      }
+      if (!Number.isInteger(hour)) {
+        return res.status(400).json({ error: "Please choose a valid appointment time." });
+      }
+
+      const booking = createBooking({
+        serviceType,
+        priority: priority as BookingPriority,
+        date,
+        hour,
+        name,
+        email,
+        phone,
+        company,
+        notes,
+        locale,
+      });
+
+      const slotLabel = `${booking.date} ${String(booking.hour).padStart(2, "0")}:00`;
+      const destination = (process.env.CONTACT_EMAIL || "contact@cvsolucion.com").trim();
+      const priorityLabel = booking.priority === "express" ? "Express" : "Standard";
+      const serviceLabel = booking.serviceType === "support" ? "Support" : "Consultation";
+
+      await sendAuthEmail({
+        to: destination,
+        subject: `New ${priorityLabel} booking - ${booking.name}`,
+        text: [
+          `Booking ID: ${booking.id}`,
+          `Service: ${serviceLabel}`,
+          `Priority: ${priorityLabel}`,
+          `Slot (Quebec): ${slotLabel}`,
+          `Name: ${booking.name}`,
+          `Email: ${booking.email}`,
+          `Phone: ${booking.phone}`,
+          booking.company ? `Company: ${booking.company}` : null,
+          booking.notes ? `Notes: ${booking.notes}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        html: `
+          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+            <h2 style="margin:0 0 16px">New ${escapeHtml(priorityLabel)} booking</h2>
+            <p><strong>Booking ID:</strong> ${escapeHtml(booking.id)}</p>
+            <p><strong>Service:</strong> ${escapeHtml(serviceLabel)}</p>
+            <p><strong>Priority:</strong> ${escapeHtml(priorityLabel)}</p>
+            <p><strong>Slot (Quebec):</strong> ${escapeHtml(slotLabel)}</p>
+            <p><strong>Name:</strong> ${escapeHtml(booking.name)}</p>
+            <p><strong>Email:</strong> ${escapeHtml(booking.email)}</p>
+            <p><strong>Phone:</strong> ${escapeHtml(booking.phone)}</p>
+            ${booking.company ? `<p><strong>Company:</strong> ${escapeHtml(booking.company)}</p>` : ""}
+            ${booking.notes ? `<p><strong>Notes:</strong> ${escapeHtml(booking.notes)}</p>` : ""}
+          </div>
+        `,
+      });
+
+      await sendAuthEmail({
+        to: booking.email,
+        subject: "Your CVsolucion booking request is confirmed",
+        text: [
+          `Hello ${booking.name},`,
+          "",
+          `Your ${priorityLabel.toLowerCase()} ${serviceLabel.toLowerCase()} booking request has been recorded.`,
+          `Requested slot (Quebec time): ${slotLabel}`,
+          "",
+          "If any adjustment is needed, our team will contact you using the details you submitted.",
+        ].join("\n"),
+        html: `
+          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+            <p>Hello ${escapeHtml(booking.name)},</p>
+            <p>Your <strong>${escapeHtml(priorityLabel.toLowerCase())}</strong> ${escapeHtml(serviceLabel.toLowerCase())} booking request has been recorded.</p>
+            <p><strong>Requested slot (Quebec time):</strong> ${escapeHtml(slotLabel)}</p>
+            <p>If any adjustment is needed, our team will contact you using the details you submitted.</p>
+          </div>
+        `,
+      });
+
+      return res.status(201).json({ ok: true, booking });
     } catch (error) {
       return next(error);
     }
@@ -1089,7 +1193,8 @@ async function startServer() {
   });
 
   app.get("/api/articles", (req, res) => {
-    const articles = listPublishedArticles().map((item) => ({
+    const locale = normalizeAuthLocale(String(req.query.locale || "en")) as ArticleLocale;
+    const articles = listPublishedArticles(locale).map((item) => ({
       ...item,
       excerpt: summarizeArticle(item.body),
     }));
@@ -1098,7 +1203,8 @@ async function startServer() {
 
   app.get("/api/articles/:slug", (req, res) => {
     const slug = String(req.params.slug || "").trim();
-    const article = getArticleBySlug(slug);
+    const locale = normalizeAuthLocale(String(req.query.locale || "en")) as ArticleLocale;
+    const article = getArticleBySlug(slug, locale);
     if (!article) {
       return res.status(404).json({ error: "Article not found." });
     }
@@ -1160,13 +1266,14 @@ async function startServer() {
     }
   );
 
-  app.post("/api/admin/articles", rateLimit({ key: "admin-articles-create", windowMs: 1000 * 60 * 5, limit: 40 }), (req, res, next) => {
+  app.post("/api/admin/articles", rateLimit({ key: "admin-articles-create", windowMs: 1000 * 60 * 5, limit: 40 }), async (req, res, next) => {
     try {
       const auth = requireAdmin(req, res);
       if (!auth) return;
 
       const title = String(req.body?.title || "").trim();
       const body = String(req.body?.body || "").trim();
+      const sourceLocale = normalizeAuthLocale(String(req.body?.sourceLocale || "en")) as ArticleLocale;
       const imageUrl = typeof req.body?.imageUrl === "string" ? req.body.imageUrl : null;
       const publishedAt = typeof req.body?.publishedAt === "string" ? req.body.publishedAt : null;
 
@@ -1174,14 +1281,14 @@ async function startServer() {
         return res.status(400).json({ error: "Title and article body are required." });
       }
 
-      const article = createArticle({ title, body, imageUrl, publishedAt });
+      const article = await createArticle({ sourceLocale, title, body, imageUrl, publishedAt });
       return res.json({ ok: true, article: { ...article, excerpt: summarizeArticle(article.body) } });
     } catch (error) {
       return next(error);
     }
   });
 
-  app.patch("/api/admin/articles/:articleId", rateLimit({ key: "admin-articles-update", windowMs: 1000 * 60 * 5, limit: 80 }), (req, res, next) => {
+  app.patch("/api/admin/articles/:articleId", rateLimit({ key: "admin-articles-update", windowMs: 1000 * 60 * 5, limit: 80 }), async (req, res, next) => {
     try {
       const auth = requireAdmin(req, res);
       if (!auth) return;
@@ -1189,6 +1296,7 @@ async function startServer() {
       const articleId = String(req.params.articleId || "").trim();
       const title = String(req.body?.title || "").trim();
       const body = String(req.body?.body || "").trim();
+      const sourceLocale = normalizeAuthLocale(String(req.body?.sourceLocale || "en")) as ArticleLocale;
       const imageUrl = typeof req.body?.imageUrl === "string" ? req.body.imageUrl : null;
       const publishedAt = typeof req.body?.publishedAt === "string" ? req.body.publishedAt : null;
 
@@ -1196,7 +1304,7 @@ async function startServer() {
         return res.status(400).json({ error: "Title and article body are required." });
       }
 
-      const article = updateArticle(articleId, { title, body, imageUrl, publishedAt });
+      const article = await updateArticle(articleId, { sourceLocale, title, body, imageUrl, publishedAt });
       return res.json({ ok: true, article: { ...article, excerpt: summarizeArticle(article.body) } });
     } catch (error) {
       return next(error);

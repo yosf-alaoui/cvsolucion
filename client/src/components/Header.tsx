@@ -73,7 +73,7 @@ export default function Header() {
   const dashboardHref = `${prefix}/dashboard`;
   const loginHref = `${prefix}/login`;
   const contactHref = `${homeHref}#contact`;
-  const bookingHref = getBookingHref();
+  const bookingHref = getBookingHref(locale);
   const isAuthed = Boolean(user?.id);
 
   const articlesLabel = locale === "ar" ? "المقالات" : "Articles";

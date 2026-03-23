@@ -1,0 +1,88 @@
+export type BookingPriority = "standard" | "express";
+export type BookingServiceType = "consultation" | "support";
+
+export type BookingAvailabilitySlot = {
+  id: string;
+  date: string;
+  hour: number;
+  priority: BookingPriority;
+  status: "available" | "booked";
+  source: "available" | "real" | "showcase";
+};
+
+export type BookingAvailabilityDay = {
+  date: string;
+  slots: BookingAvailabilitySlot[];
+};
+
+export type BookingAvailabilityResponse = {
+  timeZone: string;
+  priority: BookingPriority;
+  days: BookingAvailabilityDay[];
+  window: {
+    startDate: string;
+    endDate: string;
+  };
+  rules: {
+    standardHours: number[];
+    expressHours: number[];
+    lunchBreak: string;
+  };
+};
+
+export type BookingRecord = {
+  id: string;
+  serviceType: BookingServiceType;
+  priority: BookingPriority;
+  date: string;
+  hour: number;
+  name: string;
+  email: string;
+  phone: string;
+  company: string | null;
+  notes: string | null;
+  locale: "en" | "fr" | "ar";
+  status: "confirmed";
+  createdAt: string;
+};
+
+async function request<T>(input: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+  });
+
+  const data = (await response.json().catch(() => ({}))) as { error?: string } & T;
+  if (!response.ok) {
+    throw new Error(data.error || "Booking request failed.");
+  }
+  return data;
+}
+
+export function getBookingAvailability(priority: BookingPriority) {
+  return request<BookingAvailabilityResponse>(`/api/bookings/availability?priority=${encodeURIComponent(priority)}`, {
+    method: "GET",
+  });
+}
+
+export function createBooking(payload: {
+  serviceType: BookingServiceType;
+  priority: BookingPriority;
+  date: string;
+  hour: number;
+  name: string;
+  email: string;
+  phone: string;
+  company?: string;
+  notes?: string;
+  locale: string;
+}) {
+  return request<{ ok: true; booking: BookingRecord }>("/api/bookings", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}

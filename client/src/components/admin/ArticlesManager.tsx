@@ -116,6 +116,8 @@ export default function ArticlesManager({ locale }: { locale: string }) {
       subtitle: "Create and publish articles with an image and date from the dashboard.",
       newArticle: "New article",
       editArticle: "Edit article",
+      sourceLanguage: "Source language",
+      translatedNote: "The other two languages are translated automatically when you save.",
       articleTitle: "Article title",
       publishDate: "Publish date",
       imageUrl: "Image URL",
@@ -146,6 +148,9 @@ export default function ArticlesManager({ locale }: { locale: string }) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sourceLocale, setSourceLocale] = useState<"en" | "fr" | "ar">(
+    locale === "fr" || locale === "ar" ? locale : "en"
+  );
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -197,6 +202,7 @@ export default function ArticlesManager({ locale }: { locale: string }) {
 
   const resetForm = () => {
     setSelectedId(null);
+    setSourceLocale(locale === "fr" || locale === "ar" ? locale : "en");
     setTitle("");
     setBody("");
     setImageUrl("");
@@ -213,6 +219,7 @@ export default function ArticlesManager({ locale }: { locale: string }) {
       if (nextArticles.length && !selectedId) {
         const first = nextArticles[0];
         setSelectedId(first.id);
+        setSourceLocale(first.sourceLocale);
         setTitle(first.title);
         setBody(first.body);
         setImageUrl(first.imageUrl || "");
@@ -247,6 +254,7 @@ export default function ArticlesManager({ locale }: { locale: string }) {
 
   const handleSelect = (article: ArticleSummary) => {
     setSelectedId(article.id);
+    setSourceLocale(article.sourceLocale);
     setTitle(article.title);
     setBody(article.body);
     setImageUrl(article.imageUrl || "");
@@ -275,6 +283,7 @@ export default function ArticlesManager({ locale }: { locale: string }) {
       setBody(normalizedBody);
 
       const payload = {
+        sourceLocale,
         title,
         body: normalizedBody,
         imageUrl: imageUrl || null,
@@ -411,6 +420,23 @@ export default function ArticlesManager({ locale }: { locale: string }) {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-2">
+            <Label htmlFor="article-source-locale">{copy.sourceLanguage || "Source language"}</Label>
+            <select
+              id="article-source-locale"
+              value={sourceLocale}
+              onChange={(event) => setSourceLocale(event.target.value as "en" | "fr" | "ar")}
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
+            >
+              <option value="en">English</option>
+              <option value="fr">Francais</option>
+              <option value="ar">العربية</option>
+            </select>
+            <p className="text-xs text-slate-500">
+              {copy.translatedNote || "The other two languages are translated automatically when you save."}
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="article-title">{copy.articleTitle}</Label>
             <Input id="article-title" value={title} onChange={(event) => setTitle(event.target.value)} />
           </div>
@@ -469,9 +495,9 @@ export default function ArticlesManager({ locale }: { locale: string }) {
                   }}
                   className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
                 >
-                  <option value="paragraph">{copy.paragraph}</option>
-                  <option value="h2">{copy.heading}</option>
-                  <option value="quote">{copy.quote}</option>
+                  <option value="paragraph">{copy.paragraph || "Paragraph"}</option>
+                  <option value="h2">{copy.heading || "Heading"}</option>
+                  <option value="quote">{copy.quote || "Quote"}</option>
                 </select>
 
                 <select
@@ -564,7 +590,7 @@ export default function ArticlesManager({ locale }: { locale: string }) {
                     value={textColor}
                     onChange={(event) => handleColorChange(event.target.value)}
                     className="h-5 w-8 cursor-pointer border-0 bg-transparent p-0"
-                    title={copy.textColor}
+                    title={copy.textColor || "Text color"}
                   />
                 </label>
               </div>
