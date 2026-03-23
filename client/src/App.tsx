@@ -1,26 +1,60 @@
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
-import Training from "./pages/Training";
-import Login from "./pages/Login";
-import Privacy from "./pages/Privacy";
-import Terms from "./pages/Terms";
-import DesignPricing from "./pages/DesignPricing";
-import AdminDashboard from "./pages/AdminDashboard";
-import Articles from "./pages/Articles";
-import ArticleDetailPage from "./pages/ArticleDetail";
-import About from "./pages/About";
-import Booking from "./pages/Booking";
-import Analytics from "./components/Analytics";
-import ChatWidget from "./components/ChatWidget";
 import DotWaveBackground from "./components/DotWaveBackground";
 import { I18nProvider } from "@/i18n/i18n";
 import { AuthProvider } from "./contexts/AuthContext";
 
+const Training = lazy(() => import("./pages/Training"));
+const Login = lazy(() => import("./pages/Login"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const Terms = lazy(() => import("./pages/Terms"));
+const DesignPricing = lazy(() => import("./pages/DesignPricing"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const Articles = lazy(() => import("./pages/Articles"));
+const ArticleDetailPage = lazy(() => import("./pages/ArticleDetail"));
+const About = lazy(() => import("./pages/About"));
+const Booking = lazy(() => import("./pages/Booking"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Analytics = lazy(() => import("./components/Analytics"));
+const ChatWidget = lazy(() => import("./components/ChatWidget"));
+
+function RouteFallback() {
+  return <div className="min-h-[40vh]" />;
+}
+
+function DeferredChatWidget() {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    const enable = () => setEnabled(true);
+    const timeoutId = window.setTimeout(enable, 3500);
+    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart", "scroll"];
+    const handler = () => {
+      setEnabled(true);
+      events.forEach((eventName) => window.removeEventListener(eventName, handler));
+    };
+
+    events.forEach((eventName) => window.addEventListener(eventName, handler, { passive: true, once: true }));
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      events.forEach((eventName) => window.removeEventListener(eventName, handler));
+    };
+  }, []);
+
+  if (!enabled) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <ChatWidget />
+    </Suspense>
+  );
+}
 
 function Router() {
   return (
@@ -83,9 +117,13 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <DotWaveBackground />
-            <Analytics />
-            <ChatWidget />
-            <Router />
+            <Suspense fallback={null}>
+              <Analytics />
+            </Suspense>
+            <DeferredChatWidget />
+            <Suspense fallback={<RouteFallback />}>
+              <Router />
+            </Suspense>
           </TooltipProvider>
         </AuthProvider>
       </ThemeProvider>

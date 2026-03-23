@@ -19,7 +19,20 @@ export default function CTASection() {
   return (
     <section className="relative py-20 overflow-hidden">
       {/* Background Image */}
-      <div className="absolute inset-0 bg-[url('/images/consultation-bg.jpg')] bg-cover bg-center bg-no-repeat bg-scroll md:bg-fixed" />
+      <picture className="absolute inset-0">
+        <source srcSet="/images/consultation-bg.webp" type="image/webp" />
+        <img
+          src="/images/consultation-bg.jpg"
+          alt=""
+          aria-hidden="true"
+          width={1600}
+          height={893}
+          loading="lazy"
+          fetchPriority="low"
+          decoding="async"
+          className="h-full w-full object-cover object-center"
+        />
+      </picture>
       
       {/* Overlay */}
       <div className="absolute inset-0 bg-black/50" />

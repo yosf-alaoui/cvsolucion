@@ -1,17 +1,15 @@
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
-import ProblemsSection from "@/components/ProblemsSection";
-import ServicesSection from "@/components/ServicesSection";
-import PackagesSection from "@/components/PackagesSection";
-import BenefitsSection from "@/components/BenefitsSection";
-import FAQSection from "@/components/FAQSection";
-import CTASection from "@/components/CTASection";
-import TestimonialsSection from "@/components/TestimonialsSection";
-import ContactSection from "@/components/ContactSection";
 import Footer from "@/components/Footer";
 import Seo from "@/components/Seo";
 import { useI18n } from "@/i18n/i18n";
+
+const HomeContentSections = lazy(() => import("@/components/HomeContentSections"));
+
+function HomeSectionsFallback() {
+  return <div className="min-h-[60vh]" aria-hidden="true" />;
+}
 
 /**
  * Home Page - CV Solution
@@ -77,29 +75,9 @@ export default function Home() {
         {/* Hero Section */}
         <HeroSection />
 
-        {/* Problems Section */}
-        <ProblemsSection />
-
-        {/* Services Section */}
-        <ServicesSection />
-
-        {/* Packages Section */}
-        <PackagesSection />
-
-        {/* Social Proof Section */}
-        <TestimonialsSection />
-
-        {/* Benefits Section */}
-        <BenefitsSection />
-
-        {/* FAQ Section */}
-        <FAQSection />
-
-        {/* Contact Section */}
-        <ContactSection />
-
-        {/* CTA Section */}
-        <CTASection />
+        <Suspense fallback={<HomeSectionsFallback />}>
+          <HomeContentSections />
+        </Suspense>
       </main>
 
       {/* Footer */}

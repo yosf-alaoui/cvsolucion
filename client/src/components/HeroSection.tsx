@@ -19,7 +19,20 @@ export default function HeroSection() {
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Background Image */}
-      <div className="absolute inset-0 bg-[url('/images/Header-CVsolucion.png')] bg-cover bg-center bg-no-repeat bg-scroll md:bg-fixed" />
+      <picture className="absolute inset-0">
+        <source srcSet="/images/Header-CVsolucion.webp" type="image/webp" />
+        <img
+          src="/images/Header-CVsolucion.png"
+          alt=""
+          aria-hidden="true"
+          width={1536}
+          height={1024}
+          fetchPriority="high"
+          loading="eager"
+          decoding="async"
+          className="h-full w-full object-cover object-center"
+        />
+      </picture>
       
       {/* Overlay */}
       <div className="absolute inset-0 bg-black/30" />

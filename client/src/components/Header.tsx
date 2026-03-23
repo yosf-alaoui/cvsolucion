@@ -102,11 +102,17 @@ export default function Header() {
         <div className="mt-3 rounded-2xl border border-white/25 bg-white/85 shadow-xl backdrop-blur-xl">
           <div className="flex items-center justify-between px-4 py-3">
             <a href={homeHref} className="flex items-center transition-opacity hover:opacity-90">
-              <img
-                src="/logo.png"
-                alt="CV Solucion Logo"
-                className="h-10 w-auto drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)] sm:h-11 md:h-12"
-              />
+              <picture>
+                <source srcSet="/logo.webp" type="image/webp" />
+                <img
+                  src="/logo.png"
+                  alt="CV Solucion Logo"
+                  width={1600}
+                  height={533}
+                  decoding="async"
+                  className="h-10 w-auto drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)] sm:h-11 md:h-12"
+                />
+              </picture>
             </a>
 
             <nav className="hidden flex-1 items-center justify-center gap-8 md:flex">
