@@ -766,7 +766,13 @@ async function startServer() {
       const user = getUserByEmail(email);
 
       if (!user) {
-        return res.json({ ok: true });
+        console.warn("[auth:magic-link:no-user]", {
+          email,
+          locale,
+          ip: getRequestIp(req),
+          userAgent: req.get("user-agent") || null,
+        });
+        return res.json({ ok: true, delivered: false });
       }
 
       const { rawToken } = createToken(user.id, "magic_link", MAGIC_LINK_MS);
@@ -781,7 +787,7 @@ async function startServer() {
         userAgent: req.get("user-agent") || null,
       });
       await sendLinkEmail({ email: user.email, locale, type: "magic", url: magicUrl });
-      return res.json({ ok: true });
+      return res.json({ ok: true, delivered: true });
     } catch (error) {
       return next(error);
     }

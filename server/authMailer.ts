@@ -37,11 +37,29 @@ export async function sendAuthEmail(options: MailOptions) {
   }
 
   const from = process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@localhost";
-  await transporter.sendMail({
-    from,
-    to: options.to,
-    subject: options.subject,
-    text: options.text,
-    html: options.html,
-  });
+  try {
+    const info = await transporter.sendMail({
+      from,
+      to: options.to,
+      subject: options.subject,
+      text: options.text,
+      html: options.html,
+    });
+
+    console.log("[auth-email:sent]", {
+      to: options.to,
+      subject: options.subject,
+      messageId: info.messageId,
+      accepted: info.accepted,
+      rejected: info.rejected,
+      response: info.response,
+    });
+  } catch (error) {
+    console.error("[auth-email:error]", {
+      to: options.to,
+      subject: options.subject,
+      error: error instanceof Error ? error.stack || error.message : String(error),
+    });
+    throw error;
+  }
 }

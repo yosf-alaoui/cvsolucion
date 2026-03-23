@@ -97,9 +97,9 @@ export default function Login() {
         setStatus(t("auth.checkEmail"));
         setStatusTone("success");
       } else {
-        await sendMagic(email, locale);
-        setStatus(t("auth.magicSent"));
-        setStatusTone("success");
+        const response = await sendMagic(email, locale);
+        setStatus(t(response.delivered ? "auth.magicSent" : "auth.magicMissingAccount"));
+        setStatusTone(response.delivered ? "success" : "error");
       }
     } catch (err: any) {
       setStatus(err?.message || t("auth.genericError"));
