@@ -16,7 +16,7 @@ export default function Terms() {
             </p>
           </header>
 
-          <section className="glass-card-strong rounded-2xl p-8">
+          <section className="glass-card-strong card-static rounded-2xl p-8">
             <div className="prose max-w-none prose-slate prose-headings:mt-8 prose-headings:font-semibold">
               <TermsContent />
             </div>

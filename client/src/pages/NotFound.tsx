@@ -12,7 +12,7 @@ export default function NotFound() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-      <Card className="glass-card-strong mx-4 w-full max-w-lg border-0">
+      <Card className="glass-card-strong card-static mx-4 w-full max-w-lg border-0">
         <CardContent className="pt-8 pb-8 text-center">
           <div className="flex justify-center mb-6">
             <div className="relative">

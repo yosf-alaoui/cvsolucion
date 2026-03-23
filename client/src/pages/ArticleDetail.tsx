@@ -66,7 +66,7 @@ export default function ArticleDetailPage({ params }: RouteComponentProps<Articl
                 {copy.back}
               </a>
 
-              <GlassCard className="overflow-hidden rounded-[36px] p-0">
+              <GlassCard className="card-static overflow-hidden rounded-[36px] p-0">
                 <article>
                   {article.imageUrl ? (
                     <img src={article.imageUrl} alt={article.title} className="h-[340px] w-full object-cover sm:h-[420px]" />

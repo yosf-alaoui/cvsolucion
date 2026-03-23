@@ -129,7 +129,7 @@ export default function Login() {
       <main className="flex-1 pt-28 pb-16">
         <div className="container mx-auto px-4">
           <div className="max-w-md mx-auto">
-            <Card className="glass-card-strong rounded-2xl p-8">
+            <Card className="glass-card-strong card-static rounded-2xl p-8">
               <h1 className="text-2xl font-bold text-primary">
                 {t(mode === "signup" ? "auth.signUp" : "auth.signIn")}
               </h1>
