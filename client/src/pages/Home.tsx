@@ -41,7 +41,12 @@ export default function Home() {
 
   const homeUrl =
     typeof window !== "undefined"
-      ? window.location.href
+      ? (() => {
+          const url = new URL(window.location.href);
+          url.hash = "";
+          url.search = "";
+          return url.toString();
+        })()
       : locale === "en"
         ? "https://cvsolucion.com"
         : `https://cvsolucion.com/${locale}`;

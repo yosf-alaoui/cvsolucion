@@ -54,6 +54,7 @@ import {
 } from "./articleStore";
 import { createBooking, getBookingAvailability, type BookingPriority } from "./bookingStore";
 import { storeContactLead } from "./contactStore";
+import { buildRobotsTxt, buildSitemapXml, renderSeoHtml } from "./seo";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,6 +82,31 @@ function parseCookies(cookieHeader?: string) {
 
 function appOrigin(req: express.Request) {
   return (process.env.APP_ORIGIN || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+}
+
+function canonicalOrigin(req: express.Request) {
+  const configured = process.env.APP_ORIGIN?.replace(/\/+$/, "");
+  if (configured) {
+    try {
+      const parsed = new URL(configured);
+      if (!/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(parsed.hostname)) {
+        return configured;
+      }
+    } catch {
+      return configured;
+    }
+  }
+
+  const host = String(req.get("host") || "").trim();
+  const forwardedProto = String(req.get("x-forwarded-proto") || req.protocol || "https")
+    .split(",")[0]
+    .trim();
+
+  if (/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(host)) {
+    return `${forwardedProto}://${host}`;
+  }
+
+  return "https://cvsolucion.com";
 }
 
 function localePrefix(locale?: string | null) {
@@ -295,6 +321,44 @@ async function startServer() {
     if (blockedPaths.some((blocked) => lowerPath.startsWith(blocked))) {
       return res.status(404).send("Not Found");
     }
+    return next();
+  });
+
+  app.use((req, res, next) => {
+    const hostHeader = String(req.get("host") || "").trim();
+    if (!hostHeader) return next();
+
+    const forwardedProto = String(req.get("x-forwarded-proto") || req.protocol || "https")
+      .split(",")[0]
+      .trim();
+
+    let requestUrl: URL;
+    let canonicalUrl: URL;
+    try {
+      requestUrl = new URL(`${forwardedProto}://${hostHeader}${req.originalUrl}`);
+      canonicalUrl = new URL(canonicalOrigin(req));
+    } catch {
+      return next();
+    }
+
+    const requestHost = requestUrl.hostname.toLowerCase();
+    const targetHost = canonicalUrl.hostname.replace(/^www\./i, "").toLowerCase();
+    const targetProtocol = canonicalUrl.protocol;
+    const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(requestHost);
+
+    if (isLocalHost) return next();
+
+    if (requestHost === `www.${targetHost}`) {
+      requestUrl.hostname = targetHost;
+      requestUrl.protocol = targetProtocol;
+      return res.redirect(301, requestUrl.toString());
+    }
+
+    if (requestHost === targetHost && targetProtocol === "https:" && requestUrl.protocol !== "https:") {
+      requestUrl.protocol = "https:";
+      return res.redirect(301, requestUrl.toString());
+    }
+
     return next();
   });
 
@@ -1339,8 +1403,26 @@ async function startServer() {
       ? path.resolve(__dirname, "public")
       : path.resolve(__dirname, "..", "dist", "public");
 
+  const indexPath = path.join(staticPath, "index.html");
+  const indexTemplate = fs.readFileSync(indexPath, "utf8");
+
+  app.get("/robots.txt", (req, res) => {
+    const body = buildRobotsTxt(canonicalOrigin(req));
+    res.setHeader("Content-Type", "text/plain; charset=UTF-8");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    return res.status(200).send(body);
+  });
+
+  app.get("/sitemap.xml", (req, res) => {
+    const body = buildSitemapXml(canonicalOrigin(req));
+    res.setHeader("Content-Type", "application/xml; charset=UTF-8");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    return res.status(200).send(body);
+  });
+
   app.use(
     express.static(staticPath, {
+      index: false,
       maxAge: "1y",
       etag: true,
       lastModified: true,
@@ -1360,27 +1442,15 @@ async function startServer() {
   app.use("/uploads", express.static(path.resolve(process.cwd(), "data", "uploads"), { maxAge: "30d", etag: true, lastModified: true }));
 
   app.get("*", (req, res) => {
-    const indexPath = path.join(staticPath, "index.html");
-    const wantsFr = req.path === "/fr" || req.path.startsWith("/fr/");
-    const wantsAr = req.path === "/ar" || req.path.startsWith("/ar/");
-
-    if (wantsFr || wantsAr) {
-      try {
-        const html = fs.readFileSync(indexPath, "utf8");
-        const lang = wantsFr ? "fr" : "ar";
-        const dir = wantsAr ? ' dir="rtl"' : "";
-        const patched = html.replace(/<html\s+lang="[^"]*"/i, `<html lang="${lang}"${dir}`);
-        res.setHeader("Content-Type", "text/html; charset=UTF-8");
-        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-        res.status(200);
-        return res.end(patched);
-      } catch {
-        return res.sendFile(indexPath);
-      }
+    try {
+      const html = renderSeoHtml(indexTemplate, req.path, canonicalOrigin(req));
+      res.setHeader("Content-Type", "text/html; charset=UTF-8");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      return res.status(200).send(html);
+    } catch {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      return res.sendFile(indexPath);
     }
-
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-    return res.sendFile(indexPath);
   });
 
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

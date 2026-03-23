@@ -113,7 +113,15 @@ export default function About() {
     "@context": "https://schema.org",
     "@type": "ProfessionalService",
     name: "CVsolucion",
-    url: typeof window !== "undefined" ? window.location.href : "https://cvsolucion.com/about",
+    url:
+      typeof window !== "undefined"
+        ? (() => {
+            const url = new URL(window.location.href);
+            url.hash = "";
+            url.search = "";
+            return url.toString();
+          })()
+        : "https://cvsolucion.com/about",
     areaServed: ["Canada", "United States"],
     serviceType: ["Cabinet Vision Consulting", "Cabinet Vision Training", "CNC Troubleshooting"],
   };

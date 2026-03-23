@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import Seo from "@/components/Seo";
 import { AlertCircle, Home } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -12,6 +13,12 @@ export default function NotFound() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+      <Seo
+        title="404 | CVsolucion"
+        description="The requested page could not be found."
+        robots="noindex, nofollow"
+        type="website"
+      />
       <Card className="glass-card-strong card-static mx-4 w-full max-w-lg border-0">
         <CardContent className="pt-8 pb-8 text-center">
           <div className="flex justify-center mb-6">

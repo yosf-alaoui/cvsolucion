@@ -2,6 +2,7 @@ import { useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
+import Seo from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, MessageCircle, Sparkles } from "lucide-react";
@@ -26,6 +27,11 @@ export default function Training() {
 
   return (
     <div className="site-page min-h-screen flex flex-col bg-transparent">
+      <Seo
+        title={`${t("trainingPage.title")} | CVsolucion`}
+        description={t("trainingPage.subtitle")}
+        type="website"
+      />
       <Header />
 
       <main className="flex-1 pt-28">

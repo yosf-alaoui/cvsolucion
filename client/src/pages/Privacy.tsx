@@ -1,10 +1,16 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import Seo from "@/components/Seo";
 import { PrivacyPolicyContent } from "@/content/legal";
 
 export default function Privacy() {
   return (
     <div className="site-page min-h-screen flex flex-col bg-transparent">
+      <Seo
+        title="Privacy Policy | CVsolucion"
+        description="Read how CVsolucion collects, uses, and protects data across the site, forms, chat, and bookings."
+        type="website"
+      />
       <Header />
       <main className="flex-1 mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16 py-16">
         <div className="max-w-4xl mx-auto space-y-6">

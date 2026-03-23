@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import Seo from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import {
   Calculator,
@@ -61,6 +62,11 @@ export default function DesignPricing() {
 
   return (
     <div className="site-page min-h-screen flex flex-col bg-transparent">
+      <Seo
+        title={`${t("designPricingPage.title")} | CVsolucion`}
+        description={t("designPricingPage.subtitle")}
+        type="website"
+      />
       <Header />
 
       <main className="flex-1 pt-28">

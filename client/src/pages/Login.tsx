@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import Seo from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -124,6 +125,12 @@ export default function Login() {
 
   return (
     <div className="site-page min-h-screen flex flex-col bg-transparent">
+      <Seo
+        title={`${t("auth.signIn")} | CVsolucion`}
+        description={t("auth.subtitle")}
+        robots="noindex, nofollow"
+        type="website"
+      />
       <Header />
 
       <main className="flex-1 pt-28 pb-16">

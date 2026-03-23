@@ -67,7 +67,12 @@ export default function ArticleDetailPage({ params }: RouteComponentProps<Articl
           description: article.excerpt,
           datePublished: article.publishedAt,
           dateModified: article.updatedAt,
-          mainEntityOfPage: window.location.href,
+          mainEntityOfPage: (() => {
+            const url = new URL(window.location.href);
+            url.hash = "";
+            url.search = "";
+            return url.toString();
+          })(),
           author: {
             "@type": "Organization",
             name: "CVsolucion",

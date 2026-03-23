@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import Seo from "@/components/Seo";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
 import {
@@ -832,6 +833,12 @@ export default function AdminDashboard() {
 
   return (
     <div className="site-page min-h-screen flex flex-col bg-transparent">
+      <Seo
+        title={`${copy.title} | CVsolucion`}
+        description={copy.subtitle}
+        robots="noindex, nofollow"
+        type="website"
+      />
       <Header />
       <main className="flex-1 pt-28 pb-16">
         <div className="container mx-auto px-4">
