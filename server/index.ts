@@ -41,6 +41,7 @@ import {
 } from "./chatStore";
 import { getVisitorById } from "./visitorStore";
 import {
+  backfillArticleTranslations,
   createArticle,
   deleteArticle,
   getArticleBySlug,
@@ -786,6 +787,15 @@ async function startServer() {
       if (phone.length < 6) {
         return res.status(400).json({ error: "A valid phone number is required." });
       }
+      if (company.length < 2) {
+        return res.status(400).json({ error: "Company name is required." });
+      }
+      if (notes.length < 10) {
+        return res.status(400).json({ error: "Please describe the issue or request." });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: "Please choose a valid booking date." });
+      }
       if (!Number.isInteger(hour)) {
         return res.status(400).json({ error: "Please choose a valid appointment time." });
       }
@@ -1379,6 +1389,15 @@ async function startServer() {
   });
 
   const port = process.env.PORT || (process.env.NODE_ENV === "production" ? 3000 : 3001);
+  try {
+    const { translated } = await backfillArticleTranslations();
+    if (translated > 0) {
+      console.log(`[articles] backfilled translations for ${translated} article(s)`);
+    }
+  } catch (error) {
+    console.error("[articles] translation backfill failed", error);
+  }
+
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
     console.log("Security headers enabled");

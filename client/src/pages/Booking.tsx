@@ -8,7 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createBooking, getBookingAvailability, type BookingAvailabilityDay, type BookingAvailabilitySlot, type BookingPriority, type BookingServiceType } from "@/lib/bookings";
+import {
+  createBooking,
+  getBookingAvailability,
+  type BookingAvailabilityDay,
+  type BookingAvailabilitySlot,
+  type BookingPriority,
+  type BookingServiceType,
+} from "@/lib/bookings";
 import { useI18n } from "@/i18n/i18n";
 
 function dateLabel(date: string, locale: string) {
@@ -50,18 +57,19 @@ export default function Booking() {
     email: "",
     phone: "",
     company: "",
-    notes: "",
+    problem: "",
   });
 
   const copy = useMemo(() => {
     if (locale === "ar") {
       return {
         title: "حجز الاستشارة أو الدعم",
-        subtitle: "اختر موعدك حسب توقيت كيبيك. الحجز العادي متاح من 8:00 إلى 18:00 مع توقف بين 12:00 و13:00، والحجز السريع يعطي أولوية مع تكلفة إضافية وغالباً في الفترة الليلية.",
+        subtitle:
+          "اختر موعدك حسب توقيت كيبيك. الحجز العادي متاح من 8:00 إلى 18:00 مع توقف بين 12:00 و13:00، أما Express فيعطي أولوية أعلى مع تكلفة إضافية ويظهر فقط لليوم والغد.",
         standardTitle: "حجز عادي",
         standardText: "مناسب للاستشارة المنظمة أو الدعم غير الطارئ خلال ساعات العمل.",
         expressTitle: "Express Priority",
-        expressText: "أولوية أعلى، برسوم إضافية، وغالباً في الفترات الليلية لتسريع التدخل.",
+        expressText: "أولوية أعلى مع تكلفة إضافية، ويظهر فقط لليوم والغد مع ساعات اليوم الحقيقي حتى 9:00 مساءً.",
         consultation: "استشارة",
         support: "دعم",
         timezone: "جميع المواعيد حسب توقيت كيبيك، كندا",
@@ -75,7 +83,11 @@ export default function Booking() {
         email: "البريد الإلكتروني",
         phone: "الهاتف / واتساب",
         company: "الشركة",
-        notes: "ملاحظات",
+        problem: "اشرح المشكل أو الطلب",
+        showcase: "المواعيد المملوءة الظاهرة للثقة تظهر فقط خلال أول 10 أيام من الشهر.",
+        expressWindow: "Express يعرض فقط اليوم والغد.",
+        expressTime: "ساعات Express لليوم تبدأ من الوقت الحقيقي الحالي في كيبيك حتى 9:00 مساءً.",
+        loading: "جارٍ تحميل المواعيد...",
         submit: "تأكيد الحجز",
         sending: "جارٍ التأكيد...",
         success: "تم تسجيل الحجز بنجاح. ستصلك رسالة تأكيد عبر البريد.",
@@ -83,14 +95,16 @@ export default function Booking() {
         seoTitle: "حجز استشارة أو دعم | CVsolucion",
       };
     }
+
     if (locale === "fr") {
       return {
         title: "Reservation consultation ou support",
-        subtitle: "Choisissez votre horaire en heure du Quebec. Le booking standard est ouvert de 8h a 18h avec pause 12h-13h. Le mode express donne une priorite plus forte avec frais supplementaires, souvent en soiree.",
+        subtitle:
+          "Choisissez votre horaire en heure du Quebec. Le booking standard est ouvert de 8h a 18h avec pause 12h-13h. Le mode express ajoute une priorite reelle, un cout supplementaire, et n'affiche que aujourd'hui et demain.",
         standardTitle: "Booking standard",
         standardText: "Adapte a une consultation claire ou a un support non urgent pendant les heures normales.",
         expressTitle: "Express Priority",
-        expressText: "Priorite renforcee, frais supplementaires, et plages souvent en soiree pour accelerer la prise en charge.",
+        expressText: "Priorite renforcee avec frais supplementaires, disponible seulement pour aujourd'hui et demain, avec les heures du jour jusqu'a 21h.",
         consultation: "Consultation",
         support: "Support",
         timezone: "Tous les horaires sont affiches en heure du Quebec, Canada",
@@ -104,7 +118,11 @@ export default function Booking() {
         email: "Email",
         phone: "Telephone / WhatsApp",
         company: "Societe",
-        notes: "Notes",
+        problem: "Decrivez le probleme ou la demande",
+        showcase: "Les creneaux affiches comme occupes n'apparaissent que pendant les 10 premiers jours du mois.",
+        expressWindow: "Express affiche seulement aujourd'hui et demain.",
+        expressTime: "Pour aujourd'hui, les heures Express suivent l'heure reelle du Quebec jusqu'a 21h.",
+        loading: "Chargement des horaires...",
         submit: "Confirmer le booking",
         sending: "Confirmation...",
         success: "Le booking est enregistre. Un email de confirmation sera envoye.",
@@ -112,13 +130,15 @@ export default function Booking() {
         seoTitle: "Reservation consultation ou support | CVsolucion",
       };
     }
+
     return {
       title: "Book a consultation or support session",
-      subtitle: "Choose your appointment in Quebec time. Standard booking runs from 8:00 to 18:00 with a 12:00-13:00 break. Express gives clear priority, adds an extra fee, and often opens night slots.",
+      subtitle:
+        "Choose your appointment in Quebec time. Standard booking runs from 8:00 to 18:00 with a 12:00-13:00 break. Express adds clear priority, extra cost, and only shows today and tomorrow.",
       standardTitle: "Standard booking",
       standardText: "Best for planned consulting or non-urgent support during normal business hours.",
       expressTitle: "Express Priority",
-      expressText: "Higher priority, additional fee, and usually available in evening slots for faster response.",
+      expressText: "Higher priority with an extra fee, available only for today and tomorrow, with same-day hours following real Quebec time until 9:00 PM.",
       consultation: "Consultation",
       support: "Support",
       timezone: "All appointment times are shown in Quebec, Canada time",
@@ -132,7 +152,11 @@ export default function Booking() {
       email: "Email",
       phone: "Phone / WhatsApp",
       company: "Company",
-      notes: "Notes",
+      problem: "Describe the issue or request",
+      showcase: "Example booked slots appear only in the first 10 days of the month.",
+      expressWindow: "Express shows only today and tomorrow.",
+      expressTime: "Today's Express slots follow the real current Quebec time until 9:00 PM.",
+      loading: "Loading schedule...",
       submit: "Confirm booking",
       sending: "Confirming...",
       success: "Booking recorded successfully. A confirmation email will be sent.",
@@ -151,7 +175,7 @@ export default function Booking() {
       .finally(() => setLoading(false));
   }, [priority]);
 
-  const weeks = useMemo(() => chunkDays(days, 5), [days]);
+  const weeks = useMemo(() => chunkDays(days, priority === "express" ? 2 : 5), [days, priority]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -172,12 +196,12 @@ export default function Booking() {
         email: form.email,
         phone: form.phone,
         company: form.company,
-        notes: form.notes,
+        notes: form.problem,
         locale,
       });
 
       setStatus({ tone: "success", text: copy.success });
-      setForm({ name: "", email: "", phone: "", company: "", notes: "" });
+      setForm({ name: "", email: "", phone: "", company: "", problem: "" });
       setSelectedSlot(null);
       const refreshed = await getBookingAvailability(priority);
       setDays(refreshed.days);
@@ -238,7 +262,12 @@ export default function Booking() {
           <div className="mx-auto mt-5 flex max-w-6xl flex-wrap items-center justify-center gap-3 text-sm text-slate-600">
             <span className="glass-chip rounded-full px-4 py-2">{copy.timezone}</span>
             <span className="glass-chip rounded-full px-4 py-2">{copy.lunch}</span>
-            <span className="glass-chip rounded-full px-4 py-2">{copy.booked}: 3+ / week</span>
+            <span className="glass-chip rounded-full px-4 py-2">
+              {priority === "express" ? copy.expressWindow : copy.showcase}
+            </span>
+            <span className="glass-chip rounded-full px-4 py-2">
+              {priority === "express" ? copy.expressTime : `${copy.booked}: 3+`}
+            </span>
           </div>
 
           <div className="mx-auto mt-12 grid max-w-7xl gap-8 xl:grid-cols-[1.25fr_0.75fr]">
@@ -264,11 +293,14 @@ export default function Booking() {
                 </div>
 
                 {loading ? (
-                  <div className="mt-8 text-sm text-slate-500">Loading schedule...</div>
+                  <div className="mt-8 text-sm text-slate-500">{copy.loading}</div>
                 ) : (
                   <div className="mt-8 space-y-8">
                     {weeks.map((week, weekIndex) => (
-                      <div key={`week-${weekIndex}`} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      <div
+                        key={`week-${weekIndex}`}
+                        className={`grid gap-4 ${priority === "express" ? "md:grid-cols-2" : "md:grid-cols-2 xl:grid-cols-3"}`}
+                      >
                         {week.map((day) => (
                           <div key={day.date} className="rounded-[24px] border border-slate-200 bg-white/60 p-4">
                             <div className="text-sm font-semibold text-slate-500">{dateLabel(day.date, locale)}</div>
@@ -335,23 +367,50 @@ export default function Booking() {
                 <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
                   <div className="space-y-2">
                     <Label htmlFor="booking-name">{copy.name}</Label>
-                    <Input id="booking-name" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
+                    <Input
+                      id="booking-name"
+                      value={form.name}
+                      onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="booking-email">{copy.email}</Label>
-                    <Input id="booking-email" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} required />
+                    <Input
+                      id="booking-email"
+                      type="email"
+                      value={form.email}
+                      onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="booking-phone">{copy.phone}</Label>
-                    <Input id="booking-phone" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} required />
+                    <Input
+                      id="booking-phone"
+                      value={form.phone}
+                      onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="booking-company">{copy.company}</Label>
-                    <Input id="booking-company" value={form.company} onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))} />
+                    <Input
+                      id="booking-company"
+                      value={form.company}
+                      onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))}
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="booking-notes">{copy.notes}</Label>
-                    <Textarea id="booking-notes" className="min-h-28" value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} />
+                    <Label htmlFor="booking-problem">{copy.problem}</Label>
+                    <Textarea
+                      id="booking-problem"
+                      className="min-h-32"
+                      value={form.problem}
+                      onChange={(event) => setForm((current) => ({ ...current, problem: event.target.value }))}
+                      required
+                    />
                   </div>
 
                   <Button type="submit" className="w-full rounded-full bg-primary text-white hover:bg-primary/90" disabled={saving}>

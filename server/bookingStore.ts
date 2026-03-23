@@ -29,7 +29,7 @@ const DATA_DIR = path.resolve(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "bookings-db.json");
 const QUEBEC_TIMEZONE = "America/Toronto";
 const STANDARD_HOURS = [8, 9, 10, 11, 13, 14, 15, 16, 17];
-const EXPRESS_HOURS = [19, 20, 21];
+const EXPRESS_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
 
 function ensureDbFile() {
   if (!fs.existsSync(DATA_DIR)) {
@@ -129,6 +129,14 @@ function getHoursForPriority(priority: BookingPriority) {
   return priority === "express" ? EXPRESS_HOURS : STANDARD_HOURS;
 }
 
+function dateDayOfMonth(dateKey: string) {
+  return dateKeyParts(dateKey).day;
+}
+
+function isShowcaseWindowDate(dateKey: string) {
+  return dateDayOfMonth(dateKey) <= 10;
+}
+
 function buildSlotId(date: string, hour: number, priority: BookingPriority) {
   return `${date}:${String(hour).padStart(2, "0")}:${priority}`;
 }
@@ -159,10 +167,10 @@ function buildShowcaseBookedIds(startDate: string, daysAhead = 31) {
 
       patterns.forEach((pattern) => {
         const date = addDays(weekStart, pattern.offset);
-        booked.add(buildSlotId(date, pattern.hour, "standard"));
+        if (isShowcaseWindowDate(date)) {
+          booked.add(buildSlotId(date, pattern.hour, "standard"));
+        }
       });
-
-      booked.add(buildSlotId(addDays(weekStart, 1), 19, "express"));
     });
 
   return booked;
@@ -186,16 +194,26 @@ export function getBookingAvailability(priority: BookingPriority) {
   const quebecNow = getQuebecNow();
   const startDate = quebecNow.dateKey;
   const showcaseBooked = buildShowcaseBookedIds(startDate);
-  const hours = getHoursForPriority(priority);
   const days = [];
 
-  for (let index = 0; index < 31; index += 1) {
+  const maxDays = priority === "express" ? 2 : 31;
+
+  for (let index = 0; index < maxDays; index += 1) {
     const date = addDays(startDate, index);
     const weekdayIndex = getWeekdayIndex(date);
-    if (weekdayIndex > 5) continue;
+    if (priority === "standard" && weekdayIndex > 5) continue;
+
+    const hours =
+      priority === "express"
+        ? getHoursForPriority(priority).filter((hour) => {
+            if (date === quebecNow.dateKey) {
+              return hour > quebecNow.hour && hour <= 21;
+            }
+            return index === 1;
+          })
+        : getHoursForPriority(priority);
 
     const slots = hours
-      .filter((hour) => !(date === quebecNow.dateKey && hour <= quebecNow.hour))
       .map((hour) => {
         const slotId = buildSlotId(date, hour, priority);
         const actualBooking = db.bookings.find(
@@ -224,7 +242,7 @@ export function getBookingAvailability(priority: BookingPriority) {
     days,
     window: {
       startDate,
-      endDate: addDays(startDate, 30),
+      endDate: addDays(startDate, priority === "express" ? 1 : 30),
     },
     rules: {
       standardHours: STANDARD_HOURS,
@@ -249,11 +267,18 @@ export function createBooking(input: {
   const db = loadDb();
   const quebecNow = getQuebecNow();
   const showcaseBooked = buildShowcaseBookedIds(quebecNow.dateKey);
-  const hours = getHoursForPriority(input.priority);
+  const hours =
+    input.priority === "express"
+      ? getHoursForPriority(input.priority)
+      : getHoursForPriority(input.priority);
   const dateDiff =
     (parseDateKey(input.date).getTime() - parseDateKey(quebecNow.dateKey).getTime()) / (1000 * 60 * 60 * 24);
 
-  if (dateDiff < 0 || dateDiff > 30) {
+  if (input.priority === "express") {
+    if (dateDiff < 0 || dateDiff > 1) {
+      throw new Error("Express booking is available for today and tomorrow only.");
+    }
+  } else if (dateDiff < 0 || dateDiff > 30) {
     throw new Error("Selected slot must be within the next 30 days.");
   }
 
@@ -266,8 +291,12 @@ export function createBooking(input: {
   }
 
   const weekdayIndex = getWeekdayIndex(input.date);
-  if (weekdayIndex > 5) {
+  if (input.priority === "standard" && weekdayIndex > 5) {
     throw new Error("Bookings are available Monday to Friday only.");
+  }
+
+  if (input.priority === "express" && input.hour > 21) {
+    throw new Error("Express booking is available until 9 PM Quebec time.");
   }
 
   const slotId = buildSlotId(input.date, input.hour, input.priority);

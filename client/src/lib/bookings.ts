@@ -77,8 +77,8 @@ export function createBooking(payload: {
   name: string;
   email: string;
   phone: string;
-  company?: string;
-  notes?: string;
+  company: string;
+  notes: string;
   locale: string;
 }) {
   return request<{ ok: true; booking: BookingRecord }>("/api/bookings", {

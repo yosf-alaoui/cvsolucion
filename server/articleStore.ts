@@ -214,6 +214,31 @@ function canonicalSlugTitle(sourceLocale: ArticleLocale, translations: Record<Ar
   return (sourceLocale === "en" ? translations.en.title : translations.en.title || translations[sourceLocale].title).trim();
 }
 
+function normalizeComparableText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function translationNeedsBackfill(record: ArticleRecord, locale: ArticleLocale) {
+  if (locale === record.sourceLocale) {
+    return false;
+  }
+
+  const source = record.translations[record.sourceLocale];
+  const target = record.translations[locale];
+  if (!target?.title?.trim() || !target?.body?.trim()) {
+    return true;
+  }
+
+  return (
+    normalizeComparableText(target.title) === normalizeComparableText(source.title) &&
+    normalizeComparableText(target.body) === normalizeComparableText(source.body)
+  );
+}
+
+function articleNeedsTranslationBackfill(record: ArticleRecord) {
+  return ARTICLE_LOCALES.some((locale) => translationNeedsBackfill(record, locale));
+}
+
 export function listAdminArticles() {
   const db = loadDb();
   return sortArticles(db.articles).map((item) => localizeArticle(item, item.sourceLocale));
@@ -234,6 +259,48 @@ export function getArticleById(id: string) {
   const db = loadDb();
   const article = db.articles.find((item) => item.id === id) ?? null;
   return article ? localizeArticle(article, article.sourceLocale) : null;
+}
+
+export async function backfillArticleTranslations(articleId?: string) {
+  const db = loadDb();
+  let translated = 0;
+  let changed = false;
+
+  for (const article of db.articles) {
+    if (articleId && article.id !== articleId) {
+      continue;
+    }
+    if (!articleNeedsTranslationBackfill(article)) {
+      continue;
+    }
+
+    try {
+      const source = article.translations[article.sourceLocale];
+      const translations = await translateArticleContent({
+        sourceLocale: article.sourceLocale,
+        title: source.title.trim(),
+        body: source.body.trim(),
+      });
+
+      article.translations = translations;
+      article.slug = uniqueSlug(db, canonicalSlugTitle(article.sourceLocale, translations), article.id);
+      article.updatedAt = nowIso();
+      translated += 1;
+      changed = true;
+    } catch (error) {
+      console.error("[article-translation:backfill]", {
+        articleId: article.id,
+        slug: article.slug,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  if (changed) {
+    saveDb(db);
+  }
+
+  return { translated };
 }
 
 export async function createArticle(input: {
