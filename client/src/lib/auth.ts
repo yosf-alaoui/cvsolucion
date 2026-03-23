@@ -9,11 +9,6 @@ export type CurrentUserResponse = {
   isAdmin?: boolean;
 };
 
-export type MagicLinkResponse = {
-  ok: true;
-  delivered: boolean;
-};
-
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
@@ -46,13 +41,6 @@ export function signUp(email: string, password: string, locale: string) {
   return request<{ ok: true }>("/api/auth/signup", {
     method: "POST",
     body: JSON.stringify({ email, password, locale }),
-  });
-}
-
-export function sendMagicLink(email: string, locale: string) {
-  return request<MagicLinkResponse>("/api/auth/magic-link", {
-    method: "POST",
-    body: JSON.stringify({ email, locale }),
   });
 }
 

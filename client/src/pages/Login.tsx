@@ -8,11 +8,11 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n/i18n";
 import { useAuth } from "@/contexts/AuthContext";
 
-type AuthMode = "login" | "signup" | "magic";
+type AuthMode = "login" | "signup";
 
 export default function Login() {
   const { t, locale } = useI18n();
-  const { login, signup, sendMagic, sendReset, resetPassword } = useAuth();
+  const { login, signup, sendReset, resetPassword } = useAuth();
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,8 +30,8 @@ export default function Login() {
   const disabled = useMemo(() => {
     if (recoveryMode) return !resetToken || !newPassword || newPassword !== confirmPassword;
     if (resetMode) return !email;
-    return !email || (mode !== "magic" && !password);
-  }, [email, password, mode, resetMode, recoveryMode, newPassword, confirmPassword, resetToken]);
+    return !email || !password;
+  }, [email, password, resetMode, recoveryMode, newPassword, confirmPassword, resetToken]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -39,13 +39,19 @@ export default function Login() {
     const reset = params.get("reset");
     const recovery = params.get("recovery");
     const token = params.get("token");
+    const magic = params.get("magic");
 
-    if (next === "signup" || next === "login" || next === "magic") {
+    if (next === "signup" || next === "login") {
       setMode(next);
     }
     if (reset === "success") {
       setStatus(t("auth.resetSuccess"));
       setStatusTone("success");
+    }
+    if (magic === "disabled" || next === "magic") {
+      setMode("login");
+      setStatus(t("auth.magicDisabled"));
+      setStatusTone("error");
     }
     if ((recovery === "1" || recovery === "true") && token) {
       setRecoveryMode(true);
@@ -92,14 +98,10 @@ export default function Login() {
       if (mode === "login") {
         await login(email, password);
         window.location.href = homeHref;
-      } else if (mode === "signup") {
+      } else {
         await signup(email, password, locale);
         setStatus(t("auth.checkEmail"));
         setStatusTone("success");
-      } else {
-        const response = await sendMagic(email, locale);
-        setStatus(t(response.delivered ? "auth.magicSent" : "auth.magicMissingAccount"));
-        setStatusTone(response.delivered ? "success" : "error");
       }
     } catch (err: any) {
       setStatus(err?.message || t("auth.genericError"));
@@ -126,7 +128,7 @@ export default function Login() {
           <div className="max-w-md mx-auto">
             <Card className="glass-card-strong rounded-2xl p-8">
               <h1 className="text-2xl font-bold text-primary">
-                {t(mode === "signup" ? "auth.signUp" : mode === "magic" ? "auth.magic" : "auth.signIn")}
+                {t(mode === "signup" ? "auth.signUp" : "auth.signIn")}
               </h1>
               <p className="text-sm text-muted-foreground mt-2">{t("auth.subtitle")}</p>
 
@@ -162,22 +164,6 @@ export default function Login() {
                   disabled={recoveryMode}
                 >
                   {t("auth.signup")}
-                </Button>
-                <Button
-                  type="button"
-                  variant={mode === "magic" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => {
-                    setMode("magic");
-                    setResetMode(false);
-                    setRecoveryMode(false);
-                    setResetToken("");
-                    setStatus(null);
-                    setStatusTone(null);
-                  }}
-                  disabled={recoveryMode}
-                >
-                  {t("auth.magic")}
                 </Button>
               </div>
 
@@ -228,7 +214,7 @@ export default function Login() {
                       />
                     </div>
 
-                    {mode !== "magic" && !resetMode ? (
+                    {!resetMode ? (
                       <div className="space-y-2">
                         <Label htmlFor="password">{t("auth.password")}</Label>
                         <div className="relative">

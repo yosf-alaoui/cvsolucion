@@ -759,38 +759,13 @@ async function startServer() {
     return res.json({ ok: true });
   });
 
-  app.post("/api/auth/magic-link", rateLimit({ key: "magic", windowMs: 1000 * 60 * 15, limit: 12 }), async (req, res, next) => {
-    try {
-      const email = String(req.body?.email || "").trim();
-      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-      const user = getUserByEmail(email);
-
-      if (!user) {
-        console.warn("[auth:magic-link:no-user]", {
-          email,
-          locale,
-          ip: getRequestIp(req),
-          userAgent: req.get("user-agent") || null,
-        });
-        return res.json({ ok: true, delivered: false });
-      }
-
-      const { rawToken } = createToken(user.id, "magic_link", MAGIC_LINK_MS);
-      const magicUrl = `${appOrigin(req)}/api/auth/magic-login?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}`;
-
-      recordEvent({
-        type: "magic_link_requested",
-        userId: user.id,
-        email: user.email,
-        locale,
-        ip: getRequestIp(req),
-        userAgent: req.get("user-agent") || null,
-      });
-      await sendLinkEmail({ email: user.email, locale, type: "magic", url: magicUrl });
-      return res.json({ ok: true, delivered: true });
-    } catch (error) {
-      return next(error);
-    }
+  app.post("/api/auth/magic-link", rateLimit({ key: "magic", windowMs: 1000 * 60 * 15, limit: 12 }), (req, res) => {
+    console.warn("[auth:magic-link:disabled]", {
+      email: String(req.body?.email || "").trim() || null,
+      ip: getRequestIp(req),
+      userAgent: req.get("user-agent") || null,
+    });
+    return res.status(410).json({ error: "Magic link sign-in has been removed. Use your password or reset it if needed." });
   });
 
   app.post("/api/auth/forgot-password", rateLimit({ key: "forgot", windowMs: 1000 * 60 * 15, limit: 12 }), async (req, res, next) => {
@@ -872,31 +847,8 @@ async function startServer() {
   });
 
   app.get("/api/auth/magic-login", (req, res) => {
-    const token = String(req.query.token || "");
     const locale = normalizeAuthLocale(String(req.query.locale || "en"));
-    const tokenRecord = consumeToken(token, "magic_link");
-    const redirectUrl = `${appOrigin(req)}${localePrefix(locale)}/`;
-
-    if (!tokenRecord) {
-      return res.redirect(302, `${appOrigin(req)}${localePrefix(locale)}/login?mode=magic`);
-    }
-
-    const user = getUserById(tokenRecord.userId);
-    if (!user) {
-      return res.redirect(302, `${appOrigin(req)}${localePrefix(locale)}/login?mode=magic`);
-    }
-
-    const session = createSession(user.id, ONE_YEAR_MS);
-    setSessionCookie(res, session.id);
-    recordEvent({
-      type: "magic_login_completed",
-      userId: user.id,
-      email: user.email,
-      locale,
-      ip: getRequestIp(req),
-      userAgent: req.get("user-agent") || null,
-    });
-    return res.redirect(302, redirectUrl);
+    return res.redirect(302, `${appOrigin(req)}${localePrefix(locale)}/login?magic=disabled`);
   });
 
   app.get("/api/admin/dashboard", rateLimit({ key: "admin-dashboard", windowMs: 1000 * 60, limit: 120 }), async (req, res) => {

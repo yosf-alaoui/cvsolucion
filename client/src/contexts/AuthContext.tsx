@@ -4,10 +4,8 @@ import {
   CurrentUserResponse,
   getCurrentUser,
   loginWithPassword,
-  MagicLinkResponse,
   logout as logoutRequest,
   resetPassword as resetPasswordRequest,
-  sendMagicLink,
   sendPasswordReset,
   signUp,
 } from "@/lib/auth";
@@ -20,7 +18,6 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<AuthUser>;
   signup: (email: string, password: string, locale: string) => Promise<void>;
   logout: () => Promise<void>;
-  sendMagic: (email: string, locale: string) => Promise<MagicLinkResponse>;
   sendReset: (email: string, locale: string) => Promise<void>;
   resetPassword: (token: string, password: string) => Promise<void>;
 };
@@ -62,9 +59,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await logoutRequest();
         setUser(null);
         setIsAdmin(false);
-      },
-      sendMagic: async (email, locale) => {
-        return sendMagicLink(email, locale);
       },
       sendReset: async (email, locale) => {
         await sendPasswordReset(email, locale);
