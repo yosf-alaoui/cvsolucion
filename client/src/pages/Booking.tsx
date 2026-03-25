@@ -44,6 +44,10 @@ function chunkDays(days: BookingAvailabilityDay[], size: number) {
   return chunks;
 }
 
+function formatSlotSummary(date: string, hour: number) {
+  return `${date} ${String(hour).padStart(2, "0")}:00`;
+}
+
 export default function Booking() {
   const { locale } = useI18n();
   const { user, loading: authLoading } = useAuth();
@@ -52,7 +56,7 @@ export default function Booking() {
   const [days, setDays] = useState<BookingAvailabilityDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<BookingAvailabilitySlot | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<BookingAvailabilitySlot[]>([]);
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [form, setForm] = useState({
     name: "",
@@ -201,10 +205,25 @@ export default function Booking() {
       : locale === "fr"
         ? "Merci de vous connecter avant de confirmer le booking."
         : "Please sign in before confirming a booking.";
+  const multiSlotHint =
+    locale === "ar"
+      ? "يمكنك اختيار حتى 3 مواعيد مفضلة."
+      : locale === "fr"
+        ? "Vous pouvez choisir jusqu'a 3 horaires preferes."
+        : "You can choose up to 3 preferred time slots.";
+  const tooManySlotsError =
+    locale === "ar"
+      ? "يمكن اختيار حتى 3 مواعيد فقط."
+      : locale === "fr"
+        ? "Vous pouvez choisir jusqu'a 3 horaires seulement."
+        : "You can choose up to 3 time slots only.";
+  const primarySlotLabel =
+    locale === "ar" ? "الموعد الأساسي" : locale === "fr" ? "Horaire principal" : "Primary slot";
+  const optionLabel = locale === "ar" ? "خيار" : locale === "fr" ? "Option" : "Option";
 
   useEffect(() => {
     setLoading(true);
-    setSelectedSlot(null);
+    setSelectedSlots([]);
     setStatus(null);
     getBookingAvailability(priority)
       .then((response) => setDays(response.days))
@@ -222,16 +241,41 @@ export default function Booking() {
 
   const weeks = useMemo(() => chunkDays(days, priority === "express" ? 2 : 5), [days, priority]);
 
+  function toggleSlot(slot: BookingAvailabilitySlot) {
+    setStatus(null);
+    setSelectedSlots((current) => {
+      const exists = current.some((item) => item.id === slot.id);
+      if (exists) {
+        return current.filter((item) => item.id !== slot.id);
+      }
+      if (current.length >= 3) {
+        setStatus({ tone: "error", text: tooManySlotsError });
+        return current;
+      }
+      return [...current, slot];
+    });
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!user) {
       setStatus({ tone: "error", text: loginRequiredError });
       return;
     }
-    if (!selectedSlot) {
+    if (!selectedSlots.length) {
       setStatus({ tone: "error", text: copy.chooseSlot });
       return;
     }
+
+    const [primarySlot, ...alternativeSlotItems] = selectedSlots;
+    if (!primarySlot) {
+      setStatus({ tone: "error", text: copy.chooseSlot });
+      return;
+    }
+    const alternativeSlots = alternativeSlotItems.map((slot) => formatSlotSummary(slot.date, slot.hour));
+    const bookingNotes = alternativeSlots.length
+      ? `${form.problem}\n\nAlternative preferred slots:\n- ${alternativeSlots.join("\n- ")}`
+      : form.problem;
 
     try {
       setSaving(true);
@@ -239,19 +283,19 @@ export default function Booking() {
       await createBooking({
         serviceType,
         priority,
-        date: selectedSlot.date,
-        hour: selectedSlot.hour,
+        date: primarySlot.date,
+        hour: primarySlot.hour,
         name: form.name,
         email: form.email,
         phone: form.phone,
         company: form.company,
-        notes: form.problem,
+        notes: bookingNotes,
         locale,
       });
 
       setStatus({ tone: "success", text: copy.success });
       setForm({ name: "", email: user.email, phone: "", company: "", problem: "" });
-      setSelectedSlot(null);
+      setSelectedSlots([]);
       const refreshed = await getBookingAvailability(priority);
       setDays(refreshed.days);
     } catch (error: any) {
@@ -340,6 +384,7 @@ export default function Booking() {
                     {copy.support}
                   </Button>
                 </div>
+                <p className="mt-4 text-sm text-slate-500">{multiSlotHint}</p>
 
                 {loading ? (
                   <div className="mt-8 text-sm text-slate-500">{copy.loading}</div>
@@ -355,14 +400,14 @@ export default function Booking() {
                             <div className="text-sm font-semibold text-slate-500">{dateLabel(day.date, locale)}</div>
                             <div className="mt-4 grid gap-2">
                               {day.slots.map((slot) => {
-                                const selected = selectedSlot?.id === slot.id;
+                                const selected = selectedSlots.some((item) => item.id === slot.id);
                                 const booked = slot.status === "booked";
                                 return (
                                   <button
                                     key={slot.id}
                                     type="button"
                                     disabled={booked}
-                                    onClick={() => setSelectedSlot(slot)}
+                                    onClick={() => toggleSlot(slot)}
                                     className={`flex items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm transition ${
                                       booked
                                         ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
@@ -391,16 +436,23 @@ export default function Booking() {
             <div className="space-y-6">
               <GlassCard className="card-static rounded-[32px] p-7">
                 <h2 className="text-2xl font-bold text-slate-950">{copy.summary}</h2>
-                {selectedSlot ? (
-                  <div className="mt-5 space-y-3 text-slate-700">
-                    <div className="flex items-center gap-3">
-                      <CalendarDays className="h-5 w-5 text-primary" />
-                      <span>{dateLabel(selectedSlot.date, locale)}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Clock3 className="h-5 w-5 text-primary" />
-                      <span>{timeLabel(selectedSlot.hour, locale)}</span>
-                    </div>
+                {selectedSlots.length ? (
+                  <div className="mt-5 space-y-4 text-slate-700">
+                    {selectedSlots.map((slot, index) => (
+                      <div key={slot.id} className="rounded-2xl border border-slate-200 bg-white/70 p-4">
+                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          {index === 0 ? primarySlotLabel : `${optionLabel} ${index + 1}`}
+                        </div>
+                        <div className="mt-3 flex items-center gap-3">
+                          <CalendarDays className="h-5 w-5 text-primary" />
+                          <span>{dateLabel(slot.date, locale)}</span>
+                        </div>
+                        <div className="mt-2 flex items-center gap-3">
+                          <Clock3 className="h-5 w-5 text-primary" />
+                          <span>{timeLabel(slot.hour, locale)}</span>
+                        </div>
+                      </div>
+                    ))}
                     <div className="flex items-center gap-3">
                       <ShieldCheck className={`h-5 w-5 ${priority === "express" ? "text-amber-500" : "text-primary"}`} />
                       <span>{priority === "express" ? copy.expressTitle : copy.standardTitle}</span>
