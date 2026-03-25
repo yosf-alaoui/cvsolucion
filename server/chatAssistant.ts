@@ -508,11 +508,12 @@ export async function generateAssistantReply(args: {
 }) {
   const detectedCategory = detectServiceCategory(args.latestUserMessage);
   if (detectedCategory && !args.conversation.supportIntake) {
+    const parsed = extractSupportFormSignal(buildSupportFormPrompt(args.locale, detectedCategory));
     return {
-      text: buildSupportFormPrompt(args.locale, detectedCategory),
+      text: parsed.cleanText,
       responseId: null,
       status: "needs_human",
-      supportFormRequired: true,
+      supportFormRequired: parsed.supportFormRequired,
     } satisfies AssistantResult;
   }
 
