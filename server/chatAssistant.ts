@@ -489,8 +489,12 @@ function enforceCompactReply(text: string) {
   const marker = "[[SUPPORT_FORM]]";
   const hasMarker = text.includes(marker);
   const clean = text.replaceAll(marker, "").replace(/\s+/g, " ").trim();
-  const firstSentence = clean.split(/(?<=[.!?؟])\s+/)[0] || clean;
-  const words = firstSentence.split(/\s+/).filter(Boolean).slice(0, 25);
+  const sentences = clean.split(/(?<=[.!?؟])\s+/).filter(Boolean);
+  const firstSentence = sentences[0] || clean;
+  const firstSentenceWords = firstSentence.split(/\s+/).filter(Boolean);
+  const selectedText =
+    sentences.length > 1 && firstSentenceWords.length <= 3 ? `${firstSentence} ${sentences[1]}` : firstSentence;
+  const words = selectedText.split(/\s+/).filter(Boolean).slice(0, 25);
   const compact = words.join(" ").trim();
   return hasMarker ? `${compact} ${marker}`.trim() : compact;
 }
