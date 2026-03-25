@@ -121,10 +121,6 @@ function getWeekdayIndex(dateKey: string) {
   return day === 0 ? 7 : day;
 }
 
-function startOfWeek(dateKey: string) {
-  return addDays(dateKey, -(getWeekdayIndex(dateKey) - 1));
-}
-
 function getHoursForPriority(priority: BookingPriority) {
   return priority === "express" ? EXPRESS_HOURS : STANDARD_HOURS;
 }
@@ -146,49 +142,68 @@ function getBookableHoursForDate(priority: BookingPriority, date: string, startD
   return hours;
 }
 
-function dateDayOfMonth(dateKey: string) {
-  return dateKeyParts(dateKey).day;
-}
-
-function isShowcaseWindowDate(dateKey: string) {
-  return dateDayOfMonth(dateKey) <= 10;
-}
-
 function buildSlotId(date: string, hour: number, priority: BookingPriority) {
   return `${date}:${String(hour).padStart(2, "0")}:${priority}`;
 }
 
-function buildShowcaseBookedIds(startDate: string, daysAhead = 31) {
-  const booked = new Set<string>();
-  const weeks = new Set<string>();
+function getUpcomingBusinessDates(startDate: string, count: number) {
+  const dates: string[] = [];
+  let cursor = startDate;
 
-  for (let index = 0; index < daysAhead; index += 1) {
-    weeks.add(startOfWeek(addDays(startDate, index)));
+  while (dates.length < count) {
+    if (getWeekdayIndex(cursor) <= 5) {
+      dates.push(cursor);
+    }
+    cursor = addDays(cursor, 1);
   }
 
-  Array.from(weeks)
-    .sort()
-    .forEach((weekStart, index) => {
-      const patterns =
-        index % 2 === 0
-          ? [
-              { offset: 1, hour: 9 },
-              { offset: 3, hour: 15 },
-              { offset: 4, hour: 10 },
-            ]
-          : [
-              { offset: 0, hour: 10 },
-              { offset: 0, hour: 11 },
-              { offset: 2, hour: 16 },
-            ];
+  return dates;
+}
 
-      patterns.forEach((pattern) => {
-        const date = addDays(weekStart, pattern.offset);
-        if (isShowcaseWindowDate(date)) {
-          booked.add(buildSlotId(date, pattern.hour, "standard"));
-        }
-      });
+function addShowcaseBlock(booked: Set<string>, date: string, startHour: number) {
+  const hours = getHoursForPriority("standard");
+  const index = hours.indexOf(startHour);
+  if (index === -1) return;
+
+  booked.add(buildSlotId(date, startHour, "standard"));
+  const nextHour = hours[index + 1];
+  if (typeof nextHour === "number" && nextHour - startHour === 1) {
+    booked.add(buildSlotId(date, nextHour, "standard"));
+  }
+}
+
+function buildShowcaseBookedIds(startDate: string, daysAhead = 31) {
+  const booked = new Set<string>();
+  const businessDates = getUpcomingBusinessDates(startDate, Math.max(daysAhead, 9));
+  const today = businessDates[0];
+  const nextDay = businessDates[1];
+  const nextSevenDays = businessDates.slice(2, 9);
+
+  if (today === startDate) {
+    STANDARD_HOURS.forEach((hour) => {
+      booked.add(buildSlotId(today, hour, "standard"));
     });
+  }
+
+  if (nextDay) {
+    [8, 9, 10, 11].forEach((hour) => {
+      booked.add(buildSlotId(nextDay, hour, "standard"));
+    });
+  }
+
+  const patterns = [
+    { dayIndex: 0, hour: 13 },
+    { dayIndex: 1, hour: 9 },
+    { dayIndex: 2, hour: 15 },
+    { dayIndex: 4, hour: 10 },
+    { dayIndex: 6, hour: 14 },
+  ];
+
+  patterns.forEach((pattern, index) => {
+    const date = nextSevenDays[pattern.dayIndex] ?? nextSevenDays[index] ?? null;
+    if (!date) return;
+    addShowcaseBlock(booked, date, pattern.hour);
+  });
 
   return booked;
 }

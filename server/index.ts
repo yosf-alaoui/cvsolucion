@@ -838,12 +838,17 @@ async function startServer() {
 
   app.post("/api/bookings", rateLimit({ key: "bookings-create", windowMs: 1000 * 60 * 10, limit: 20 }), async (req, res, next) => {
     try {
+      const auth = getCurrentUser(req);
+      if (!auth) {
+        return res.status(401).json({ error: "Please sign in before booking an appointment." });
+      }
+
       const serviceType = String(req.body?.serviceType || "consultation").trim() === "support" ? "support" : "consultation";
       const priority = String(req.body?.priority || "standard").trim() === "express" ? "express" : "standard";
       const date = String(req.body?.date || "").trim();
       const hour = Number(req.body?.hour);
       const name = String(req.body?.name || "").trim();
-      const email = String(req.body?.email || "").trim();
+      const email = auth.user.email;
       const phone = String(req.body?.phone || "").trim();
       const company = String(req.body?.company || "").trim();
       const notes = String(req.body?.notes || "").trim();
@@ -851,9 +856,6 @@ async function startServer() {
 
       if (name.length < 2) {
         return res.status(400).json({ error: "Name is required." });
-      }
-      if (!EMAIL_REGEX.test(email)) {
-        return res.status(400).json({ error: "A valid email is required." });
       }
       if (phone.length < 6) {
         return res.status(400).json({ error: "A valid phone number is required." });

@@ -63,6 +63,15 @@ export default function Login() {
 
   const homeHref = locale === "en" ? "/" : `/${locale}`;
   const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
+  const nextHref = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const rawNext = params.get("next")?.trim();
+    if (!rawNext) return homeHref;
+    if (rawNext.startsWith("/") && !rawNext.startsWith("//")) {
+      return rawNext;
+    }
+    return homeHref;
+  }, [homeHref]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -98,7 +107,7 @@ export default function Login() {
 
       if (mode === "login") {
         await login(email, password);
-        window.location.href = homeHref;
+        window.location.href = nextHref;
       } else {
         await signup(email, password, locale);
         setStatus(t("auth.checkEmail"));

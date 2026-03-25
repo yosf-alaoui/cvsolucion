@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   createBooking,
   getBookingAvailability,
@@ -45,6 +46,7 @@ function chunkDays(days: BookingAvailabilityDay[], size: number) {
 
 export default function Booking() {
   const { locale } = useI18n();
+  const { user, loading: authLoading } = useAuth();
   const [priority, setPriority] = useState<BookingPriority>("standard");
   const [serviceType, setServiceType] = useState<BookingServiceType>("consultation");
   const [days, setDays] = useState<BookingAvailabilityDay[]>([]);
@@ -119,7 +121,7 @@ export default function Booking() {
         phone: "Telephone / WhatsApp",
         company: "Societe",
         problem: "Decrivez le probleme ou la demande",
-        showcase: "Les creneaux affiches comme occupes n'apparaissent que pendant les 10 premiers jours du mois.",
+        showcase: "Aujourd'hui est complet, demain matin aussi, puis 5 bookings de 2 heures sont repartis sur les 7 jours suivants.",
         expressWindow: "Express affiche seulement aujourd'hui et demain.",
         expressTime: "Pour aujourd'hui, les heures Express suivent l'heure reelle du Quebec jusqu'a 21h.",
         loading: "Chargement des horaires...",
@@ -153,7 +155,7 @@ export default function Booking() {
       phone: "Phone / WhatsApp",
       company: "Company",
       problem: "Describe the issue or request",
-      showcase: "Example booked slots appear only in the first 10 days of the month.",
+      showcase: "Today is full, tomorrow morning is full, and 5 scattered 2-hour bookings are shown across the next 7 days.",
       expressWindow: "Express shows only today and tomorrow.",
       expressTime: "Today's Express slots follow the real current Quebec time until 9:00 PM.",
       loading: "Loading schedule...",
@@ -165,6 +167,41 @@ export default function Booking() {
     };
   }, [locale]);
 
+  const bookingPath = locale === "en" ? "/book" : `/${locale}/book`;
+  const loginPath = locale === "en" ? "/login" : `/${locale}/login`;
+  const loginHref = `${loginPath}?next=${encodeURIComponent(bookingPath)}`;
+  const signupHref = `${loginPath}?mode=signup&next=${encodeURIComponent(bookingPath)}`;
+  const standardShowcaseDetail =
+    locale === "ar"
+      ? "اليوم ممتلئ، وصباح الغد ممتلئ، ثم 5 حجوزات متفرقة من ساعتين خلال الأيام السبعة التالية."
+      : locale === "fr"
+        ? "Aujourd'hui est complet, demain matin aussi, puis 5 bookings de 2 heures sont repartis sur les 7 jours suivants."
+        : "Today is full, tomorrow morning is full, and 5 scattered 2-hour bookings are shown across the next 7 days.";
+  const standardShowcaseMeta =
+    locale === "ar"
+      ? "5 مواعيد متفرقة، وكل موعد منها مدته ساعتان."
+      : locale === "fr"
+        ? "5 bookings eparpilles, 2 heures chacun."
+        : "5 scattered bookings, 2 hours each.";
+  const loginRequiredTitle =
+    locale === "ar" ? "يجب تسجيل الدخول أولاً" : locale === "fr" ? "Connexion obligatoire" : "Sign in required";
+  const loginRequiredText =
+    locale === "ar"
+      ? "لتأكيد أي موعد، يجب أن تدخل إلى حسابك أو تنشئ حساباً أولاً."
+      : locale === "fr"
+        ? "Pour confirmer un booking, le client doit d'abord se connecter ou creer un compte."
+        : "To confirm any booking, the client must sign in or create an account first.";
+  const loginButtonLabel = locale === "ar" ? "تسجيل الدخول" : locale === "fr" ? "Se connecter" : "Sign in";
+  const signupButtonLabel = locale === "ar" ? "إنشاء حساب" : locale === "fr" ? "Creer un compte" : "Create account";
+  const authLoadingText =
+    locale === "ar" ? "جارٍ التحقق من الحساب..." : locale === "fr" ? "Verification du compte..." : "Checking your account...";
+  const loginRequiredError =
+    locale === "ar"
+      ? "يجب تسجيل الدخول أولاً قبل تأكيد الحجز."
+      : locale === "fr"
+        ? "Merci de vous connecter avant de confirmer le booking."
+        : "Please sign in before confirming a booking.";
+
   useEffect(() => {
     setLoading(true);
     setSelectedSlot(null);
@@ -175,10 +212,22 @@ export default function Booking() {
       .finally(() => setLoading(false));
   }, [priority]);
 
+  useEffect(() => {
+    if (!user?.email) return;
+    setForm((current) => ({
+      ...current,
+      email: user.email,
+    }));
+  }, [user?.email]);
+
   const weeks = useMemo(() => chunkDays(days, priority === "express" ? 2 : 5), [days, priority]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!user) {
+      setStatus({ tone: "error", text: loginRequiredError });
+      return;
+    }
     if (!selectedSlot) {
       setStatus({ tone: "error", text: copy.chooseSlot });
       return;
@@ -201,7 +250,7 @@ export default function Booking() {
       });
 
       setStatus({ tone: "success", text: copy.success });
-      setForm({ name: "", email: "", phone: "", company: "", problem: "" });
+      setForm({ name: "", email: user.email, phone: "", company: "", problem: "" });
       setSelectedSlot(null);
       const refreshed = await getBookingAvailability(priority);
       setDays(refreshed.days);
@@ -263,10 +312,10 @@ export default function Booking() {
             <span className="glass-chip rounded-full px-4 py-2">{copy.timezone}</span>
             <span className="glass-chip rounded-full px-4 py-2">{copy.lunch}</span>
             <span className="glass-chip rounded-full px-4 py-2">
-              {priority === "express" ? copy.expressWindow : copy.showcase}
+              {priority === "express" ? copy.expressWindow : standardShowcaseDetail}
             </span>
             <span className="glass-chip rounded-full px-4 py-2">
-              {priority === "express" ? copy.expressTime : `${copy.booked}: 3+`}
+              {priority === "express" ? copy.expressTime : standardShowcaseMeta}
             </span>
           </div>
 
@@ -364,59 +413,74 @@ export default function Booking() {
 
               <GlassCard className="card-static rounded-[32px] p-7">
                 <h2 className="text-2xl font-bold text-slate-950">{copy.formTitle}</h2>
-                <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-                  <div className="space-y-2">
-                    <Label htmlFor="booking-name">{copy.name}</Label>
-                    <Input
-                      id="booking-name"
-                      value={form.name}
-                      onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                      required
-                    />
+                {authLoading ? (
+                  <div className="mt-6 text-sm text-slate-500">{authLoadingText}</div>
+                ) : !user ? (
+                  <div className="mt-6 space-y-4">
+                    <h3 className="text-lg font-semibold text-slate-900">{loginRequiredTitle}</h3>
+                    <p className="text-base leading-7 text-slate-600">{loginRequiredText}</p>
+                    <div className="flex flex-wrap gap-3">
+                      <a href={loginHref}>
+                        <Button type="button" className="rounded-full">
+                          {loginButtonLabel}
+                        </Button>
+                      </a>
+                      <a href={signupHref}>
+                        <Button type="button" variant="outline" className="rounded-full">
+                          {signupButtonLabel}
+                        </Button>
+                      </a>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="booking-email">{copy.email}</Label>
-                    <Input
-                      id="booking-email"
-                      type="email"
-                      value={form.email}
-                      onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="booking-phone">{copy.phone}</Label>
-                    <Input
-                      id="booking-phone"
-                      value={form.phone}
-                      onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="booking-company">{copy.company}</Label>
-                    <Input
-                      id="booking-company"
-                      value={form.company}
-                      onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="booking-problem">{copy.problem}</Label>
-                    <Textarea
-                      id="booking-problem"
-                      className="min-h-32"
-                      value={form.problem}
-                      onChange={(event) => setForm((current) => ({ ...current, problem: event.target.value }))}
-                      required
-                    />
-                  </div>
+                ) : (
+                  <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+                    <div className="space-y-2">
+                      <Label htmlFor="booking-name">{copy.name}</Label>
+                      <Input
+                        id="booking-name"
+                        value={form.name}
+                        onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="booking-email">{copy.email}</Label>
+                      <Input id="booking-email" type="email" value={form.email} readOnly disabled className="opacity-80" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="booking-phone">{copy.phone}</Label>
+                      <Input
+                        id="booking-phone"
+                        value={form.phone}
+                        onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="booking-company">{copy.company}</Label>
+                      <Input
+                        id="booking-company"
+                        value={form.company}
+                        onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="booking-problem">{copy.problem}</Label>
+                      <Textarea
+                        id="booking-problem"
+                        className="min-h-32"
+                        value={form.problem}
+                        onChange={(event) => setForm((current) => ({ ...current, problem: event.target.value }))}
+                        required
+                      />
+                    </div>
 
-                  <Button type="submit" className="w-full rounded-full bg-primary text-white hover:bg-primary/90" disabled={saving}>
-                    {saving ? copy.sending : copy.submit}
-                  </Button>
-                </form>
+                    <Button type="submit" className="w-full rounded-full bg-primary text-white hover:bg-primary/90" disabled={saving}>
+                      {saving ? copy.sending : copy.submit}
+                    </Button>
+                  </form>
+                )}
 
                 {status ? (
                   <div
