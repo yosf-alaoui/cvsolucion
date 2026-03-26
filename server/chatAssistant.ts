@@ -510,12 +510,14 @@ export async function generateAssistantReply(args: {
 }) {
   const model = getModel();
   const promptId = getPromptId();
-  const instructions = buildSystemPrompt({
-    locale: args.locale,
-    visitor: args.visitor,
-    conversation: args.conversation,
-    latestUserMessage: args.latestUserMessage,
-  });
+  const instructions = promptId
+    ? null
+    : buildSystemPrompt({
+        locale: args.locale,
+        visitor: args.visitor,
+        conversation: args.conversation,
+        latestUserMessage: args.latestUserMessage,
+      });
 
   try {
     const body: Record<string, unknown> = {
@@ -527,7 +529,7 @@ export async function generateAssistantReply(args: {
       body.prompt = {
         id: promptId,
       };
-    } else {
+    } else if (instructions) {
       body.instructions = instructions;
     }
 
@@ -559,7 +561,7 @@ export async function generateAssistantReply(args: {
       fallbackBody.prompt = {
         id: promptId,
       };
-    } else {
+    } else if (instructions) {
       fallbackBody.instructions = instructions;
     }
 
