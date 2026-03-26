@@ -128,10 +128,9 @@ async function callResponsesApi(body: Record<string, unknown>) {
 }
 
 function buildHistoryInput(messages: ChatMessageRecord[]) {
-  return messages.map((message) => ({
-    role: message.role,
-    content: [{ type: "input_text", text: message.content }],
-  }));
+  return messages
+    .map((message) => `${message.role === "assistant" ? "Assistant" : "User"}: ${message.content}`)
+    .join("\n");
 }
 
 function inferStatus(reply: string): AssistantResult["status"] {
