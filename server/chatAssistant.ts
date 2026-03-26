@@ -543,7 +543,7 @@ export async function generateAssistantReply(args: {
 
     if (promptId) {
       body.prompt = {
-        prompt_id: promptId,
+        id: promptId,
       };
     } else {
       body.instructions = instructions;
@@ -575,7 +575,7 @@ export async function generateAssistantReply(args: {
 
     if (promptId) {
       fallbackBody.prompt = {
-        prompt_id: promptId,
+        id: promptId,
       };
     } else {
       fallbackBody.instructions = instructions;
