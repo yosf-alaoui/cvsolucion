@@ -183,6 +183,7 @@ const SERVICE_CATEGORY_PATTERNS: Array<{
 ];
 
 const OPENAI_API_URL = "https://api.openai.com/v1/responses";
+const DEFAULT_OPENAI_CHAT_PROMPT_ID = "pmpt_69c50c1ccf708195957c9b8b143df409001a07536ed2078a";
 
 function getOpenAiKey() {
   return process.env.OPENAI_API_KEY?.trim() || null;
@@ -190,6 +191,10 @@ function getOpenAiKey() {
 
 function getModel() {
   return process.env.OPENAI_CHAT_MODEL?.trim() || "gpt-5-mini";
+}
+
+function getPromptId() {
+  return process.env.OPENAI_CHAT_PROMPT_ID?.trim() || DEFAULT_OPENAI_CHAT_PROMPT_ID;
 }
 
 function truncate(text: string, max = 1400) {
@@ -522,6 +527,7 @@ export async function generateAssistantReply(args: {
   }
 
   const model = getModel();
+  const promptId = getPromptId();
   const instructions = buildSystemPrompt({
     locale: args.locale,
     visitor: args.visitor,
@@ -532,9 +538,16 @@ export async function generateAssistantReply(args: {
   try {
     const body: Record<string, unknown> = {
       model,
-      instructions,
       input: truncate(args.latestUserMessage),
     };
+
+    if (promptId) {
+      body.prompt = {
+        prompt_id: promptId,
+      };
+    } else {
+      body.instructions = instructions;
+    }
 
     if (args.conversation.latestResponseId) {
       body.previous_response_id = args.conversation.latestResponseId;
@@ -555,11 +568,20 @@ export async function generateAssistantReply(args: {
       supportFormRequired: parsed.supportFormRequired,
     } satisfies AssistantResult;
   } catch (error) {
-    const fallbackJson = await callResponsesApi({
+    const fallbackBody: Record<string, unknown> = {
       model,
-      instructions,
       input: buildHistoryInput(args.messages.slice(-14)),
-    });
+    };
+
+    if (promptId) {
+      fallbackBody.prompt = {
+        prompt_id: promptId,
+      };
+    } else {
+      fallbackBody.instructions = instructions;
+    }
+
+    const fallbackJson = await callResponsesApi(fallbackBody);
 
     const text = extractOutputText(fallbackJson);
     if (!text) {
