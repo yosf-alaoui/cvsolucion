@@ -137,56 +137,7 @@ function pickAssistantName(locale: ChatConversationRecord["locale"]) {
 }
 
 function buildIntroMessages(locale: ChatConversationRecord["locale"], assistantName: string) {
-  const now = nowIso();
-
-  if (locale === "fr") {
-    return [
-      {
-        id: randomId(10),
-        role: "assistant" as const,
-        content: "Bienvenue. Merci de patienter un instant.",
-        createdAt: now,
-      },
-      {
-        id: randomId(10),
-        role: "assistant" as const,
-        content: `Bonjour, je suis ${assistantName}. Comment puis-je vous aider ?`,
-        createdAt: new Date(Date.now() + 1200).toISOString(),
-      },
-    ];
-  }
-
-  if (locale === "ar") {
-    return [
-      {
-        id: randomId(10),
-        role: "assistant" as const,
-        content: "مرحبًا. يرجى الانتظار قليلًا.",
-        createdAt: now,
-      },
-      {
-        id: randomId(10),
-        role: "assistant" as const,
-        content: `مرحبًا، معك ${assistantName}. كيف أستطيع مساعدتك؟`,
-        createdAt: new Date(Date.now() + 1200).toISOString(),
-      },
-    ];
-  }
-
-  return [
-    {
-      id: randomId(10),
-      role: "assistant" as const,
-      content: "Welcome. Please wait a moment.",
-      createdAt: now,
-    },
-    {
-      id: randomId(10),
-      role: "assistant" as const,
-      content: `Hi, I'm ${assistantName}. How can I help you?`,
-      createdAt: new Date(Date.now() + 1200).toISOString(),
-    },
-  ];
+  return [];
 }
 
 function computeLeadScore(conversation: ChatConversationRecord, visitor?: VisitorRecord | null) {

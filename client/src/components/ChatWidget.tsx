@@ -169,34 +169,8 @@ export default function ChatWidget() {
     })
       .then((payload) => {
         setConversation(payload.conversation);
-
-        if (payload.isNew && payload.conversation.messages.length) {
-          setIntroVisibleCount(1);
-          setInputLocked(true);
-
-          const agentDelay = window.setTimeout(() => {
-            setShowAgentCard(true);
-          }, 7000);
-
-          const typingDelay = window.setTimeout(() => {
-            setTyping(true);
-          }, 9000);
-
-          const revealDelay = window.setTimeout(() => {
-            setIntroVisibleCount(2);
-          }, 14000);
-
-          const doneDelay = window.setTimeout(() => {
-            setTyping(false);
-            setIntroVisibleCount(null);
-            setInputLocked(false);
-          }, 14600);
-
-          introTimersRef.current = [agentDelay, typingDelay, revealDelay, doneDelay];
-          return;
-        }
-
         setIntroVisibleCount(null);
+        setInputLocked(false);
       })
       .catch((err) => {
         setError(err?.message || copy.error);
@@ -244,7 +218,7 @@ export default function ChatWidget() {
       setDraft("");
       replyTypingTimerRef.current = window.setTimeout(() => {
         setTyping(true);
-      }, 2000);
+      }, 250);
 
       const payload = await sendChatMessage({
         conversationId: currentConversation.id,
@@ -255,7 +229,6 @@ export default function ChatWidget() {
       });
 
       clearReplyTypingTimer();
-      await new Promise((resolve) => window.setTimeout(resolve, 900));
       setConversation(payload.conversation);
     } catch (err: any) {
       clearReplyTypingTimer();
