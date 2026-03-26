@@ -490,18 +490,11 @@ function extractSupportFormSignal(text: string) {
   };
 }
 
-function enforceCompactReply(text: string) {
+function normalizeAssistantReply(text: string) {
   const marker = "[[SUPPORT_FORM]]";
   const hasMarker = text.includes(marker);
   const clean = text.replaceAll(marker, "").replace(/\s+/g, " ").trim();
-  const sentences = clean.split(/(?<=[.!?؟])\s+/).filter(Boolean);
-  const firstSentence = sentences[0] || clean;
-  const firstSentenceWords = firstSentence.split(/\s+/).filter(Boolean);
-  const selectedText =
-    sentences.length > 1 && firstSentenceWords.length <= 3 ? `${firstSentence} ${sentences[1]}` : firstSentence;
-  const words = selectedText.split(/\s+/).filter(Boolean).slice(0, 25);
-  const compact = words.join(" ").trim();
-  return hasMarker ? `${compact} ${marker}`.trim() : compact;
+  return hasMarker ? `${clean} ${marker}`.trim() : clean;
 }
 
 export function isChatEnabled() {
@@ -515,17 +508,6 @@ export async function generateAssistantReply(args: {
   visitor: VisitorRecord | null;
   latestUserMessage: string;
 }) {
-  const detectedCategory = detectServiceCategory(args.latestUserMessage);
-  if (detectedCategory && !args.conversation.supportIntake) {
-    const parsed = extractSupportFormSignal(buildSupportFormPrompt(args.locale, detectedCategory));
-    return {
-      text: parsed.cleanText,
-      responseId: null,
-      status: "needs_human",
-      supportFormRequired: parsed.supportFormRequired,
-    } satisfies AssistantResult;
-  }
-
   const model = getModel();
   const promptId = getPromptId();
   const instructions = buildSystemPrompt({
@@ -559,7 +541,7 @@ export async function generateAssistantReply(args: {
       throw new Error("Empty AI response.");
     }
 
-    const parsed = extractSupportFormSignal(enforceCompactReply(text));
+    const parsed = extractSupportFormSignal(normalizeAssistantReply(text));
 
     return {
       text: parsed.cleanText,
@@ -588,7 +570,7 @@ export async function generateAssistantReply(args: {
       throw error;
     }
 
-    const parsed = extractSupportFormSignal(enforceCompactReply(text));
+    const parsed = extractSupportFormSignal(normalizeAssistantReply(text));
 
     return {
       text: parsed.cleanText,
