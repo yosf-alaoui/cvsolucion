@@ -52,9 +52,17 @@ import {
   updateArticle,
   type ArticleLocale,
 } from "./articleStore";
-import { createBooking, getBookingAvailability, type BookingPriority } from "./bookingStore";
+import {
+  createBooking,
+  getBookingAvailability,
+  listBookingsForUser,
+  rescheduleBooking,
+  serializeCustomerBooking,
+  type BookingPriority,
+} from "./bookingStore";
 import { storeContactLead } from "./contactStore";
 import { buildRobotsTxt, buildSitemapXml, renderSeoHtml } from "./seo";
+import { getCustomerProfile, updateCustomerProfile, upsertCustomerProfile } from "./customerProfileStore";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -292,7 +300,7 @@ async function startServer() {
     res.setHeader("X-XSS-Protection", "1; mode=block");
     res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-    res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=()");
+    res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(self)");
     next();
   });
 
@@ -369,6 +377,61 @@ async function startServer() {
       return res.json({ user: null });
     }
     return res.json({ user: serializePublicUser(auth.user), isAdmin: isAdminEmail(auth.user.email) });
+  });
+
+  app.get("/api/customer/dashboard", rateLimit({ key: "customer-dashboard", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    const auth = getCurrentUser(req);
+    if (!auth) {
+      return res.status(401).json({ error: "Authentication required." });
+    }
+
+    const profile =
+      getCustomerProfile(auth.user.id) ??
+      upsertCustomerProfile({
+        userId: auth.user.id,
+        email: auth.user.email,
+      });
+
+    const bookings = listBookingsForUser(auth.user.id, auth.user.email).map(serializeCustomerBooking);
+
+    return res.json({
+      user: serializePublicUser(auth.user),
+      profile,
+      bookings,
+    });
+  });
+
+  app.patch("/api/customer/profile", rateLimit({ key: "customer-profile", windowMs: 1000 * 60 * 10, limit: 40 }), (req, res) => {
+    const auth = getCurrentUser(req);
+    if (!auth) {
+      return res.status(401).json({ error: "Authentication required." });
+    }
+
+    const name = String(req.body?.name || "").trim();
+    const country = String(req.body?.country || "").trim();
+    const phone = String(req.body?.phone || "").trim();
+    const company = String(req.body?.company || "").trim();
+
+    if (name.length < 2) {
+      return res.status(400).json({ error: "Name is required." });
+    }
+    if (country.length < 2) {
+      return res.status(400).json({ error: "Country is required." });
+    }
+    if (phone.length < 6) {
+      return res.status(400).json({ error: "A valid phone number is required." });
+    }
+
+    const profile = updateCustomerProfile({
+      userId: auth.user.id,
+      email: auth.user.email,
+      name,
+      country,
+      phone,
+      company,
+    });
+
+    return res.json({ ok: true, profile });
   });
 
   app.post("/api/visitor/track", rateLimit({ key: "visitor-track", windowMs: 1000 * 60, limit: 240 }), (req, res) => {
@@ -850,6 +913,7 @@ async function startServer() {
       const name = String(req.body?.name || "").trim();
       const email = auth.user.email;
       const phone = String(req.body?.phone || "").trim();
+      const country = String(req.body?.country || "").trim();
       const company = String(req.body?.company || "").trim();
       const notes = String(req.body?.notes || "").trim();
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
@@ -859,6 +923,9 @@ async function startServer() {
       }
       if (phone.length < 6) {
         return res.status(400).json({ error: "A valid phone number is required." });
+      }
+      if (country.length < 2) {
+        return res.status(400).json({ error: "Country is required." });
       }
       if (company.length < 2) {
         return res.status(400).json({ error: "Company name is required." });
@@ -874,6 +941,7 @@ async function startServer() {
       }
 
       const booking = createBooking({
+        userId: auth.user.id,
         serviceType,
         priority: priority as BookingPriority,
         date,
@@ -881,9 +949,19 @@ async function startServer() {
         name,
         email,
         phone,
+        country,
         company,
         notes,
         locale,
+      });
+
+      upsertCustomerProfile({
+        userId: auth.user.id,
+        email: auth.user.email,
+        name,
+        country,
+        phone,
+        company,
       });
 
       const slotLabel = `${booking.date} ${String(booking.hour).padStart(2, "0")}:00`;
@@ -945,6 +1023,40 @@ async function startServer() {
       });
 
       return res.status(201).json({ ok: true, booking });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post("/api/bookings/:bookingId/reschedule", rateLimit({ key: "bookings-reschedule", windowMs: 1000 * 60 * 10, limit: 30 }), async (req, res, next) => {
+    try {
+      const auth = getCurrentUser(req);
+      if (!auth) {
+        return res.status(401).json({ error: "Please sign in before changing an appointment." });
+      }
+
+      const bookingId = String(req.params.bookingId || "").trim();
+      const date = String(req.body?.date || "").trim();
+      const hour = Number(req.body?.hour);
+
+      if (!bookingId) {
+        return res.status(400).json({ error: "Booking is required." });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: "Please choose a valid booking date." });
+      }
+      if (!Number.isInteger(hour)) {
+        return res.status(400).json({ error: "Please choose a valid appointment time." });
+      }
+
+      const booking = rescheduleBooking({
+        bookingId,
+        userId: auth.user.id,
+        date,
+        hour,
+      });
+
+      return res.json({ ok: true, booking: serializeCustomerBooking(booking) });
     } catch (error) {
       return next(error);
     }

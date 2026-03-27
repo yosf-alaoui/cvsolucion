@@ -7,6 +7,7 @@ export type BookingServiceType = "consultation" | "support";
 
 export type BookingRecord = {
   id: string;
+  userId: string;
   serviceType: BookingServiceType;
   priority: BookingPriority;
   date: string;
@@ -14,11 +15,17 @@ export type BookingRecord = {
   name: string;
   email: string;
   phone: string;
+  country: string | null;
   company: string | null;
   notes: string | null;
   locale: "en" | "fr" | "ar";
   status: "confirmed";
   createdAt: string;
+  updatedAt: string;
+  rescheduledFromBookingId: string | null;
+  paymentStatus: "pending" | "paid" | "unpaid";
+  paymentProvider: "stripe" | null;
+  paymentReference: string | null;
 };
 
 type BookingDb = {
@@ -43,7 +50,18 @@ function ensureDbFile() {
 function loadDb(): BookingDb {
   ensureDbFile();
   const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<BookingDb>;
-  return { bookings: parsed.bookings ?? [] };
+  return {
+    bookings: (parsed.bookings ?? []).map((booking) => ({
+      ...booking,
+      userId: booking.userId ?? "",
+      country: booking.country ?? null,
+      updatedAt: booking.updatedAt ?? booking.createdAt ?? nowIso(),
+      rescheduledFromBookingId: booking.rescheduledFromBookingId ?? null,
+      paymentStatus: booking.paymentStatus ?? "unpaid",
+      paymentProvider: booking.paymentProvider ?? null,
+      paymentReference: booking.paymentReference ?? null,
+    })),
+  };
 }
 
 function saveDb(db: BookingDb) {
@@ -216,9 +234,40 @@ function sortBookings(items: BookingRecord[]) {
   });
 }
 
+function getBookingUtcMs(dateKey: string, hour: number) {
+  const { year, month, day } = dateKeyParts(dateKey);
+  let utcMs = Date.UTC(year, month - 1, day, hour, 0, 0);
+
+  for (let index = 0; index < 4; index += 1) {
+    const zoned = formatInTimeZone(new Date(utcMs), QUEBEC_TIMEZONE);
+    const targetMs = Date.UTC(year, month - 1, day, hour, 0, 0);
+    const zonedMs = Date.UTC(zoned.year, zoned.month - 1, zoned.day, zoned.hour, 0, 0);
+    const diffMs = targetMs - zonedMs;
+    if (diffMs === 0) break;
+    utcMs += diffMs;
+  }
+
+  return utcMs;
+}
+
+function canRescheduleBooking(booking: BookingRecord) {
+  const bookingUtcMs = getBookingUtcMs(booking.date, booking.hour);
+  return bookingUtcMs - Date.now() > 1000 * 60 * 60 * 12;
+}
+
 export function listBookings() {
   const db = loadDb();
   return sortBookings(db.bookings);
+}
+
+export function listBookingsForUser(userId: string, email?: string | null) {
+  const db = loadDb();
+  const normalizedEmail = email?.trim().toLowerCase() || null;
+  return sortBookings(
+    db.bookings.filter(
+      (booking) => booking.userId === userId || (!!normalizedEmail && !booking.userId && booking.email === normalizedEmail)
+    )
+  );
 }
 
 export function getBookingAvailability(priority: BookingPriority) {
@@ -277,6 +326,7 @@ export function getBookingAvailability(priority: BookingPriority) {
 }
 
 export function createBooking(input: {
+  userId: string;
   serviceType: BookingServiceType;
   priority: BookingPriority;
   date: string;
@@ -284,6 +334,7 @@ export function createBooking(input: {
   name: string;
   email: string;
   phone: string;
+  country?: string | null;
   company?: string | null;
   notes?: string | null;
   locale: "en" | "fr" | "ar";
@@ -334,6 +385,7 @@ export function createBooking(input: {
 
   const booking: BookingRecord = {
     id: randomId(),
+    userId: input.userId,
     serviceType: input.serviceType,
     priority: input.priority,
     date: input.date,
@@ -341,14 +393,96 @@ export function createBooking(input: {
     name: input.name.trim(),
     email: input.email.trim().toLowerCase(),
     phone: input.phone.trim(),
+    country: input.country?.trim() || null,
     company: input.company?.trim() || null,
     notes: input.notes?.trim() || null,
     locale: input.locale,
     status: "confirmed",
     createdAt: nowIso(),
+    updatedAt: nowIso(),
+    rescheduledFromBookingId: null,
+    paymentStatus: "unpaid",
+    paymentProvider: null,
+    paymentReference: null,
   };
 
   db.bookings.push(booking);
   saveDb(db);
   return booking;
+}
+
+export function rescheduleBooking(input: {
+  bookingId: string;
+  userId: string;
+  date: string;
+  hour: number;
+}) {
+  const db = loadDb();
+  const booking = db.bookings.find((item) => item.id === input.bookingId && item.userId === input.userId);
+
+  if (!booking) {
+    throw new Error("Booking not found.");
+  }
+
+  if (!canRescheduleBooking(booking)) {
+    throw new Error("This booking can only be changed more than 12 hours before the appointment.");
+  }
+
+  const hours = getHoursForPriority(booking.priority);
+  const quebecNow = getQuebecNow();
+  const showcaseBooked = buildShowcaseBookedIds(quebecNow.dateKey);
+  const dateDiff =
+    (parseDateKey(input.date).getTime() - parseDateKey(quebecNow.dateKey).getTime()) / (1000 * 60 * 60 * 24);
+
+  if (booking.priority === "express") {
+    if (dateDiff < 0 || dateDiff > 1) {
+      throw new Error("Express booking is available for today and tomorrow only.");
+    }
+  } else if (dateDiff < 0 || dateDiff > 30) {
+    throw new Error("Selected slot must be within the next 30 days.");
+  }
+
+  if (!hours.includes(input.hour)) {
+    throw new Error("Selected slot is outside bookable hours.");
+  }
+
+  if (input.date === quebecNow.dateKey && input.hour <= quebecNow.hour) {
+    throw new Error("Selected slot is no longer available.");
+  }
+
+  const weekdayIndex = getWeekdayIndex(input.date);
+  if (booking.priority === "standard" && weekdayIndex > 5) {
+    throw new Error("Bookings are available Monday to Friday only.");
+  }
+
+  const slotId = buildSlotId(input.date, input.hour, booking.priority);
+  const isTaken = db.bookings.some(
+    (item) =>
+      item.id !== booking.id &&
+      item.date === input.date &&
+      item.hour === input.hour &&
+      item.priority === booking.priority &&
+      item.status === "confirmed"
+  );
+
+  if (isTaken) {
+    throw new Error("This slot has just been taken. Please choose another time.");
+  }
+
+  if (showcaseBooked.has(slotId)) {
+    throw new Error("This slot has just been taken. Please choose another time.");
+  }
+
+  booking.date = input.date;
+  booking.hour = input.hour;
+  booking.updatedAt = nowIso();
+  saveDb(db);
+  return booking;
+}
+
+export function serializeCustomerBooking(booking: BookingRecord) {
+  return {
+    ...booking,
+    canReschedule: canRescheduleBooking(booking),
+  };
 }

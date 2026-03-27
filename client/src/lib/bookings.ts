@@ -32,6 +32,7 @@ export type BookingAvailabilityResponse = {
 
 export type BookingRecord = {
   id: string;
+  userId: string;
   serviceType: BookingServiceType;
   priority: BookingPriority;
   date: string;
@@ -39,11 +40,18 @@ export type BookingRecord = {
   name: string;
   email: string;
   phone: string;
+  country: string | null;
   company: string | null;
   notes: string | null;
   locale: "en" | "fr" | "ar";
   status: "confirmed";
   createdAt: string;
+  updatedAt: string;
+  rescheduledFromBookingId: string | null;
+  paymentStatus: "pending" | "paid" | "unpaid";
+  paymentProvider: "stripe" | null;
+  paymentReference: string | null;
+  canReschedule?: boolean;
 };
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
@@ -77,11 +85,19 @@ export function createBooking(payload: {
   name: string;
   email: string;
   phone: string;
+  country: string;
   company: string;
   notes: string;
   locale: string;
 }) {
   return request<{ ok: true; booking: BookingRecord }>("/api/bookings", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function rescheduleBooking(bookingId: string, payload: { date: string; hour: number }) {
+  return request<{ ok: true; booking: BookingRecord }>(`/api/bookings/${encodeURIComponent(bookingId)}/reschedule`, {
     method: "POST",
     body: JSON.stringify(payload),
   });

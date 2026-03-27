@@ -14,7 +14,7 @@ const Login = lazy(() => import("./pages/Login"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 const DesignPricing = lazy(() => import("./pages/DesignPricing"));
-const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Articles = lazy(() => import("./pages/Articles"));
 const ArticleDetailPage = lazy(() => import("./pages/ArticleDetail"));
 const About = lazy(() => import("./pages/About"));
@@ -72,9 +72,9 @@ function Router() {
       <Route path={"/login"} component={Login} />
       <Route path={"/fr/login"} component={Login} />
       <Route path={"/ar/login"} component={Login} />
-      <Route path={"/dashboard"} component={AdminDashboard} />
-      <Route path={"/fr/dashboard"} component={AdminDashboard} />
-      <Route path={"/ar/dashboard"} component={AdminDashboard} />
+      <Route path={"/dashboard"} component={Dashboard} />
+      <Route path={"/fr/dashboard"} component={Dashboard} />
+      <Route path={"/ar/dashboard"} component={Dashboard} />
       <Route path={"/articles"} component={Articles} />
       <Route path={"/fr/articles"} component={Articles} />
       <Route path={"/ar/articles"} component={Articles} />

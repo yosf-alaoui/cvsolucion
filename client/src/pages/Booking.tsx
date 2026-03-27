@@ -62,6 +62,7 @@ export default function Booking() {
     name: "",
     email: "",
     phone: "",
+    country: "",
     company: "",
     problem: "",
   });
@@ -88,6 +89,7 @@ export default function Booking() {
         name: "الاسم",
         email: "البريد الإلكتروني",
         phone: "الهاتف / واتساب",
+        country: "الدولة",
         company: "الشركة",
         problem: "اشرح المشكل أو الطلب",
         showcase: "المواعيد المملوءة الظاهرة للثقة تظهر فقط خلال أول 10 أيام من الشهر.",
@@ -123,6 +125,7 @@ export default function Booking() {
         name: "Nom",
         email: "Email",
         phone: "Telephone / WhatsApp",
+        country: "Pays",
         company: "Societe",
         problem: "Decrivez le probleme ou la demande",
         showcase: "Aujourd'hui est complet, demain matin aussi, puis 5 bookings de 2 heures sont repartis sur les 7 jours suivants.",
@@ -157,6 +160,7 @@ export default function Booking() {
       name: "Name",
       email: "Email",
       phone: "Phone / WhatsApp",
+      country: "Country",
       company: "Company",
       problem: "Describe the issue or request",
       showcase: "Today is full, tomorrow morning is full, and 5 scattered 2-hour bookings are shown across the next 7 days.",
@@ -288,13 +292,14 @@ export default function Booking() {
         name: form.name,
         email: form.email,
         phone: form.phone,
+        country: form.country,
         company: form.company,
         notes: bookingNotes,
         locale,
       });
 
       setStatus({ tone: "success", text: copy.success });
-      setForm({ name: "", email: user.email, phone: "", company: "", problem: "" });
+      setForm({ name: "", email: user.email, phone: "", country: "", company: "", problem: "" });
       setSelectedSlots([]);
       const refreshed = await getBookingAvailability(priority);
       setDays(refreshed.days);
@@ -505,6 +510,15 @@ export default function Booking() {
                         id="booking-phone"
                         value={form.phone}
                         onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="booking-country">{copy.country}</Label>
+                      <Input
+                        id="booking-country"
+                        value={form.country}
+                        onChange={(event) => setForm((current) => ({ ...current, country: event.target.value }))}
                         required
                       />
                     </div>

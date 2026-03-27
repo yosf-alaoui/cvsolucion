@@ -1,0 +1,55 @@
+import type { BookingRecord } from "@/lib/bookings";
+
+export type CustomerProfile = {
+  userId: string;
+  email: string;
+  name: string | null;
+  country: string | null;
+  phone: string | null;
+  company: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CustomerDashboardResponse = {
+  user: {
+    id: string;
+    email: string;
+    emailVerifiedAt: string | null;
+  };
+  profile: CustomerProfile;
+  bookings: BookingRecord[];
+};
+
+async function request<T>(input: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+  });
+
+  const data = (await response.json().catch(() => ({}))) as { error?: string } & T;
+  if (!response.ok) {
+    throw new Error(data.error || "Request failed.");
+  }
+  return data;
+}
+
+export function getCustomerDashboard() {
+  return request<CustomerDashboardResponse>("/api/customer/dashboard", { method: "GET" });
+}
+
+export function updateCustomerProfile(payload: {
+  name: string;
+  country: string;
+  phone: string;
+  company: string;
+}) {
+  return request<{ ok: true; profile: CustomerProfile }>("/api/customer/profile", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}

@@ -12,7 +12,7 @@ export default function Header() {
   const mobileLangMenuRef = useRef<HTMLDivElement | null>(null);
 
   const { locale, t } = useI18n();
-  const { user, isAdmin, logout } = useAuth();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     if (!isLangOpen) return;
@@ -128,7 +128,7 @@ export default function Header() {
               <a href={aboutHref} className="font-semibold text-foreground transition-colors hover:text-primary">
                 {aboutLabel}
               </a>
-              {isAuthed && isAdmin ? (
+              {isAuthed ? (
                 <a href={dashboardHref} className="font-semibold text-foreground transition-colors hover:text-primary">
                   Dashboard
                 </a>
@@ -325,7 +325,7 @@ export default function Header() {
               >
                 {aboutLabel}
               </a>
-              {isAuthed && isAdmin ? (
+              {isAuthed ? (
                 <a
                   href={dashboardHref}
                   className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
