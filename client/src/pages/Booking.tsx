@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Clock3, ShieldCheck, Zap } from "lucide-react";
+import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
 import Header from "@/components/Header";
@@ -17,6 +19,7 @@ import {
   type BookingPriority,
   type BookingServiceType,
 } from "@/lib/bookings";
+import { createBookingPaymentIntent, getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
 import { useI18n } from "@/i18n/i18n";
 
 function dateLabel(date: string, locale: string) {
@@ -48,6 +51,93 @@ function formatSlotSummary(date: string, hour: number) {
   return `${date} ${String(hour).padStart(2, "0")}:00`;
 }
 
+function BookingPaymentElement({
+  clientSecret,
+  publishableKey,
+  locale,
+  submitLabel,
+  processingLabel,
+  onConfirm,
+}: {
+  clientSecret: string;
+  publishableKey: string;
+  locale: string;
+  submitLabel: string;
+  processingLabel: string;
+  onConfirm: (paymentIntentId: string) => Promise<void>;
+}) {
+  const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
+  const options = useMemo<StripeElementsOptions>(
+    () => ({
+      clientSecret,
+      appearance: {
+        theme: "stripe",
+      },
+    }),
+    [clientSecret]
+  );
+
+  return (
+    <Elements stripe={stripePromise} options={options}>
+      <StripePaymentInner locale={locale} submitLabel={submitLabel} processingLabel={processingLabel} onConfirm={onConfirm} />
+    </Elements>
+  );
+}
+
+function StripePaymentInner({
+  locale,
+  submitLabel,
+  processingLabel,
+  onConfirm,
+}: {
+  locale: string;
+  submitLabel: string;
+  processingLabel: string;
+  onConfirm: (paymentIntentId: string) => Promise<void>;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit() {
+    if (!stripe || !elements) return;
+    setBusy(true);
+    try {
+      const submitResult = await elements.submit();
+      if (submitResult.error) {
+        throw new Error(submitResult.error.message || "Payment form is incomplete.");
+      }
+
+      const result = await stripe.confirmPayment({
+        elements,
+        redirect: "if_required",
+      });
+
+      if (result.error) {
+        throw new Error(result.error.message || "Payment confirmation failed.");
+      }
+
+      const paymentIntentId = result.paymentIntent?.id;
+      if (!paymentIntentId) {
+        throw new Error("Stripe did not return a payment intent.");
+      }
+
+      await onConfirm(paymentIntentId);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <PaymentElement options={{ layout: "tabs" }} />
+      <Button type="button" className="w-full rounded-full bg-primary text-white hover:bg-primary/90" disabled={!stripe || !elements || busy} onClick={handleSubmit}>
+        {busy ? processingLabel : submitLabel}
+      </Button>
+    </div>
+  );
+}
+
 export default function Booking() {
   const { locale } = useI18n();
   const { user, loading: authLoading } = useAuth();
@@ -56,6 +146,10 @@ export default function Booking() {
   const [days, setDays] = useState<BookingAvailabilityDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [stripeConfig, setStripeConfig] = useState<StripeConfigResponse | null>(null);
+  const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
   const [selectedSlots, setSelectedSlots] = useState<BookingAvailabilitySlot[]>([]);
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [form, setForm] = useState({
@@ -98,6 +192,10 @@ export default function Booking() {
         loading: "جارٍ تحميل المواعيد...",
         submit: "تأكيد الحجز",
         sending: "جارٍ التأكيد...",
+        payment: "الدفع",
+        paymentSecure: "ادفع الآن داخل الموقع لإكمال الحجز.",
+        paymentUnavailable: "الدفع غير متاح حالياً. أكمل إعداد Stripe أولاً.",
+        paymentLoading: "جارٍ تجهيز الدفع الآمن...",
         success: "تم تسجيل الحجز بنجاح. ستصلك رسالة تأكيد عبر البريد.",
         chooseSlot: "اختر موعداً صالحاً قبل الإرسال.",
         seoTitle: "حجز استشارة أو دعم | CVsolucion",
@@ -134,6 +232,10 @@ export default function Booking() {
         loading: "Chargement des horaires...",
         submit: "Confirmer le booking",
         sending: "Confirmation...",
+        payment: "Paiement",
+        paymentSecure: "Payez maintenant dans le site pour finaliser le booking.",
+        paymentUnavailable: "Le paiement n'est pas encore disponible. Stripe doit encore être configure.",
+        paymentLoading: "Preparation du paiement securise...",
         success: "Le booking est enregistre. Un email de confirmation sera envoye.",
         chooseSlot: "Choisissez un horaire valide avant de confirmer.",
         seoTitle: "Reservation consultation ou support | CVsolucion",
@@ -169,6 +271,10 @@ export default function Booking() {
       loading: "Loading schedule...",
       submit: "Confirm booking",
       sending: "Confirming...",
+      payment: "Payment",
+      paymentSecure: "Pay securely inside the site to finalize this booking.",
+      paymentUnavailable: "Payment is not available yet. Stripe still needs to be configured.",
+      paymentLoading: "Preparing secure payment...",
       success: "Booking recorded successfully. A confirmation email will be sent.",
       chooseSlot: "Choose a valid slot before confirming.",
       seoTitle: "Book a consultation or support session | CVsolucion",
@@ -236,14 +342,68 @@ export default function Booking() {
   }, [priority]);
 
   useEffect(() => {
+    getStripeBookingConfig()
+      .then((response) => setStripeConfig(response))
+      .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "cad", prices: {} }));
+  }, []);
+
+  useEffect(() => {
     if (!user?.email) return;
     setForm((current) => ({
       ...current,
       email: user.email,
-    }));
+      }));
   }, [user?.email]);
 
+  useEffect(() => {
+    const primarySlot = selectedSlots[0];
+    const stripeEnabled = Boolean(stripeConfig?.enabled && stripeConfig.publishableKey);
+    if (!user || !primarySlot || !stripeEnabled) {
+      setPaymentClientSecret(null);
+      setPaymentIntentId(null);
+      return;
+    }
+
+    let cancelled = false;
+    setPaymentLoading(true);
+    createBookingPaymentIntent({
+      serviceType,
+      priority,
+      date: primarySlot.date,
+      hour: primarySlot.hour,
+      locale,
+    })
+      .then((response) => {
+        if (cancelled) return;
+        setPaymentClientSecret(response.clientSecret);
+        setPaymentIntentId(response.paymentIntentId);
+      })
+      .catch((error: Error) => {
+        if (cancelled) return;
+        setPaymentClientSecret(null);
+        setPaymentIntentId(null);
+        setStatus({ tone: "error", text: error.message });
+      })
+      .finally(() => {
+        if (!cancelled) setPaymentLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locale, priority, selectedSlots, serviceType, stripeConfig?.enabled, stripeConfig?.publishableKey, user]);
+
   const weeks = useMemo(() => chunkDays(days, priority === "express" ? 2 : 5), [days, priority]);
+  const stripePriceKey = `${priority}:${serviceType}`;
+  const stripeAmount = stripeConfig?.prices?.[stripePriceKey] ?? 0;
+  const stripeEnabled = Boolean(stripeConfig?.enabled && stripeConfig.publishableKey && stripeAmount > 0);
+  const stripeAmountLabel =
+    stripeAmount > 0
+      ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
+          style: "currency",
+          currency: (stripeConfig?.currency || "cad").toUpperCase(),
+        }).format(stripeAmount / 100)
+      : null;
 
   function toggleSlot(slot: BookingAvailabilitySlot) {
     setStatus(null);
@@ -260,8 +420,7 @@ export default function Booking() {
     });
   }
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const finalizeBooking = async (confirmedPaymentIntentId?: string | null) => {
     if (!user) {
       setStatus({ tone: "error", text: loginRequiredError });
       return;
@@ -295,6 +454,7 @@ export default function Booking() {
         country: form.country,
         company: form.company,
         notes: bookingNotes,
+        paymentIntentId: confirmedPaymentIntentId || paymentIntentId || "",
         locale,
       });
 
@@ -490,7 +650,12 @@ export default function Booking() {
                     </div>
                   </div>
                 ) : (
-                  <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+                  <form
+                    className="mt-6 space-y-4"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                    }}
+                  >
                     <div className="space-y-2">
                       <Label htmlFor="booking-name">{copy.name}</Label>
                       <Input
@@ -542,9 +707,45 @@ export default function Booking() {
                       />
                     </div>
 
-                    <Button type="submit" className="w-full rounded-full bg-primary text-white hover:bg-primary/90" disabled={saving}>
-                      {saving ? copy.sending : copy.submit}
-                    </Button>
+                    <div className="rounded-[24px] border border-slate-200 bg-white/70 p-4">
+                      <div className="text-sm font-semibold text-slate-900">{copy.payment}</div>
+                      <div className="mt-2 text-sm text-slate-600">
+                        {stripeAmountLabel ? `${copy.paymentSecure} ${stripeAmountLabel}` : copy.paymentSecure}
+                      </div>
+
+                      {stripeEnabled ? (
+                        paymentLoading ? (
+                          <div className="mt-4 text-sm text-slate-500">{copy.paymentLoading}</div>
+                        ) : paymentClientSecret && stripeConfig?.publishableKey ? (
+                          <div className="mt-4">
+                            <BookingPaymentElement
+                              clientSecret={paymentClientSecret}
+                              publishableKey={stripeConfig.publishableKey}
+                              locale={locale}
+                              submitLabel={saving ? copy.sending : copy.submit}
+                              processingLabel={copy.sending}
+                              onConfirm={async (confirmedPaymentIntentId) => {
+                                await finalizeBooking(confirmedPaymentIntentId);
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="mt-4 text-sm text-slate-500">{copy.chooseSlot}</div>
+                        )
+                      ) : (
+                        <div className="mt-4 space-y-4">
+                          <div className="text-sm text-slate-500">{copy.paymentUnavailable}</div>
+                          <Button
+                            type="button"
+                            className="w-full rounded-full bg-primary text-white hover:bg-primary/90"
+                            disabled={saving}
+                            onClick={() => void finalizeBooking()}
+                          >
+                            {saving ? copy.sending : copy.submit}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </form>
                 )}
 

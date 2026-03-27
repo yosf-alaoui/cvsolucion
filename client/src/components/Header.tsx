@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, ChevronDown, Mail, Menu, X } from "lucide-react";
+import { CalendarDays, ChevronDown, LogOut, Mail, Menu, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
 import { getBookingHref } from "@/lib/site";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -128,11 +134,6 @@ export default function Header() {
               <a href={aboutHref} className="font-semibold text-foreground transition-colors hover:text-primary">
                 {aboutLabel}
               </a>
-              {isAuthed ? (
-                <a href={dashboardHref} className="font-semibold text-foreground transition-colors hover:text-primary">
-                  Dashboard
-                </a>
-              ) : null}
               <button
                 onClick={() => scrollToSection("services")}
                 className="font-semibold text-foreground transition-colors hover:text-primary"
@@ -177,13 +178,36 @@ export default function Header() {
                   {t("auth.signInUp")}
                 </a>
               ) : (
-                <button
-                  type="button"
-                  className="font-semibold text-foreground transition-colors hover:text-primary"
-                  onClick={handleSignOut}
-                >
-                  {t("auth.signOut")}
-                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/75 px-4 py-2 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:bg-white/90"
+                    >
+                      <UserRound className="h-4 w-4" />
+                      Profile
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 rounded-2xl border-slate-200 bg-white/95 p-2 backdrop-blur-xl">
+                    <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
+                      <a href={dashboardHref}>
+                        <UserRound className="h-4 w-4" />
+                        My account
+                      </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="cursor-pointer rounded-xl px-3 py-2 font-semibold"
+                      onSelect={(event) => {
+                        event.preventDefault();
+                        void handleSignOut();
+                      }}
+                    >
+                      <LogOut className="h-4 w-4" />
+                      {t("auth.signOut")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
 
               <div data-testid="lang-switch-desktop" className="relative" ref={langMenuRef}>
@@ -331,7 +355,7 @@ export default function Header() {
                   className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Dashboard
+                  Profile
                 </a>
               ) : null}
               <button

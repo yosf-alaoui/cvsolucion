@@ -338,6 +338,9 @@ export function createBooking(input: {
   company?: string | null;
   notes?: string | null;
   locale: "en" | "fr" | "ar";
+  paymentStatus?: BookingRecord["paymentStatus"];
+  paymentProvider?: BookingRecord["paymentProvider"];
+  paymentReference?: string | null;
 }) {
   const db = loadDb();
   const quebecNow = getQuebecNow();
@@ -401,9 +404,9 @@ export function createBooking(input: {
     createdAt: nowIso(),
     updatedAt: nowIso(),
     rescheduledFromBookingId: null,
-    paymentStatus: "unpaid",
-    paymentProvider: null,
-    paymentReference: null,
+    paymentStatus: input.paymentStatus ?? "unpaid",
+    paymentProvider: input.paymentProvider ?? null,
+    paymentReference: input.paymentReference ?? null,
   };
 
   db.bookings.push(booking);

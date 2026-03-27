@@ -88,6 +88,7 @@ export function createBooking(payload: {
   country: string;
   company: string;
   notes: string;
+  paymentIntentId?: string;
   locale: string;
 }) {
   return request<{ ok: true; booking: BookingRecord }>("/api/bookings", {

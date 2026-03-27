@@ -63,6 +63,7 @@ import {
 import { storeContactLead } from "./contactStore";
 import { buildRobotsTxt, buildSitemapXml, renderSeoHtml } from "./seo";
 import { getCustomerProfile, updateCustomerProfile, upsertCustomerProfile } from "./customerProfileStore";
+import { createBookingPaymentIntent, getStripePricingSnapshot, verifyBookingPayment } from "./stripeBooking";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -899,6 +900,50 @@ async function startServer() {
     return res.json(getBookingAvailability(priority));
   });
 
+  app.get("/api/stripe/config", rateLimit({ key: "stripe-config", windowMs: 1000 * 60, limit: 120 }), (_req, res) => {
+    return res.json(getStripePricingSnapshot());
+  });
+
+  app.post("/api/stripe/booking-payment-intent", rateLimit({ key: "stripe-payment-intent", windowMs: 1000 * 60 * 10, limit: 40 }), async (req, res, next) => {
+    try {
+      const auth = getCurrentUser(req);
+      if (!auth) {
+        return res.status(401).json({ error: "Please sign in before starting payment." });
+      }
+
+      const serviceType = String(req.body?.serviceType || "consultation").trim() === "support" ? "support" : "consultation";
+      const priority = String(req.body?.priority || "standard").trim() === "express" ? "express" : "standard";
+      const date = String(req.body?.date || "").trim();
+      const hour = Number(req.body?.hour);
+      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: "Please choose a valid booking date." });
+      }
+      if (!Number.isInteger(hour)) {
+        return res.status(400).json({ error: "Please choose a valid appointment time." });
+      }
+
+      const intent = await createBookingPaymentIntent({
+        userId: auth.user.id,
+        email: auth.user.email,
+        serviceType,
+        priority: priority as BookingPriority,
+        date,
+        hour,
+        locale,
+      });
+
+      return res.json({
+        ok: true,
+        clientSecret: intent.client_secret,
+        paymentIntentId: intent.id,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
   app.post("/api/bookings", rateLimit({ key: "bookings-create", windowMs: 1000 * 60 * 10, limit: 20 }), async (req, res, next) => {
     try {
       const auth = getCurrentUser(req);
@@ -916,6 +961,7 @@ async function startServer() {
       const country = String(req.body?.country || "").trim();
       const company = String(req.body?.company || "").trim();
       const notes = String(req.body?.notes || "").trim();
+      const paymentIntentId = String(req.body?.paymentIntentId || "").trim();
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
 
       if (name.length < 2) {
@@ -940,6 +986,23 @@ async function startServer() {
         return res.status(400).json({ error: "Please choose a valid appointment time." });
       }
 
+      const stripeConfig = getStripePricingSnapshot();
+      let verifiedPayment: Awaited<ReturnType<typeof verifyBookingPayment>> | null = null;
+      if (stripeConfig.enabled) {
+        if (!paymentIntentId) {
+          return res.status(400).json({ error: "Payment is required before confirming this booking." });
+        }
+
+        verifiedPayment = await verifyBookingPayment({
+          paymentIntentId,
+          userId: auth.user.id,
+          serviceType,
+          priority: priority as BookingPriority,
+          date,
+          hour,
+        });
+      }
+
       const booking = createBooking({
         userId: auth.user.id,
         serviceType,
@@ -953,6 +1016,9 @@ async function startServer() {
         company,
         notes,
         locale,
+        paymentStatus: verifiedPayment ? "paid" : "unpaid",
+        paymentProvider: verifiedPayment ? "stripe" : null,
+        paymentReference: verifiedPayment?.id || null,
       });
 
       upsertCustomerProfile({
