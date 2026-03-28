@@ -89,6 +89,186 @@
       "server": ["server/ga4Reporting.ts", "server/visitorStore.ts", "server/index.ts"],
       "data": ["data/visitors-db.json"]
     }
+  },
+  {
+    "name": "articles",
+    "summary": "Localized article publishing with automatic translation, admin CRUD, and image upload.",
+    "runtime": ["client", "server"],
+    "entrypoints": [
+      "modules/articles/contracts.ts",
+      "modules/articles/client.ts",
+      "modules/articles/server.ts",
+      "modules/articles/env.ts"
+    ],
+    "currentProject": {
+      "client": [
+        "client/src/lib/articles.ts",
+        "client/src/lib/articleBody.ts",
+        "client/src/pages/Articles.tsx",
+        "client/src/pages/ArticleDetail.tsx",
+        "client/src/components/admin/ArticlesManager.tsx"
+      ],
+      "server": [
+        "server/articleStore.ts",
+        "server/articleTranslation.ts",
+        "server/index.ts"
+      ],
+      "data": ["data/articles-db.json", "data/uploads/articles"]
+    }
+  },
+  {
+    "name": "seo",
+    "summary": "Reusable SEO metadata, hreflang, canonical, robots, sitemap, and fallback rendering helpers.",
+    "runtime": ["client", "server"],
+    "entrypoints": [
+      "modules/seo/contracts.ts",
+      "modules/seo/client.ts",
+      "modules/seo/server.ts",
+      "modules/seo/env.ts"
+    ],
+    "currentProject": {
+      "client": [
+        "client/index.html",
+        "client/src/components/Seo.tsx",
+        "client/src/pages/Home.tsx",
+        "client/src/pages/Training.tsx",
+        "client/src/pages/DesignPricing.tsx"
+      ],
+      "server": [
+        "server/seo.ts",
+        "server/index.ts"
+      ]
+    }
+  },
+  {
+    "name": "contact",
+    "summary": "Contact/lead capture flow with reusable payloads, client submitters, and storage hooks.",
+    "runtime": ["client", "server"],
+    "entrypoints": [
+      "modules/contact/contracts.ts",
+      "modules/contact/client.ts",
+      "modules/contact/server.ts",
+      "modules/contact/env.ts"
+    ],
+    "currentProject": {
+      "client": [
+        "client/src/lib/contact.ts",
+        "client/src/components/ContactSection.tsx"
+      ],
+      "server": [
+        "server/contactStore.ts",
+        "server/index.ts"
+      ],
+      "data": ["data/contact-leads.json"]
+    }
+  },
+  {
+    "name": "catalog",
+    "summary": "Reusable service catalog for public packages and admin-managed booking prices.",
+    "runtime": ["client", "server"],
+    "entrypoints": [
+      "modules/catalog/contracts.ts",
+      "modules/catalog/client.ts",
+      "modules/catalog/server.ts",
+      "modules/catalog/env.ts"
+    ],
+    "currentProject": {
+      "client": [
+        "client/src/lib/admin.ts",
+        "client/src/components/admin/CatalogManager.tsx",
+        "client/src/components/PackagesSection.tsx"
+      ],
+      "server": [
+        "server/catalogStore.ts",
+        "server/index.ts"
+      ],
+      "data": ["data/catalog-db.json"]
+    }
+  },
+  {
+    "name": "payments",
+    "summary": "Stripe payment config, intents, verification, webhook idempotency, and refund-ready order handling.",
+    "runtime": ["client", "server"],
+    "entrypoints": [
+      "modules/payments/contracts.ts",
+      "modules/payments/client.ts",
+      "modules/payments/server.ts",
+      "modules/payments/env.ts"
+    ],
+    "currentProject": {
+      "client": [
+        "client/src/lib/stripeBooking.ts",
+        "client/src/components/booking/StripePaymentForm.tsx",
+        "client/src/pages/BookingCheckout.tsx"
+      ],
+      "server": [
+        "server/stripeBooking.ts",
+        "server/stripeEventStore.ts",
+        "server/index.ts"
+      ],
+      "data": ["data/stripe-events-db.json", "data/bookings-db.json"]
+    }
+  },
+  {
+    "name": "i18n",
+    "summary": "Localized path helpers, translation lookup, locale switching, and direction management.",
+    "runtime": ["client"],
+    "entrypoints": [
+      "modules/i18n/contracts.ts",
+      "modules/i18n/client.ts",
+      "modules/i18n/env.ts"
+    ],
+    "currentProject": {
+      "client": [
+        "client/src/i18n/i18n.tsx",
+        "client/src/i18n/translations.ts"
+      ],
+      "server": []
+    }
+  },
+  {
+    "name": "customer-profile",
+    "summary": "Reusable customer profile storage and update flows for account dashboards and checkout autofill.",
+    "runtime": ["client", "server"],
+    "entrypoints": [
+      "modules/customer-profile/contracts.ts",
+      "modules/customer-profile/client.ts",
+      "modules/customer-profile/server.ts",
+      "modules/customer-profile/env.ts"
+    ],
+    "currentProject": {
+      "client": [
+        "client/src/lib/customer.ts",
+        "client/src/pages/CustomerDashboard.tsx",
+        "client/src/pages/BookingCheckout.tsx"
+      ],
+      "server": [
+        "server/customerProfileStore.ts",
+        "server/index.ts"
+      ],
+      "data": ["data/customer-profiles-db.json"]
+    }
+  },
+  {
+    "name": "visitor-tracking",
+    "summary": "First-party visitor telemetry, session/pageview storage, and interaction audit trails.",
+    "runtime": ["client", "server"],
+    "entrypoints": [
+      "modules/visitor-tracking/contracts.ts",
+      "modules/visitor-tracking/client.ts",
+      "modules/visitor-tracking/server.ts",
+      "modules/visitor-tracking/env.ts"
+    ],
+    "currentProject": {
+      "client": [
+        "client/src/components/Analytics.tsx",
+        "client/src/components/ChatWidget.tsx"
+      ],
+      "server": [
+        "server/visitorStore.ts",
+        "server/index.ts"
+      ],
+      "data": ["data/visitors-db.json"]
+    }
   }
 ]
-

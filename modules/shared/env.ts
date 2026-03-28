@@ -7,7 +7,21 @@ export type ModuleEnvRequirement = {
 
 export type ReusableModuleManifest = {
   name: string;
-  category: "auth" | "email" | "chat" | "booking" | "dashboard" | "analytics";
+  category:
+    | "auth"
+    | "email"
+    | "chat"
+    | "booking"
+    | "dashboard"
+    | "analytics"
+    | "articles"
+    | "seo"
+    | "contact"
+    | "catalog"
+    | "payments"
+    | "i18n"
+    | "customer-profile"
+    | "visitor-tracking";
   summary: string;
   runtime: Array<"client" | "server">;
   env: ModuleEnvRequirement[];
@@ -17,4 +31,3 @@ export type ReusableModuleManifest = {
     data?: string[];
   };
 };
-
