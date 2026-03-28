@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, ChevronDown, LogOut, Mail, Menu, UserRound, X } from "lucide-react";
+import { CalendarDays, ChevronDown, LogOut, Mail, Menu, ShoppingCart, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
 import { getBookingHref } from "@/lib/site";
+import { getBookingCheckoutCount, getBookingCheckoutEventName } from "@/lib/bookingCheckout";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,11 +15,25 @@ import {
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLangOpen, setIsLangOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
   const langMenuRef = useRef<HTMLDivElement | null>(null);
   const mobileLangMenuRef = useRef<HTMLDivElement | null>(null);
 
   const { locale, t } = useI18n();
   const { user, logout } = useAuth();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const syncCart = () => setCartCount(getBookingCheckoutCount());
+    syncCart();
+    const eventName = getBookingCheckoutEventName();
+    window.addEventListener(eventName, syncCart);
+    window.addEventListener("storage", syncCart);
+    return () => {
+      window.removeEventListener(eventName, syncCart);
+      window.removeEventListener("storage", syncCart);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isLangOpen) return;
@@ -80,6 +95,7 @@ export default function Header() {
   const loginHref = `${prefix}/login`;
   const contactHref = `${homeHref}#contact`;
   const bookingHref = getBookingHref(locale);
+  const cartHref = locale === "en" ? "/book/checkout" : `/${locale}/book/checkout`;
   const isAuthed = Boolean(user?.id);
 
   const articlesLabel = locale === "ar" ? "المقالات" : "Articles";
@@ -170,6 +186,18 @@ export default function Header() {
                 >
                   <CalendarDays className="h-4 w-4" />
                   {bookLabel}
+                </a>
+              </Button>
+
+              <Button asChild variant="outline" size="sm" className="relative rounded-full border-slate-200 bg-white/75 backdrop-blur">
+                <a href={cartHref}>
+                  <ShoppingCart className="h-4 w-4" />
+                  Cart
+                  {cartCount > 0 ? (
+                    <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                      {cartCount}
+                    </span>
+                  ) : null}
                 </a>
               </Button>
 
@@ -395,6 +423,17 @@ export default function Header() {
               )}
 
               <div className="grid gap-2 pt-2">
+                <Button asChild variant="outline" className="relative w-full rounded-full bg-white/80">
+                  <a href={cartHref} onClick={() => setIsMenuOpen(false)}>
+                    <ShoppingCart className="h-4 w-4" />
+                    Cart
+                    {cartCount > 0 ? (
+                      <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                        {cartCount}
+                      </span>
+                    ) : null}
+                  </a>
+                </Button>
                 <Button asChild variant="outline" className="w-full rounded-full bg-white/80">
                   <a href={contactHref} onClick={() => setIsMenuOpen(false)}>
                     <Mail className="h-4 w-4" />

@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Clock3, ShieldCheck, ShoppingCart } from "lucide-react";
-import { CardElement, Elements, useElements, useStripe } from "@stripe/react-stripe-js";
+import {
+  CardCvcElement,
+  CardExpiryElement,
+  CardNumberElement,
+  Elements,
+  useElements,
+  useStripe,
+} from "@stripe/react-stripe-js";
 import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
@@ -95,18 +102,39 @@ function StripePaymentInner({
   const stripe = useStripe();
   const elements = useElements();
   const [busy, setBusy] = useState(false);
+  const [cardReady, setCardReady] = useState(false);
+  const [cardComplete, setCardComplete] = useState(false);
+  const [cardError, setCardError] = useState<string | null>(null);
+  const billingComplete = Boolean(
+    billingDetails.name.trim() && billingDetails.email.trim() && billingDetails.phone.trim() && billingDetails.country.trim()
+  );
+  const canSubmit = Boolean(stripe && elements && cardReady && cardComplete && billingComplete && !busy);
+
+  const elementStyle = {
+    style: {
+      base: {
+        fontSize: "16px",
+        color: "#0f172a",
+        fontFamily: "Cairo, ui-sans-serif, system-ui, sans-serif",
+        "::placeholder": {
+          color: "#94a3b8",
+        },
+      },
+    },
+  } as const;
 
   async function handleSubmit() {
     if (!stripe || !elements) return;
     setBusy(true);
+    setCardError(null);
     try {
-      const cardElement = elements.getElement(CardElement);
-      if (!cardElement) {
+      const cardNumber = elements.getElement(CardNumberElement);
+      if (!cardNumber) {
         throw new Error("Card form is not ready yet.");
       }
       const result = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
-          card: cardElement,
+          card: cardNumber,
           billing_details: {
             name: billingDetails.name,
             email: billingDetails.email,
@@ -125,24 +153,32 @@ function StripePaymentInner({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-        <CardElement
-          options={{
-            hidePostalCode: true,
-            style: {
-              base: {
-                fontSize: "16px",
-                color: "#0f172a",
-                fontFamily: "Cairo, ui-sans-serif, system-ui, sans-serif",
-                "::placeholder": {
-                  color: "#94a3b8",
-                },
-              },
-            },
-          }}
-        />
+      <div className="space-y-3">
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Card number</div>
+          <CardNumberElement
+            options={elementStyle}
+            onReady={() => setCardReady(true)}
+            onChange={(event) => {
+              setCardComplete(event.complete);
+              setCardError(event.error?.message || null);
+            }}
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Expiry</div>
+            <CardExpiryElement options={elementStyle} />
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">CVC</div>
+            <CardCvcElement options={elementStyle} />
+          </div>
+        </div>
       </div>
-      <Button type="button" className="w-full rounded-full bg-primary text-white hover:bg-primary/90" disabled={!stripe || !elements || busy} onClick={handleSubmit}>
+      {cardError ? <div className="text-sm text-rose-600">{cardError}</div> : null}
+      {!billingComplete ? <div className="text-sm text-slate-500">Fill your booking details first to enable payment.</div> : null}
+      <Button type="button" className="w-full rounded-full bg-primary text-white hover:bg-primary/90" disabled={!canSubmit} onClick={handleSubmit}>
         {busy ? processingLabel : submitLabel}
       </Button>
     </div>

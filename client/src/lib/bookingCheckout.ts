@@ -14,10 +14,12 @@ export type BookingCheckoutDraft = {
 };
 
 const STORAGE_KEY = "cvsolucion-booking-checkout";
+const EVENT_NAME = "cvsolucion-booking-cart-change";
 
 export function saveBookingCheckoutDraft(draft: BookingCheckoutDraft) {
   if (typeof window === "undefined") return;
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+  window.dispatchEvent(new CustomEvent(EVENT_NAME));
 }
 
 export function getBookingCheckoutDraft(): BookingCheckoutDraft | null {
@@ -39,4 +41,13 @@ export function getBookingCheckoutDraft(): BookingCheckoutDraft | null {
 export function clearBookingCheckoutDraft() {
   if (typeof window === "undefined") return;
   window.sessionStorage.removeItem(STORAGE_KEY);
+  window.dispatchEvent(new CustomEvent(EVENT_NAME));
+}
+
+export function getBookingCheckoutCount() {
+  return getBookingCheckoutDraft()?.slots.length || 0;
+}
+
+export function getBookingCheckoutEventName() {
+  return EVENT_NAME;
 }
