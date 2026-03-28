@@ -83,6 +83,9 @@ export default function CustomerDashboard() {
         support: "دعم",
         standard: "عادي",
         express: "إكسبريس",
+        cancelled: "ملغى",
+        refunded: "مسترجع",
+        partiallyRefunded: "استرجاع جزئي",
       };
     }
     if (locale === "fr") {
@@ -117,6 +120,9 @@ export default function CustomerDashboard() {
         support: "Support",
         standard: "Standard",
         express: "Express",
+        cancelled: "Annule",
+        refunded: "Rembourse",
+        partiallyRefunded: "Remboursement partiel",
       };
     }
     return {
@@ -150,6 +156,9 @@ export default function CustomerDashboard() {
       support: "Support",
       standard: "Standard",
       express: "Express",
+      cancelled: "Cancelled",
+      refunded: "Refunded",
+      partiallyRefunded: "Partially refunded",
     };
   }, [locale]);
 
@@ -178,12 +187,20 @@ export default function CustomerDashboard() {
   const now = Date.now();
   const upcomingBookings = useMemo(
     () =>
-      (data?.bookings || []).filter((booking) => new Date(`${booking.date}T${String(booking.hour).padStart(2, "0")}:00:00`).getTime() >= now),
+      (data?.bookings || []).filter(
+        (booking) =>
+          booking.status === "confirmed" &&
+          new Date(`${booking.date}T${String(booking.hour).padStart(2, "0")}:00:00`).getTime() >= now
+      ),
     [data?.bookings, now]
   );
   const pastBookings = useMemo(
     () =>
-      (data?.bookings || []).filter((booking) => new Date(`${booking.date}T${String(booking.hour).padStart(2, "0")}:00:00`).getTime() < now),
+      (data?.bookings || []).filter(
+        (booking) =>
+          booking.status !== "confirmed" ||
+          new Date(`${booking.date}T${String(booking.hour).padStart(2, "0")}:00:00`).getTime() < now
+      ),
     [data?.bookings, now]
   );
 
@@ -405,6 +422,15 @@ export default function CustomerDashboard() {
                               {booking.serviceType === "support" ? copy.support : copy.consultation} •{" "}
                               {booking.priority === "express" ? copy.express : copy.standard}
                             </div>
+                            {booking.status === "cancelled" || booking.paymentStatus === "refunded" || booking.paymentStatus === "partially_refunded" ? (
+                              <div className="mt-2 text-sm font-medium text-slate-700">
+                                {booking.status === "cancelled"
+                                  ? copy.cancelled
+                                  : booking.paymentStatus === "refunded"
+                                    ? copy.refunded
+                                    : copy.partiallyRefunded}
+                              </div>
+                            ) : null}
                           </div>
                         ))
                       ) : (

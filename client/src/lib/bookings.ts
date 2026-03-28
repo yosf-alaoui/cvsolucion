@@ -1,5 +1,8 @@
 export type BookingPriority = "standard" | "express";
 export type BookingServiceType = "consultation" | "support";
+export type BookingStatus = "confirmed" | "cancelled";
+export type BookingPaymentStatus = "pending" | "paid" | "unpaid" | "partially_refunded" | "refunded";
+export type BookingRefundStatus = "none" | "pending" | "succeeded" | "failed" | "canceled";
 
 export type BookingAvailabilitySlot = {
   id: string;
@@ -44,13 +47,18 @@ export type BookingRecord = {
   company: string | null;
   notes: string | null;
   locale: "en" | "fr" | "ar";
-  status: "confirmed";
+  status: BookingStatus;
   createdAt: string;
   updatedAt: string;
   rescheduledFromBookingId: string | null;
-  paymentStatus: "pending" | "paid" | "unpaid";
+  paymentStatus: BookingPaymentStatus;
   paymentProvider: "stripe" | null;
   paymentReference: string | null;
+  unitAmount: number;
+  refundStatus: BookingRefundStatus;
+  refundReference: string | null;
+  refundAmount: number;
+  refundedAt: string | null;
   canReschedule?: boolean;
 };
 

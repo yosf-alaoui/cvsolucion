@@ -4,6 +4,9 @@ import path from "path";
 
 export type BookingPriority = "standard" | "express";
 export type BookingServiceType = "consultation" | "support";
+export type BookingStatus = "confirmed" | "cancelled";
+export type BookingPaymentStatus = "pending" | "paid" | "unpaid" | "partially_refunded" | "refunded";
+export type BookingRefundStatus = "none" | "pending" | "succeeded" | "failed" | "canceled";
 
 export type BookingRecord = {
   id: string;
@@ -19,13 +22,18 @@ export type BookingRecord = {
   company: string | null;
   notes: string | null;
   locale: "en" | "fr" | "ar";
-  status: "confirmed";
+  status: BookingStatus;
   createdAt: string;
   updatedAt: string;
   rescheduledFromBookingId: string | null;
-  paymentStatus: "pending" | "paid" | "unpaid";
+  paymentStatus: BookingPaymentStatus;
   paymentProvider: "stripe" | null;
   paymentReference: string | null;
+  unitAmount: number;
+  refundStatus: BookingRefundStatus;
+  refundReference: string | null;
+  refundAmount: number;
+  refundedAt: string | null;
 };
 
 type BookingDb = {
@@ -55,11 +63,17 @@ function loadDb(): BookingDb {
       ...booking,
       userId: booking.userId ?? "",
       country: booking.country ?? null,
+      status: booking.status ?? "confirmed",
       updatedAt: booking.updatedAt ?? booking.createdAt ?? nowIso(),
       rescheduledFromBookingId: booking.rescheduledFromBookingId ?? null,
       paymentStatus: booking.paymentStatus ?? "unpaid",
       paymentProvider: booking.paymentProvider ?? null,
       paymentReference: booking.paymentReference ?? null,
+      unitAmount: resolveBookingUnitAmount(booking),
+      refundStatus: booking.refundStatus ?? "none",
+      refundReference: booking.refundReference ?? null,
+      refundAmount: Number.isFinite(booking.refundAmount) ? Number(booking.refundAmount) : 0,
+      refundedAt: booking.refundedAt ?? null,
     })),
   };
 }
@@ -74,6 +88,31 @@ function nowIso() {
 
 function randomId(size = 16) {
   return crypto.randomBytes(size).toString("hex");
+}
+
+function parseAmount(value: string | undefined) {
+  const amount = Number(value || "");
+  return Number.isInteger(amount) && amount > 0 ? amount : 0;
+}
+
+function resolveBookingUnitAmount(booking: Partial<BookingRecord>) {
+  if (Number.isInteger(booking.unitAmount) && Number(booking.unitAmount) > 0) {
+    return Number(booking.unitAmount);
+  }
+
+  const serviceType = booking.serviceType === "support" ? "support" : "consultation";
+  const priority = booking.priority === "express" ? "express" : "standard";
+
+  const envKey =
+    priority === "express"
+      ? serviceType === "support"
+        ? "STRIPE_PRICE_EXPRESS_SUPPORT"
+        : "STRIPE_PRICE_EXPRESS_CONSULTATION"
+      : serviceType === "support"
+        ? "STRIPE_PRICE_STANDARD_SUPPORT"
+        : "STRIPE_PRICE_STANDARD_CONSULTATION";
+
+  return parseAmount(process.env[envKey]);
 }
 
 function dateKeyParts(dateKey: string) {
@@ -270,6 +309,13 @@ export function listBookingsForUser(userId: string, email?: string | null) {
   );
 }
 
+export function listBookingsByPaymentReference(paymentReference: string) {
+  const db = loadDb();
+  return sortBookings(
+    db.bookings.filter((booking) => booking.paymentReference && booking.paymentReference === paymentReference)
+  );
+}
+
 export function getBookingAvailability(priority: BookingPriority) {
   const db = loadDb();
   const quebecNow = getQuebecNow();
@@ -290,7 +336,7 @@ export function getBookingAvailability(priority: BookingPriority) {
       .map((hour) => {
         const slotId = buildSlotId(date, hour, priority);
         const actualBooking = db.bookings.find(
-          (booking) => booking.date === date && booking.hour === hour && booking.priority === priority
+          (booking) => booking.date === date && booking.hour === hour && booking.priority === priority && booking.status === "confirmed"
         );
         const showcase = showcaseBooked.has(slotId);
 
@@ -338,7 +384,7 @@ export function createBooking(input: {
   company?: string | null;
   notes?: string | null;
   locale: "en" | "fr" | "ar";
-  paymentStatus?: BookingRecord["paymentStatus"];
+  paymentStatus?: BookingPaymentStatus;
   paymentProvider?: BookingRecord["paymentProvider"];
   paymentReference?: string | null;
 }) {
@@ -379,7 +425,11 @@ export function createBooking(input: {
 
   const slotId = buildSlotId(input.date, input.hour, input.priority);
   const alreadyBooked = db.bookings.some(
-    (booking) => booking.date === input.date && booking.hour === input.hour && booking.priority === input.priority
+    (booking) =>
+      booking.date === input.date &&
+      booking.hour === input.hour &&
+      booking.priority === input.priority &&
+      booking.status === "confirmed"
   );
 
   if (alreadyBooked || showcaseBooked.has(slotId)) {
@@ -407,11 +457,165 @@ export function createBooking(input: {
     paymentStatus: input.paymentStatus ?? "unpaid",
     paymentProvider: input.paymentProvider ?? null,
     paymentReference: input.paymentReference ?? null,
+    unitAmount: resolveBookingUnitAmount({
+      serviceType: input.serviceType,
+      priority: input.priority,
+    }),
+    refundStatus: "none",
+    refundReference: null,
+    refundAmount: 0,
+    refundedAt: null,
   };
 
   db.bookings.push(booking);
   saveDb(db);
   return booking;
+}
+
+type StripeRefundSyncStatus = "pending" | "succeeded" | "failed" | "canceled";
+
+export type StripeRefundSyncResult = {
+  paymentReference: string;
+  refundId: string;
+  refundStatus: StripeRefundSyncStatus;
+  refundAmount: number;
+  currency: string | null;
+  scope: "full" | "partial" | "manual" | "none";
+  groupBookings: BookingRecord[];
+  affectedBookings: BookingRecord[];
+  customer: {
+    email: string | null;
+    name: string | null;
+    locale: "en" | "fr" | "ar";
+  } | null;
+};
+
+function getRefundableBookings(bookings: BookingRecord[]) {
+  return bookings.filter((booking) => booking.paymentStatus !== "refunded");
+}
+
+function sortBookingsLatestFirst(bookings: BookingRecord[]) {
+  return [...bookings].sort((a, b) => {
+    const slotA = `${a.date}-${String(a.hour).padStart(2, "0")}`;
+    const slotB = `${b.date}-${String(b.hour).padStart(2, "0")}`;
+    return slotB.localeCompare(slotA);
+  });
+}
+
+function selectBookingsForRefund(bookings: BookingRecord[], refundAmount: number) {
+  const refundable = sortBookingsLatestFirst(getRefundableBookings(bookings));
+  if (!refundable.length || refundAmount <= 0) {
+    return { scope: "none" as const, affectedBookings: [] as BookingRecord[] };
+  }
+
+  const totalAmount = refundable.reduce((sum, booking) => sum + booking.unitAmount, 0);
+  if (refundAmount >= totalAmount) {
+    return { scope: "full" as const, affectedBookings: refundable };
+  }
+
+  const unitAmount = refundable[0]?.unitAmount || 0;
+  const homogeneousUnitAmount = refundable.every((booking) => booking.unitAmount === unitAmount);
+  if (!homogeneousUnitAmount || !unitAmount || refundAmount % unitAmount !== 0) {
+    return { scope: "manual" as const, affectedBookings: [] as BookingRecord[] };
+  }
+
+  const slotCount = refundAmount / unitAmount;
+  if (!Number.isInteger(slotCount) || slotCount <= 0) {
+    return { scope: "manual" as const, affectedBookings: [] as BookingRecord[] };
+  }
+
+  return {
+    scope: "partial" as const,
+    affectedBookings: refundable.slice(0, slotCount),
+  };
+}
+
+export function applyStripeRefundUpdate(input: {
+  paymentReference: string;
+  refundId: string;
+  refundAmount: number;
+  currency?: string | null;
+  refundStatus: StripeRefundSyncStatus;
+}) {
+  const db = loadDb();
+  const relatedBookings = sortBookings(
+    db.bookings.filter((booking) => booking.paymentReference && booking.paymentReference === input.paymentReference)
+  );
+
+  if (!relatedBookings.length) {
+    return null;
+  }
+
+  const { scope, affectedBookings } = selectBookingsForRefund(relatedBookings, input.refundAmount);
+  const timestamp = nowIso();
+  const normalizedRefundStatus: BookingRefundStatus =
+    input.refundStatus === "failed"
+      ? "failed"
+      : input.refundStatus === "canceled"
+        ? "canceled"
+        : input.refundStatus === "succeeded"
+          ? "succeeded"
+          : "pending";
+
+  if (input.refundStatus === "pending") {
+    const pendingTargets = scope === "manual" ? relatedBookings : affectedBookings;
+    for (const booking of pendingTargets) {
+      booking.refundStatus = normalizedRefundStatus;
+      booking.refundReference = input.refundId;
+      booking.updatedAt = timestamp;
+    }
+  } else if (input.refundStatus === "succeeded") {
+    if (scope === "manual") {
+      for (const booking of relatedBookings) {
+        if (booking.paymentStatus === "paid") {
+          booking.paymentStatus = "partially_refunded";
+        }
+        booking.refundStatus = normalizedRefundStatus;
+        booking.refundReference = input.refundId;
+        booking.updatedAt = timestamp;
+      }
+    } else {
+      for (const booking of affectedBookings) {
+        booking.status = "cancelled";
+        booking.paymentStatus = "refunded";
+        booking.refundStatus = normalizedRefundStatus;
+        booking.refundReference = input.refundId;
+        booking.refundAmount = booking.unitAmount;
+        booking.refundedAt = timestamp;
+        booking.updatedAt = timestamp;
+      }
+    }
+  } else {
+    const failedTargets = relatedBookings.filter(
+      (booking) => booking.refundReference === input.refundId || scope === "manual"
+    );
+    for (const booking of failedTargets) {
+      booking.refundStatus = normalizedRefundStatus;
+      booking.refundReference = input.refundId;
+      booking.updatedAt = timestamp;
+    }
+  }
+
+  saveDb(db);
+
+  const customerBooking = relatedBookings[0] ?? null;
+  return {
+    paymentReference: input.paymentReference,
+    refundId: input.refundId,
+    refundStatus: input.refundStatus,
+    refundAmount: input.refundAmount,
+    currency: input.currency ?? null,
+    scope,
+    groupBookings: relatedBookings,
+    affectedBookings,
+    customer: customerBooking
+      ? {
+          email: customerBooking.email,
+          name: customerBooking.name,
+          locale: customerBooking.locale,
+        }
+      : null,
+  } satisfies StripeRefundSyncResult;
 }
 
 export function rescheduleBooking(input: {

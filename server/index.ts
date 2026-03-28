@@ -4,6 +4,7 @@ import { createServer } from "http";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import type Stripe from "stripe";
 import { COOKIE_NAME, ONE_YEAR_MS, VISITOR_COOKIE_NAME } from "../shared/const";
 import {
   consumeToken,
@@ -53,6 +54,7 @@ import {
   type ArticleLocale,
 } from "./articleStore";
 import {
+  applyStripeRefundUpdate,
   createBooking,
   getBookingAvailability,
   listBookingsForUser,
@@ -64,6 +66,7 @@ import { storeContactLead } from "./contactStore";
 import { buildRobotsTxt, buildSitemapXml, renderSeoHtml } from "./seo";
 import { getCustomerProfile, updateCustomerProfile, upsertCustomerProfile } from "./customerProfileStore";
 import { constructStripeEvent, createBookingPaymentIntent, getStripePricingSnapshot, verifyBookingPayment } from "./stripeBooking";
+import { hasProcessedStripeEvent, markStripeEventProcessed } from "./stripeEventStore";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,6 +76,7 @@ const VERIFY_LINK_MS = 1000 * 60 * 60 * 24;
 const RESET_LINK_MS = 1000 * 60 * 30;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+const QUEBEC_TIMEZONE = "America/Toronto";
 
 function parseCookies(cookieHeader?: string) {
   const entries = (cookieHeader || "")
@@ -159,6 +163,127 @@ function escapeHtml(value: string) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function normalizeStripeRefundStatus(status: string | null | undefined) {
+  if (status === "failed") return "failed" as const;
+  if (status === "canceled") return "canceled" as const;
+  if (status === "succeeded") return "succeeded" as const;
+  return "pending" as const;
+}
+
+function formatMoney(amount: number, currency: string | null | undefined, locale: "en" | "fr" | "ar") {
+  const normalizedLocale = locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA";
+  return new Intl.NumberFormat(normalizedLocale, {
+    style: "currency",
+    currency: (currency || "cad").toUpperCase(),
+  }).format(amount / 100);
+}
+
+function formatBookingSlotForEmail(date: string, hour: number, locale: "en" | "fr" | "ar") {
+  const normalizedLocale = locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA";
+  const dt = new Date(`${date}T${String(hour).padStart(2, "0")}:00:00`);
+  return new Intl.DateTimeFormat(normalizedLocale, {
+    dateStyle: "full",
+    timeStyle: "short",
+    timeZone: QUEBEC_TIMEZONE,
+  }).format(dt);
+}
+
+function renderRefundEmailTemplate(args: {
+  locale: "en" | "fr" | "ar";
+  name: string;
+  slots: string[];
+  amountLabel: string;
+  status: "succeeded" | "failed" | "canceled";
+  scope: "full" | "partial" | "manual" | "none";
+}) {
+  const slotsBlock = args.slots.length ? args.slots.join("\n") : "-";
+
+  if (args.locale === "fr") {
+    if (args.status === "succeeded") {
+      return {
+        subject: "Votre remboursement CVsolucion a été traité",
+        text: [
+          `Bonjour ${args.name},`,
+          "",
+          `Votre remboursement de ${args.amountLabel} a été traité.`,
+          args.scope === "manual"
+            ? "Le remboursement ne correspond pas exactement à des créneaux complets. Notre équipe vérifiera la mise à jour finale de votre dossier."
+            : "Les créneaux remboursés ont été annulés dans votre espace client.",
+          "",
+          "Créneaux concernés (heure du Québec) :",
+          slotsBlock,
+        ].join("\n"),
+      };
+    }
+
+    return {
+      subject: "Mise à jour sur votre remboursement CVsolucion",
+      text: [
+        `Bonjour ${args.name},`,
+        "",
+        `Le remboursement demandé (${args.amountLabel}) est actuellement marqué comme "${args.status}".`,
+        "Notre équipe vérifiera le dossier et vous recontactera si une action supplémentaire est nécessaire.",
+      ].join("\n"),
+    };
+  }
+
+  if (args.locale === "ar") {
+    if (args.status === "succeeded") {
+      return {
+        subject: "تم تنفيذ استرجاع المبلغ من CVsolucion",
+        text: [
+          `مرحباً ${args.name}،`,
+          "",
+          `تم تنفيذ استرجاع بقيمة ${args.amountLabel}.`,
+          args.scope === "manual"
+            ? "هذا الاسترجاع لا يطابق مواعيد كاملة بشكل مباشر، لذلك سيقوم فريقنا بمراجعة الحالة النهائية يدوياً."
+            : "تم إلغاء المواعيد المرتبطة بالاسترجاع داخل حسابك.",
+          "",
+          "المواعيد المتأثرة بتوقيت كيبيك:",
+          slotsBlock,
+        ].join("\n"),
+      };
+    }
+
+    return {
+      subject: "تحديث بخصوص استرجاع المبلغ من CVsolucion",
+      text: [
+        `مرحباً ${args.name}،`,
+        "",
+        `حالة الاسترجاع بقيمة ${args.amountLabel} هي حالياً: ${args.status}.`,
+        "سيقوم فريقنا بمراجعة الحالة والتواصل معك إذا كان هناك أي إجراء إضافي.",
+      ].join("\n"),
+    };
+  }
+
+  if (args.status === "succeeded") {
+    return {
+      subject: "Your CVsolucion refund has been processed",
+      text: [
+        `Hello ${args.name},`,
+        "",
+        `Your refund of ${args.amountLabel} has been processed.`,
+        args.scope === "manual"
+          ? "The refunded amount does not map cleanly to whole booking slots, so our team will review the final booking status manually."
+          : "The refunded appointment slots have been cancelled in your account.",
+        "",
+        "Affected slots (Quebec time):",
+        slotsBlock,
+      ].join("\n"),
+    };
+  }
+
+  return {
+    subject: "Update about your CVsolucion refund",
+    text: [
+      `Hello ${args.name},`,
+      "",
+      `The refund request for ${args.amountLabel} is currently marked as "${args.status}".`,
+      "Our team will review it and contact you if any follow-up is needed.",
+    ].join("\n"),
+  };
 }
 
 function setSessionCookie(res: express.Response, sessionId: string) {
@@ -314,7 +439,7 @@ async function startServer() {
   app.set("trust proxy", true);
   app.disable("x-powered-by");
 
-  app.post("/api/webhook", express.raw({ type: "application/json" }), (req, res) => {
+  app.post("/api/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     const signature = String(req.get("stripe-signature") || "").trim();
     if (!signature) {
       return res.status(400).send("Missing Stripe signature.");
@@ -322,9 +447,87 @@ async function startServer() {
 
     try {
       const event = constructStripeEvent(req.body as Buffer, signature);
+      if (hasProcessedStripeEvent(event.id)) {
+        return res.json({ received: true, duplicate: true });
+      }
+
       if (event.type === "payment_intent.succeeded") {
         console.log("[stripe:webhook] payment_intent.succeeded", event.data.object?.id || null);
       }
+
+      if (event.type === "refund.created" || event.type === "refund.updated") {
+        const refund = event.data.object as Stripe.Refund;
+        const paymentReference =
+          typeof refund.payment_intent === "string"
+            ? refund.payment_intent
+            : refund.payment_intent?.id || null;
+
+        if (paymentReference) {
+          const refundStatus = normalizeStripeRefundStatus(refund.status);
+          const syncResult = applyStripeRefundUpdate({
+            paymentReference,
+            refundId: refund.id,
+            refundAmount: refund.amount || 0,
+            currency: refund.currency || null,
+            refundStatus,
+          });
+
+          if (syncResult) {
+            console.log("[stripe:webhook] refund.sync", {
+              eventId: event.id,
+              refundId: refund.id,
+              paymentReference,
+              refundStatus,
+              scope: syncResult.scope,
+              matchedBookings: syncResult.groupBookings.length,
+              affectedBookings: syncResult.affectedBookings.length,
+            });
+
+            if (
+              syncResult.customer?.email &&
+              (refundStatus === "succeeded" || refundStatus === "failed" || refundStatus === "canceled")
+            ) {
+              const locale = syncResult.customer.locale;
+              const amountLabel = formatMoney(syncResult.refundAmount, syncResult.currency, locale);
+              const slots = (syncResult.affectedBookings.length ? syncResult.affectedBookings : syncResult.groupBookings)
+                .map((booking) => formatBookingSlotForEmail(booking.date, booking.hour, locale));
+              const template = renderRefundEmailTemplate({
+                locale,
+                name: syncResult.customer.name || syncResult.customer.email,
+                slots,
+                amountLabel,
+                status: refundStatus,
+                scope: syncResult.scope,
+              });
+
+              try {
+                await sendAuthEmail({
+                  to: syncResult.customer.email,
+                  subject: template.subject,
+                  text: template.text,
+                  html: `
+                    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+                      ${template.text
+                        .split("\n")
+                        .filter(Boolean)
+                        .map((line) => `<p>${escapeHtml(line)}</p>`)
+                        .join("")}
+                    </div>
+                  `,
+                });
+              } catch (mailError) {
+                console.error("[stripe:webhook:refund-email:error]", {
+                  eventId: event.id,
+                  refundId: refund.id,
+                  error: mailError instanceof Error ? mailError.stack || mailError.message : String(mailError),
+                });
+              }
+            }
+          }
+        }
+      }
+
+      markStripeEventProcessed(event.id, event.type);
       return res.json({ received: true });
     } catch (error: any) {
       return res.status(400).send(error?.message || "Webhook verification failed.");
