@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import crypto from "crypto";
 import type { BookingPriority, BookingServiceType } from "./bookingStore";
+import { getCatalogSnapshot } from "./catalogStore";
 
 type StripeBookingPriceMap = Record<`${BookingPriority}:${BookingServiceType}`, number>;
 
@@ -32,17 +33,13 @@ function getStripeClient() {
   return stripeClient;
 }
 
-function parseAmount(value: string | undefined) {
-  const amount = Number(value || "");
-  return Number.isInteger(amount) && amount > 0 ? amount : 0;
-}
-
 function getPriceMap(): StripeBookingPriceMap {
+  const bookingPrices = getCatalogSnapshot().bookingPrices;
   return {
-    "standard:consultation": parseAmount(process.env.STRIPE_PRICE_STANDARD_CONSULTATION),
-    "standard:support": parseAmount(process.env.STRIPE_PRICE_STANDARD_SUPPORT),
-    "express:consultation": parseAmount(process.env.STRIPE_PRICE_EXPRESS_CONSULTATION),
-    "express:support": parseAmount(process.env.STRIPE_PRICE_EXPRESS_SUPPORT),
+    "standard:consultation": bookingPrices.standardConsultation,
+    "standard:support": bookingPrices.standardSupport,
+    "express:consultation": bookingPrices.expressConsultation,
+    "express:support": bookingPrices.expressSupport,
   };
 }
 

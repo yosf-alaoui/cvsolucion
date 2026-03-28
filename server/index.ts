@@ -67,6 +67,7 @@ import { buildRobotsTxt, buildSitemapXml, renderSeoHtml } from "./seo";
 import { getCustomerProfile, updateCustomerProfile, upsertCustomerProfile } from "./customerProfileStore";
 import { constructStripeEvent, createBookingPaymentIntent, getStripePricingSnapshot, verifyBookingPayment } from "./stripeBooking";
 import { hasProcessedStripeEvent, markStripeEventProcessed } from "./stripeEventStore";
+import { createCatalogPackage, deleteCatalogPackage, getCatalogSnapshot, getPublicCatalog, updateCatalogBookingPrices, updateCatalogPackage } from "./catalogStore";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1135,6 +1136,11 @@ async function startServer() {
     }
   });
 
+  app.get("/api/catalog/public", rateLimit({ key: "catalog-public", windowMs: 1000 * 60, limit: 180 }), (req, res) => {
+    const locale = normalizeAuthLocale(String(req.query.locale || "en"));
+    return res.json(getPublicCatalog(locale));
+  });
+
   app.get("/api/bookings/availability", rateLimit({ key: "booking-availability", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
     const priority = String(req.query.priority || "standard").trim() === "express" ? "express" : "standard";
     return res.json(getBookingAvailability(priority));
@@ -1549,6 +1555,89 @@ async function startServer() {
         enabled: isChatEnabled(),
       },
     });
+  });
+
+  app.get("/api/admin/catalog", rateLimit({ key: "admin-catalog-get", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+    return res.json(getCatalogSnapshot());
+  });
+
+  app.put("/api/admin/catalog/pricing", rateLimit({ key: "admin-catalog-pricing", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const pricing = updateCatalogBookingPrices({
+        standardConsultation: Number(req.body?.standardConsultation),
+        standardSupport: Number(req.body?.standardSupport),
+        expressConsultation: Number(req.body?.expressConsultation),
+        expressSupport: Number(req.body?.expressSupport),
+      });
+
+      return res.json({ ok: true, bookingPrices: pricing });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post("/api/admin/catalog/packages", rateLimit({ key: "admin-catalog-package-create", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const record = createCatalogPackage({
+        active: typeof req.body?.active === "boolean" ? req.body.active : true,
+        highlight: Boolean(req.body?.highlight),
+        order: Number(req.body?.order),
+        translations: req.body?.translations,
+      });
+
+      return res.status(201).json({ ok: true, package: record });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.patch("/api/admin/catalog/packages/:packageId", rateLimit({ key: "admin-catalog-package-update", windowMs: 1000 * 60 * 5, limit: 100 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const packageId = String(req.params.packageId || "").trim();
+      if (!packageId) {
+        return res.status(400).json({ error: "Package is required." });
+      }
+
+      const record = updateCatalogPackage({
+        id: packageId,
+        active: typeof req.body?.active === "boolean" ? req.body.active : undefined,
+        highlight: typeof req.body?.highlight === "boolean" ? req.body.highlight : undefined,
+        order: typeof req.body?.order !== "undefined" ? Number(req.body.order) : undefined,
+        translations: req.body?.translations,
+      });
+
+      return res.json({ ok: true, package: record });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.delete("/api/admin/catalog/packages/:packageId", rateLimit({ key: "admin-catalog-package-delete", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const packageId = String(req.params.packageId || "").trim();
+      if (!packageId) {
+        return res.status(400).json({ error: "Package is required." });
+      }
+
+      deleteCatalogPackage(packageId);
+      return res.json({ ok: true });
+    } catch (error) {
+      return next(error);
+    }
   });
 
   app.patch("/api/admin/users/:userId", rateLimit({ key: "admin-user-patch", windowMs: 1000 * 60 * 5, limit: 60 }), (req, res, next) => {

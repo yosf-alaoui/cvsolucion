@@ -21,6 +21,7 @@ import {
 } from "@/lib/admin";
 import ConversationsPanel from "@/components/admin/ConversationsPanel";
 import ArticlesManager from "@/components/admin/ArticlesManager";
+import CatalogManager from "@/components/admin/CatalogManager";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -142,6 +143,10 @@ export default function AdminDashboard() {
         exportUsers: "Exporter les utilisateurs",
         exportEvents: "Exporter les evenements",
         overview: "Vue generale",
+        commercial: "Commercial",
+        contentHub: "Contenu",
+        customerOps: "Clients",
+        analyticsHub: "Analytics",
         users: "Utilisateurs",
         visitors: "Visiteurs",
         sessions: "Sessions",
@@ -233,6 +238,10 @@ export default function AdminDashboard() {
         exportUsers: "تصدير المستخدمين",
         exportEvents: "تصدير الأحداث",
         overview: "نظرة عامة",
+        commercial: "تجاري",
+        contentHub: "المحتوى",
+        customerOps: "العملاء",
+        analyticsHub: "التحليلات",
         users: "المستخدمون",
         visitors: "الزوار",
         sessions: "الجلسات",
@@ -323,6 +332,10 @@ export default function AdminDashboard() {
       exportUsers: "Export users",
       exportEvents: "Export events",
       overview: "Overview",
+      commercial: "Commercial",
+      contentHub: "Content",
+      customerOps: "Customers",
+      analyticsHub: "Analytics",
       users: "Users",
       visitors: "Visitors",
       sessions: "Sessions",
@@ -1041,44 +1054,12 @@ export default function AdminDashboard() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardContent className="p-5">
-                    <div className="grid gap-4 md:grid-cols-[1fr_180px_180px]">
-                      <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.search} />
-                      <select
-                        value={verificationFilter}
-                        onChange={(event) => setVerificationFilter(event.target.value as "all" | "verified" | "pending")}
-                        className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm"
-                      >
-                        <option value="all">{copy.verified}</option>
-                        <option value="verified">{copy.yes}</option>
-                        <option value="pending">{copy.no}</option>
-                      </select>
-                      <select
-                        value={eventFilter}
-                        onChange={(event) => setEventFilter(event.target.value)}
-                        className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm"
-                      >
-                        <option value="all">{copy.eventType}</option>
-                        {eventTypes.map((item) => (
-                          <option key={item} value={item}>
-                            {eventLabels[item] || item}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </CardContent>
-                </Card>
-
                 <Tabs defaultValue="overview" className="space-y-6">
-                  <TabsList className="grid w-full grid-cols-7">
+                  <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="overview">{copy.overview}</TabsTrigger>
-                    <TabsTrigger value="users">{copy.users}</TabsTrigger>
-                    <TabsTrigger value="visitors">{copy.visitors}</TabsTrigger>
-                    <TabsTrigger value="articles">{articlesLabel}</TabsTrigger>
-                    <TabsTrigger value="conversations">{conversationCopy.conversations}</TabsTrigger>
-                    <TabsTrigger value="sessions">{copy.sessions}</TabsTrigger>
-                    <TabsTrigger value="events">{copy.events}</TabsTrigger>
+                    <TabsTrigger value="customer-ops">{copy.customerOps}</TabsTrigger>
+                    <TabsTrigger value="commercial">{copy.commercial}</TabsTrigger>
+                    <TabsTrigger value="content">{copy.contentHub}</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="overview" className="space-y-6">
@@ -1107,113 +1088,180 @@ export default function AdminDashboard() {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="users">
-                    <UsersTable copy={copy} locale={locale} users={filteredUsers} selectedUserId={selectedUserId} onSelect={handleSelectUser} />
+                  <TabsContent value="customer-ops" className="space-y-6">
+                    <Card>
+                      <CardContent className="p-5">
+                        <div className="grid gap-4 md:grid-cols-[1fr_180px_180px]">
+                          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.search} />
+                          <select
+                            value={verificationFilter}
+                            onChange={(event) => setVerificationFilter(event.target.value as "all" | "verified" | "pending")}
+                            className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                          >
+                            <option value="all">{copy.verified}</option>
+                            <option value="verified">{copy.yes}</option>
+                            <option value="pending">{copy.no}</option>
+                          </select>
+                          <select
+                            value={eventFilter}
+                            onChange={(event) => setEventFilter(event.target.value)}
+                            className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                          >
+                            <option value="all">{copy.eventType}</option>
+                            {eventTypes.map((item) => (
+                              <option key={item} value={item}>
+                                {eventLabels[item] || item}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Tabs defaultValue="users" className="space-y-6">
+                      <TabsList className="grid w-full grid-cols-5">
+                        <TabsTrigger value="users">{copy.users}</TabsTrigger>
+                        <TabsTrigger value="visitors">{copy.visitors}</TabsTrigger>
+                        <TabsTrigger value="conversations">{conversationCopy.conversations}</TabsTrigger>
+                        <TabsTrigger value="sessions">{copy.sessions}</TabsTrigger>
+                        <TabsTrigger value="events">{copy.events}</TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="users">
+                        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                          <UsersTable copy={copy} locale={locale} users={filteredUsers} selectedUserId={selectedUserId} onSelect={handleSelectUser} />
+                          <UserDetailPanel
+                            copy={copy}
+                            locale={locale}
+                            selectedUser={selectedUser}
+                            editEmail={editEmail}
+                            editPassword={editPassword}
+                            editVerified={editVerified}
+                            savingUser={savingUser}
+                            selectedUserSessions={selectedUserSessions}
+                            selectedUserEvents={selectedUserEvents}
+                            onEditEmail={setEditEmail}
+                            onEditPassword={setEditPassword}
+                            onEditVerified={setEditVerified}
+                            onSave={handleSaveUser}
+                            onDelete={handleDeleteUser}
+                            onResendVerification={handleResendVerification}
+                            onRevokeUserSessions={handleRevokeUserSessions}
+                            onRevokeSession={handleRevokeSession}
+                            eventLabels={eventLabels}
+                          />
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="visitors">
+                        <div className="grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
+                          <VisitorsTable
+                            copy={copy}
+                            locale={locale}
+                            visitors={filteredVisitors}
+                            selectedVisitorId={selectedVisitorId}
+                            onSelect={setSelectedVisitorId}
+                          />
+                          <VisitorDetailPanel copy={copy} locale={locale} visitor={selectedVisitor} />
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="conversations">
+                        <ConversationsPanel
+                          copy={{ ...copy, ...conversationCopy }}
+                          locale={locale}
+                          conversations={filteredConversations}
+                          selectedConversationId={selectedConversationId}
+                          onSelect={setSelectedConversationId}
+                        />
+                      </TabsContent>
+
+                      <TabsContent value="sessions">
+                        <Card>
+                          <CardHeader><CardTitle>{copy.sessions}</CardTitle></CardHeader>
+                          <CardContent>
+                            <ScrollArea className="w-full">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>{copy.email}</TableHead>
+                                    <TableHead>{copy.created}</TableHead>
+                                    <TableHead>{copy.sessionExpiry}</TableHead>
+                                    <TableHead>{copy.actions}</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {filteredSessions.length ? (
+                                    filteredSessions.map((session) => (
+                                      <TableRow key={session.id}>
+                                        <TableCell className="font-medium">{session.email || session.userId}</TableCell>
+                                        <TableCell>{formatDate(session.createdAt, locale)}</TableCell>
+                                        <TableCell>{formatDate(session.expiresAt, locale)}</TableCell>
+                                        <TableCell>
+                                          <Button type="button" size="sm" variant="outline" onClick={() => handleRevokeSession(session)}>
+                                            {copy.revokeSession}
+                                          </Button>
+                                        </TableCell>
+                                      </TableRow>
+                                    ))
+                                  ) : (
+                                    <TableRow>
+                                      <TableCell colSpan={4} className="text-center text-slate-500">{copy.noResults}</TableCell>
+                                    </TableRow>
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </ScrollArea>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
+
+                      <TabsContent value="events">
+                        <Card>
+                          <CardHeader><CardTitle>{copy.events}</CardTitle></CardHeader>
+                          <CardContent>
+                            <ScrollArea className="w-full">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>{copy.eventType}</TableHead>
+                                    <TableHead>{copy.email}</TableHead>
+                                    <TableHead>{copy.locale}</TableHead>
+                                    <TableHead>IP</TableHead>
+                                    <TableHead>{copy.when}</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {filteredEvents.length ? (
+                                    filteredEvents.map((event) => (
+                                      <TableRow key={event.id}>
+                                        <TableCell className="font-medium">{eventLabels[event.type] || event.type}</TableCell>
+                                        <TableCell>{event.email || "-"}</TableCell>
+                                        <TableCell>{event.locale || "-"}</TableCell>
+                                        <TableCell>{event.ip || "-"}</TableCell>
+                                        <TableCell>{formatDate(event.createdAt, locale)}</TableCell>
+                                      </TableRow>
+                                    ))
+                                  ) : (
+                                    <TableRow>
+                                      <TableCell colSpan={5} className="text-center text-slate-500">{copy.noResults}</TableCell>
+                                    </TableRow>
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </ScrollArea>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
+                    </Tabs>
                   </TabsContent>
 
-                  <TabsContent value="visitors">
-                    <div className="grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
-                      <VisitorsTable
-                        copy={copy}
-                        locale={locale}
-                        visitors={filteredVisitors}
-                        selectedVisitorId={selectedVisitorId}
-                        onSelect={setSelectedVisitorId}
-                      />
-                      <VisitorDetailPanel copy={copy} locale={locale} visitor={selectedVisitor} />
-                    </div>
+                  <TabsContent value="commercial">
+                    <CatalogManager locale={locale} />
                   </TabsContent>
 
-                  <TabsContent value="articles">
+                  <TabsContent value="content">
                     <ArticlesManager locale={locale} />
-                  </TabsContent>
-
-                  <TabsContent value="conversations">
-                    <ConversationsPanel
-                      copy={{ ...copy, ...conversationCopy }}
-                      locale={locale}
-                      conversations={filteredConversations}
-                      selectedConversationId={selectedConversationId}
-                      onSelect={setSelectedConversationId}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="sessions">
-                    <Card>
-                      <CardHeader><CardTitle>{copy.sessions}</CardTitle></CardHeader>
-                      <CardContent>
-                        <ScrollArea className="w-full">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>{copy.email}</TableHead>
-                                <TableHead>{copy.created}</TableHead>
-                                <TableHead>{copy.sessionExpiry}</TableHead>
-                                <TableHead>{copy.actions}</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {filteredSessions.length ? (
-                                filteredSessions.map((session) => (
-                                  <TableRow key={session.id}>
-                                    <TableCell className="font-medium">{session.email || session.userId}</TableCell>
-                                    <TableCell>{formatDate(session.createdAt, locale)}</TableCell>
-                                    <TableCell>{formatDate(session.expiresAt, locale)}</TableCell>
-                                    <TableCell>
-                                      <Button type="button" size="sm" variant="outline" onClick={() => handleRevokeSession(session)}>
-                                        {copy.revokeSession}
-                                      </Button>
-                                    </TableCell>
-                                  </TableRow>
-                                ))
-                              ) : (
-                                <TableRow>
-                                  <TableCell colSpan={4} className="text-center text-slate-500">{copy.noResults}</TableCell>
-                                </TableRow>
-                              )}
-                            </TableBody>
-                          </Table>
-                        </ScrollArea>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-
-                  <TabsContent value="events">
-                    <Card>
-                      <CardHeader><CardTitle>{copy.events}</CardTitle></CardHeader>
-                      <CardContent>
-                        <ScrollArea className="w-full">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>{copy.eventType}</TableHead>
-                                <TableHead>{copy.email}</TableHead>
-                                <TableHead>{copy.locale}</TableHead>
-                                <TableHead>IP</TableHead>
-                                <TableHead>{copy.when}</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {filteredEvents.length ? (
-                                filteredEvents.map((event) => (
-                                  <TableRow key={event.id}>
-                                    <TableCell className="font-medium">{eventLabels[event.type] || event.type}</TableCell>
-                                    <TableCell>{event.email || "-"}</TableCell>
-                                    <TableCell>{event.locale || "-"}</TableCell>
-                                    <TableCell>{event.ip || "-"}</TableCell>
-                                    <TableCell>{formatDate(event.createdAt, locale)}</TableCell>
-                                  </TableRow>
-                                ))
-                              ) : (
-                                <TableRow>
-                                  <TableCell colSpan={5} className="text-center text-slate-500">{copy.noResults}</TableCell>
-                                </TableRow>
-                              )}
-                            </TableBody>
-                          </Table>
-                        </ScrollArea>
-                      </CardContent>
-                    </Card>
                   </TabsContent>
                 </Tabs>
               </>

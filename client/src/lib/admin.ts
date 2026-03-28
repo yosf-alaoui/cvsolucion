@@ -216,6 +216,38 @@ export type AdminDashboardResponse = {
   };
 };
 
+export type AdminCatalogPackageTranslation = {
+  title: string;
+  subtitle: string;
+  duration: string;
+  priceLabel: string;
+  bullets: string[];
+};
+
+export type AdminCatalogPackage = {
+  id: string;
+  active: boolean;
+  highlight: boolean;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+  translations: {
+    en: AdminCatalogPackageTranslation;
+    fr: AdminCatalogPackageTranslation;
+    ar: AdminCatalogPackageTranslation;
+  };
+};
+
+export type AdminCatalogResponse = {
+  bookingPrices: {
+    standardConsultation: number;
+    standardSupport: number;
+    expressConsultation: number;
+    expressSupport: number;
+  };
+  servicePackages: AdminCatalogPackage[];
+};
+
 async function adminRequest<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
@@ -235,6 +267,50 @@ async function adminRequest<T>(input: string, init?: RequestInit): Promise<T> {
 
 export async function getAdminDashboard() {
   return adminRequest<AdminDashboardResponse>("/api/admin/dashboard", { method: "GET" });
+}
+
+export async function getAdminCatalog() {
+  return adminRequest<AdminCatalogResponse>("/api/admin/catalog", { method: "GET" });
+}
+
+export function updateAdminCatalogPricing(payload: AdminCatalogResponse["bookingPrices"]) {
+  return adminRequest<{ ok: true; bookingPrices: AdminCatalogResponse["bookingPrices"] }>("/api/admin/catalog/pricing", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createAdminCatalogPackage(payload: {
+  active?: boolean;
+  highlight?: boolean;
+  order?: number;
+  translations: AdminCatalogPackage["translations"];
+}) {
+  return adminRequest<{ ok: true; package: AdminCatalogPackage }>("/api/admin/catalog/packages", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminCatalogPackage(
+  packageId: string,
+  payload: {
+    active?: boolean;
+    highlight?: boolean;
+    order?: number;
+    translations?: Partial<AdminCatalogPackage["translations"]>;
+  }
+) {
+  return adminRequest<{ ok: true; package: AdminCatalogPackage }>(`/api/admin/catalog/packages/${packageId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminCatalogPackage(packageId: string) {
+  return adminRequest<{ ok: true }>(`/api/admin/catalog/packages/${packageId}`, {
+    method: "DELETE",
+  });
 }
 
 export function updateAdminUser(

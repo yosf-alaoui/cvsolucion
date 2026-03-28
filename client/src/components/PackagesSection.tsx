@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
 import { useAuth } from "@/contexts/AuthContext";
+import { getPublicCatalog, type PublicCatalogPackage } from "@/lib/catalog";
 
 /**
  * Packages Section - CV Solution (Upgraded)
@@ -22,9 +24,32 @@ export default function PackagesSection() {
     bullets: string[];
   };
 
-  const packages = t("packages.cards") as ServicePackage[];
+  const fallbackPackages = (t("packages.cards") as ServicePackage[]) || [];
+  const [packages, setPackages] = useState<ServicePackage[]>(fallbackPackages);
   const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
   const canSeePrice = Boolean(user?.emailVerifiedAt);
+
+  useEffect(() => {
+    setPackages(fallbackPackages);
+  }, [locale, t]);
+
+  useEffect(() => {
+    getPublicCatalog(locale)
+      .then((response) => {
+        const mapped = response.servicePackages.map((pkg: PublicCatalogPackage) => ({
+          title: pkg.title,
+          subtitle: pkg.subtitle,
+          duration: pkg.duration,
+          price: pkg.priceLabel || undefined,
+          highlight: pkg.highlight,
+          bullets: pkg.bullets,
+        }));
+        if (mapped.length) {
+          setPackages(mapped);
+        }
+      })
+      .catch(() => {});
+  }, [locale]);
 
   return (
     <section id="packages" className="scroll-mt-28 bg-transparent py-20">
