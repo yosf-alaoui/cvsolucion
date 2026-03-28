@@ -50,13 +50,15 @@ export default function HeroSection() {
       {/* Content */}
       <div className="container relative z-10 mx-auto px-4 py-20 text-center">
         <div className="relative mx-auto max-w-4xl animate-fade-in px-4 py-6 sm:px-6 sm:py-8">
-          <div className="absolute inset-0 rounded-[40px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.1),rgba(255,255,255,0)_46%)] blur-2xl" />
-          <div className="relative mx-auto max-w-3xl overflow-hidden rounded-[38px] border border-white/18 bg-[linear-gradient(180deg,rgba(6,12,28,0.46)_0%,rgba(7,15,34,0.36)_45%,rgba(8,17,40,0.28)_100%)] px-6 py-8 shadow-[0_28px_72px_rgba(0,0,0,0.28)] ring-1 ring-white/10 backdrop-blur-[18px] sm:px-10 sm:py-10">
-            <div className="absolute inset-x-10 top-4 h-24 rounded-full bg-white/12 blur-3xl" />
-            <div className="absolute inset-x-16 bottom-5 h-20 rounded-full bg-primary/24 blur-3xl" />
-            <div className="absolute inset-x-0 top-0 h-px bg-white/34" />
-            <div className="absolute inset-y-6 left-0 w-px bg-white/10" />
-            <div className="absolute inset-y-6 right-0 w-px bg-white/10" />
+          <div className="absolute inset-0 rounded-[40px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),rgba(255,255,255,0)_46%)] blur-2xl" />
+          <div className="relative mx-auto max-w-3xl overflow-hidden rounded-[38px] border border-white/24 bg-[linear-gradient(180deg,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0.1)_45%,rgba(255,255,255,0.06)_100%)] px-6 py-8 shadow-[0_26px_70px_rgba(0,0,0,0.24)] ring-1 ring-white/16 backdrop-blur-[26px] backdrop-saturate-150 sm:px-10 sm:py-10">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(10,22,48,0.18),rgba(10,22,48,0)_62%)]" />
+            <div className="absolute inset-x-10 top-4 h-24 rounded-full bg-white/18 blur-3xl" />
+            <div className="absolute inset-x-16 bottom-5 h-20 rounded-full bg-primary/18 blur-3xl" />
+            <div className="absolute inset-x-0 top-0 h-px bg-white/42" />
+            <div className="absolute inset-x-0 bottom-0 h-px bg-white/12" />
+            <div className="absolute inset-y-6 left-0 w-px bg-white/12" />
+            <div className="absolute inset-y-6 right-0 w-px bg-white/12" />
             <div className="relative">
           {/* Main Heading */}
           <h1 
