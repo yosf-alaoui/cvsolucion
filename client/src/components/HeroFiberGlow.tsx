@@ -40,10 +40,10 @@ export default function HeroFiberGlow({ className = "" }: HeroFiberGlowProps) {
     const mouse = { x: -9999, y: -9999 };
 
     const FIBER_COUNT = 260;
-    const REPEL = 240;
-    const FORCE = 2.2;
-    const SPRING = 0.012;
-    const DAMP = 0.92;
+    const REPEL = 150;
+    const FORCE = 0.82;
+    const SPRING = 0.0075;
+    const DAMP = 0.95;
     let tick = 0;
 
     function buildFibers() {
