@@ -1,0 +1,94 @@
+[
+  {
+    "name": "auth",
+    "summary": "Email/password auth with verification, sessions, and password reset.",
+    "runtime": ["client", "server"],
+    "entrypoints": ["modules/auth/contracts.ts", "modules/auth/client.ts", "modules/auth/env.ts"],
+    "currentProject": {
+      "client": [
+        "client/src/lib/auth.ts",
+        "client/src/contexts/AuthContext.tsx",
+        "client/src/pages/Login.tsx"
+      ],
+      "server": [
+        "server/authStore.ts",
+        "server/authMailer.ts",
+        "server/authEmailTemplates.ts",
+        "server/index.ts"
+      ],
+      "data": ["data/auth-db.json"]
+    }
+  },
+  {
+    "name": "email",
+    "summary": "SMTP mail delivery for transactional flows.",
+    "runtime": ["server"],
+    "entrypoints": ["modules/email/contracts.ts", "modules/email/server.ts", "modules/email/env.ts"],
+    "currentProject": {
+      "client": [],
+      "server": ["server/authMailer.ts", "server/index.ts"]
+    }
+  },
+  {
+    "name": "chat",
+    "summary": "OpenAI-backed support chat with intake handoff.",
+    "runtime": ["client", "server"],
+    "entrypoints": ["modules/chat/contracts.ts", "modules/chat/client.ts", "modules/chat/env.ts"],
+    "currentProject": {
+      "client": ["client/src/lib/chat.ts", "client/src/components/ChatWidget.tsx"],
+      "server": ["server/chatAssistant.ts", "server/chatStore.ts", "server/index.ts"],
+      "data": ["data/chat-db.json", "data/visitors-db.json"]
+    }
+  },
+  {
+    "name": "booking",
+    "summary": "Booking availability, checkout, Stripe, rescheduling, and refunds.",
+    "runtime": ["client", "server"],
+    "entrypoints": ["modules/booking/contracts.ts", "modules/booking/client.ts", "modules/booking/env.ts"],
+    "currentProject": {
+      "client": [
+        "client/src/lib/bookings.ts",
+        "client/src/lib/bookingCheckout.ts",
+        "client/src/pages/Booking.tsx",
+        "client/src/pages/BookingCart.tsx",
+        "client/src/pages/BookingCheckout.tsx"
+      ],
+      "server": ["server/bookingStore.ts", "server/stripeBooking.ts", "server/stripeEventStore.ts", "server/index.ts"],
+      "data": ["data/bookings-db.json", "data/customer-profiles-db.json"]
+    }
+  },
+  {
+    "name": "dashboard",
+    "summary": "Customer and admin dashboards for bookings, pricing, packages, and operations.",
+    "runtime": ["client", "server"],
+    "entrypoints": ["modules/dashboard/contracts.ts", "modules/dashboard/client.ts", "modules/dashboard/env.ts"],
+    "currentProject": {
+      "client": [
+        "client/src/lib/customer.ts",
+        "client/src/lib/admin.ts",
+        "client/src/pages/CustomerDashboard.tsx",
+        "client/src/pages/AdminDashboard.tsx",
+        "client/src/pages/Dashboard.tsx"
+      ],
+      "server": ["server/customerProfileStore.ts", "server/catalogStore.ts", "server/index.ts"],
+      "data": ["data/customer-profiles-db.json", "data/catalog-db.json"]
+    }
+  },
+  {
+    "name": "analytics",
+    "summary": "Client event tracking plus GA4 reporting and first-party visitor telemetry.",
+    "runtime": ["client", "server"],
+    "entrypoints": [
+      "modules/analytics/contracts.ts",
+      "modules/analytics/client.ts",
+      "modules/analytics/server.ts",
+      "modules/analytics/env.ts"
+    ],
+    "currentProject": {
+      "client": ["client/src/components/Analytics.tsx"],
+      "server": ["server/ga4Reporting.ts", "server/visitorStore.ts", "server/index.ts"],
+      "data": ["data/visitors-db.json"]
+    }
+  }
+]
+
