@@ -14,6 +14,7 @@ import {
   type BookingServiceType,
 } from "@/lib/bookings";
 import { saveBookingCheckoutDraft } from "@/lib/bookingCheckout";
+import { getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
 
 function dateLabel(date: string, locale: string) {
   return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
@@ -45,6 +46,7 @@ export default function Booking() {
   const [days, setDays] = useState<BookingAvailabilityDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlots, setSelectedSlots] = useState<BookingAvailabilitySlot[]>([]);
+  const [stripeConfig, setStripeConfig] = useState<StripeConfigResponse | null>(null);
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   const copy = useMemo(() => {
@@ -70,6 +72,11 @@ export default function Booking() {
         tooManySlots: "يمكن اختيار حتى 3 مواعيد فقط.",
         primarySlot: "الموعد الأساسي",
         option: "خيار",
+        service: "الخدمة",
+        priority: "الأولوية",
+        price: "السعر",
+        total: "الإجمالي المستحق",
+        backupNote: "المواعيد الإضافية تبقى بدائل فقط ولا تُحاسب بشكل منفصل.",
         seoTitle: "حجز موعد | CVsolucion",
       };
     }
@@ -95,6 +102,11 @@ export default function Booking() {
         tooManySlots: "Vous pouvez choisir jusqu'a 3 horaires seulement.",
         primarySlot: "Horaire principal",
         option: "Option",
+        service: "Service",
+        priority: "Priorite",
+        price: "Prix",
+        total: "Total a payer",
+        backupNote: "Les horaires supplementaires restent des options de secours et ne sont pas factures separement.",
         seoTitle: "Reserver un booking | CVsolucion",
       };
     }
@@ -119,6 +131,11 @@ export default function Booking() {
       tooManySlots: "You can choose up to 3 time slots only.",
       primarySlot: "Primary slot",
       option: "Option",
+      service: "Service",
+      priority: "Priority",
+      price: "Price",
+      total: "Total due now",
+      backupNote: "Extra selected slots stay as backups only and are not charged separately.",
       seoTitle: "Book an appointment | CVsolucion",
     };
   }, [locale]);
@@ -133,8 +150,25 @@ export default function Booking() {
       .finally(() => setLoading(false));
   }, [priority]);
 
+  useEffect(() => {
+    getStripeBookingConfig()
+      .then((response) => setStripeConfig(response))
+      .catch(() => setStripeConfig(null));
+  }, []);
+
   const weeks = useMemo(() => chunkDays(days, priority === "express" ? 2 : 5), [days, priority]);
   const checkoutHref = locale === "en" ? "/book/checkout" : `/${locale}/book/checkout`;
+  const priceKey = `${priority}:${serviceType}`;
+  const amount = stripeConfig?.prices?.[priceKey] ?? 0;
+  const amountLabel =
+    amount > 0
+      ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
+          style: "currency",
+          currency: (stripeConfig?.currency || "cad").toUpperCase(),
+        }).format(amount / 100)
+      : null;
+  const serviceLabel = serviceType === "support" ? copy.support : copy.consultation;
+  const priorityLabel = priority === "express" ? copy.expressTitle : copy.standardTitle;
 
   function toggleSlot(slot: BookingAvailabilitySlot) {
     setStatus(null);
@@ -291,8 +325,29 @@ export default function Booking() {
                       <ShieldCheck className={`h-5 w-5 ${priority === "express" ? "text-amber-500" : "text-primary"}`} />
                       <span>{priority === "express" ? copy.expressTitle : copy.standardTitle}</span>
                     </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-500">{copy.service}</span>
+                        <span className="font-semibold text-slate-900">{serviceLabel}</span>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between gap-4">
+                        <span className="text-slate-500">{copy.priority}</span>
+                        <span className="font-semibold text-slate-900">{priorityLabel}</span>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between gap-4">
+                        <span className="text-slate-500">{copy.price}</span>
+                        <span className="font-semibold text-slate-900">{amountLabel || "—"}</span>
+                      </div>
+                      <div className="mt-4 border-t border-slate-200 pt-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="font-semibold text-slate-900">{copy.total}</span>
+                          <span className="text-lg font-bold text-primary">{amountLabel || "—"}</span>
+                        </div>
+                        <p className="mt-3 text-xs leading-6 text-slate-500">{copy.backupNote}</p>
+                      </div>
+                    </div>
                     <Button type="button" className="mt-2 w-full rounded-full bg-primary text-white hover:bg-primary/90" onClick={continueToCheckout}>
-                      {copy.continueCheckout}
+                      {amountLabel ? `${copy.continueCheckout} • ${amountLabel}` : copy.continueCheckout}
                     </Button>
                   </div>
                 ) : (

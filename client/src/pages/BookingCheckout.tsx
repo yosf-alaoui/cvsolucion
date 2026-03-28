@@ -193,6 +193,11 @@ export default function BookingCheckout() {
         express: "إكسبريس",
         primarySlot: "الموعد الأساسي",
         option: "خيار",
+        service: "الخدمة",
+        priority: "الأولوية",
+        price: "السعر",
+        total: "الإجمالي المستحق",
+        backupNote: "المواعيد الإضافية تبقى بدائل فقط ولا تُحاسب بشكل منفصل.",
         signInRequired: "يجب تسجيل الدخول أولاً لإتمام الحجز.",
         checkout: "إتمام الدفع والحجز",
         paying: "جارٍ التأكيد...",
@@ -223,6 +228,11 @@ export default function BookingCheckout() {
         express: "Express",
         primarySlot: "Horaire principal",
         option: "Option",
+        service: "Service",
+        priority: "Priorite",
+        price: "Prix",
+        total: "Total a payer",
+        backupNote: "Les horaires supplementaires restent des options de secours et ne sont pas factures separement.",
         signInRequired: "Connexion obligatoire pour finaliser le booking.",
         checkout: "Payer et confirmer",
         paying: "Confirmation...",
@@ -252,6 +262,11 @@ export default function BookingCheckout() {
       express: "Express",
       primarySlot: "Primary slot",
       option: "Option",
+      service: "Service",
+      priority: "Priority",
+      price: "Price",
+      total: "Total due now",
+      backupNote: "Extra selected slots stay as backups only and are not charged separately.",
       signInRequired: "Sign in is required to complete this booking.",
       checkout: "Pay and confirm",
       paying: "Confirming...",
@@ -305,6 +320,15 @@ export default function BookingCheckout() {
   const stripePriceKey = draft ? `${draft.priority}:${draft.serviceType}` : "";
   const stripeAmount = stripeConfig?.prices?.[stripePriceKey] ?? 0;
   const stripeEnabled = Boolean(stripeConfig?.enabled && stripeConfig.publishableKey && stripeAmount > 0);
+  const stripeAmountLabel =
+    stripeAmount > 0
+      ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
+          style: "currency",
+          currency: (stripeConfig?.currency || "cad").toUpperCase(),
+        }).format(stripeAmount / 100)
+      : null;
+  const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";
+  const priorityLabel = draft ? (draft.priority === "express" ? copy.express : copy.standard) : "";
 
   useEffect(() => {
     if (!user || !draft || !primarySlot || !stripeEnabled) {
@@ -437,6 +461,27 @@ export default function BookingCheckout() {
                     <span className="text-slate-400">•</span>
                     <span>{draft.serviceType === "support" ? copy.support : copy.consultation}</span>
                   </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-slate-500">{copy.service}</span>
+                      <span className="font-semibold text-slate-900">{serviceLabel}</span>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-4">
+                      <span className="text-slate-500">{copy.priority}</span>
+                      <span className="font-semibold text-slate-900">{priorityLabel}</span>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-4">
+                      <span className="text-slate-500">{copy.price}</span>
+                      <span className="font-semibold text-slate-900">{stripeAmountLabel || "—"}</span>
+                    </div>
+                    <div className="mt-4 border-t border-slate-200 pt-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="font-semibold text-slate-900">{copy.total}</span>
+                        <span className="text-lg font-bold text-primary">{stripeAmountLabel || "—"}</span>
+                      </div>
+                      <p className="mt-3 text-xs leading-6 text-slate-500">{copy.backupNote}</p>
+                    </div>
+                  </div>
                 </div>
               </GlassCard>
             </div>
@@ -482,6 +527,7 @@ export default function BookingCheckout() {
 
                     <div className="rounded-[24px] border border-slate-200 bg-white/70 p-4">
                       <div className="text-sm font-semibold text-slate-900">{copy.payment}</div>
+                      {stripeAmountLabel ? <div className="mt-2 text-sm text-slate-600">{copy.total}: {stripeAmountLabel}</div> : null}
                       {stripeEnabled ? (
                         paymentLoading ? (
                           <div className="mt-4 text-sm text-slate-500">{copy.paymentLoading}</div>
