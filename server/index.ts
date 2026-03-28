@@ -63,7 +63,7 @@ import {
 import { storeContactLead } from "./contactStore";
 import { buildRobotsTxt, buildSitemapXml, renderSeoHtml } from "./seo";
 import { getCustomerProfile, updateCustomerProfile, upsertCustomerProfile } from "./customerProfileStore";
-import { createBookingPaymentIntent, getStripePricingSnapshot, verifyBookingPayment } from "./stripeBooking";
+import { constructStripeEvent, createBookingPaymentIntent, getStripePricingSnapshot, verifyBookingPayment } from "./stripeBooking";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -294,6 +294,24 @@ async function startServer() {
 
   app.set("trust proxy", true);
   app.disable("x-powered-by");
+
+  app.post("/api/webhook", express.raw({ type: "application/json" }), (req, res) => {
+    const signature = String(req.get("stripe-signature") || "").trim();
+    if (!signature) {
+      return res.status(400).send("Missing Stripe signature.");
+    }
+
+    try {
+      const event = constructStripeEvent(req.body as Buffer, signature);
+      if (event.type === "payment_intent.succeeded") {
+        console.log("[stripe:webhook] payment_intent.succeeded", event.data.object?.id || null);
+      }
+      return res.json({ received: true });
+    } catch (error: any) {
+      return res.status(400).send(error?.message || "Webhook verification failed.");
+    }
+  });
+
   app.use(express.json({ limit: "15mb" }));
 
   app.use((_req, res, next) => {

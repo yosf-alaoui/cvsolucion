@@ -149,3 +149,14 @@ export async function verifyBookingPayment(input: {
 
   return intent;
 }
+
+export function constructStripeEvent(payload: Buffer, signature: string) {
+  const stripe = getStripeClient();
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim() || null;
+
+  if (!stripe || !webhookSecret) {
+    throw new Error("Stripe webhook is not configured.");
+  }
+
+  return stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+}
