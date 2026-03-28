@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { CSSProperties, useEffect, useRef } from "react";
 
 type HeroFiberGlowProps = {
   className?: string;
+  style?: CSSProperties;
 };
 
 type Fiber = {
@@ -19,7 +20,7 @@ type Fiber = {
   w3: { freq: number; amp: number; phase: number };
 };
 
-export default function HeroFiberGlow({ className = "" }: HeroFiberGlowProps) {
+export default function HeroFiberGlow({ className = "", style }: HeroFiberGlowProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sectionRef = useRef<HTMLElement | null>(null);
 
@@ -222,5 +223,5 @@ export default function HeroFiberGlow({ className = "" }: HeroFiberGlowProps) {
     };
   }, []);
 
-  return <canvas ref={canvasRef} className={className} aria-hidden="true" />;
+  return <canvas ref={canvasRef} className={className} style={style} aria-hidden="true" />;
 }

@@ -36,24 +36,30 @@ export default function HeroSection() {
       </picture>
       
       {/* Overlay */}
-      <div className="absolute inset-0 bg-black/30" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/30 to-black/38" />
 
       {/* Fiber Glow Effect */}
-      <HeroFiberGlow className="absolute inset-0 z-[1] h-full w-full opacity-90 mix-blend-screen" />
+      <HeroFiberGlow
+        className="absolute inset-0 z-[1] h-full w-full opacity-75 mix-blend-screen"
+        style={{
+          maskImage: "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.96) 40%, rgba(0,0,0,0.42) 62%, rgba(0,0,0,0) 80%)",
+          WebkitMaskImage: "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.96) 40%, rgba(0,0,0,0.42) 62%, rgba(0,0,0,0) 80%)",
+        }}
+      />
 
       {/* Content */}
       <div className="container relative z-10 mx-auto px-4 py-20 text-center">
-        <div className="max-w-3xl mx-auto animate-fade-in">
+        <div className="mx-auto max-w-4xl animate-fade-in rounded-[36px] border border-white/10 bg-black/12 px-6 py-8 shadow-[0_24px_60px_rgba(0,0,0,0.18)] backdrop-blur-[3px] sm:px-10 sm:py-10">
           {/* Main Heading */}
           <h1 
-            className="whitespace-pre-line text-4xl md:text-5xl font-bold text-white mb-6 leading-tight"
+            className="mb-6 whitespace-pre-line text-4xl font-bold leading-tight text-white drop-shadow-[0_4px_18px_rgba(0,0,0,0.55)] md:text-5xl"
             style={{ fontFamily: 'Playfair Display' }}
           >
             {t("hero.title")}
           </h1>
 
           {/* Subheading */}
-          <p className="text-lg md:text-xl text-white/90 mb-8 leading-relaxed max-w-2xl mx-auto">
+          <p className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-white/92 drop-shadow-[0_2px_12px_rgba(0,0,0,0.45)] md:text-xl">
             {t("hero.subtitle")}
           </p>
 
