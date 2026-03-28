@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { CalendarDays, MessageCircle, Send } from "lucide-react";
 import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
 import { getBookingHref } from "@/lib/site";
+import HeroFiberGlow from "@/components/HeroFiberGlow";
 
 /**
  * Hero Section - CV Solution
@@ -36,6 +37,9 @@ export default function HeroSection() {
       
       {/* Overlay */}
       <div className="absolute inset-0 bg-black/30" />
+
+      {/* Fiber Glow Effect */}
+      <HeroFiberGlow className="absolute inset-0 z-[1] h-full w-full opacity-70 mix-blend-screen" />
 
       {/* Content */}
       <div className="container relative z-10 mx-auto px-4 py-20 text-center">
