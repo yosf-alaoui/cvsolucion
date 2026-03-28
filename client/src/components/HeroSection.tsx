@@ -39,7 +39,7 @@ export default function HeroSection() {
       <div className="absolute inset-0 bg-black/30" />
 
       {/* Fiber Glow Effect */}
-      <HeroFiberGlow className="absolute inset-0 z-[1] h-full w-full opacity-70 mix-blend-screen" />
+      <HeroFiberGlow className="absolute inset-0 z-[1] h-full w-full opacity-90 mix-blend-screen" />
 
       {/* Content */}
       <div className="container relative z-10 mx-auto px-4 py-20 text-center">
@@ -57,16 +57,8 @@ export default function HeroSection() {
             {t("hero.subtitle")}
           </p>
 
-          {/* Statistics Box */}
-          <div className="bg-white/10 backdrop-blur-md rounded-lg p-6 mb-8 inline-block border border-white/20">
-            <div className="text-4xl font-bold text-white" style={{ fontFamily: 'Playfair Display' }}>
-              500+
-            </div>
-            <p className="text-white/80 mt-2">{t("hero.statsLabel")}</p>
-          </div>
-
           {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mt-10">
             <a 
               href={whatsappHref}
               target="_blank"

@@ -21,10 +21,12 @@ type Fiber = {
 
 export default function HeroFiberGlow({ className = "" }: HeroFiberGlowProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const sectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    sectionRef.current = canvas.closest("section");
 
     const context = canvas.getContext("2d");
     if (!context) return;
@@ -37,21 +39,21 @@ export default function HeroFiberGlow({ className = "" }: HeroFiberGlowProps) {
     let fibers: Fiber[] = [];
     const mouse = { x: -9999, y: -9999 };
 
-    const FIBER_COUNT = 180;
-    const REPEL = 130;
-    const FORCE = 1.1;
-    const SPRING = 0.008;
-    const DAMP = 0.94;
+    const FIBER_COUNT = 260;
+    const REPEL = 240;
+    const FORCE = 2.2;
+    const SPRING = 0.012;
+    const DAMP = 0.92;
     let tick = 0;
 
     function buildFibers() {
       fibers = [];
       const cx = width * 0.5;
-      const cy = height * 0.9;
+      const cy = height * 0.95;
 
       for (let index = 0; index < FIBER_COUNT; index += 1) {
         const angle = Math.PI + Math.random() * Math.PI;
-        const len = 90 + Math.random() * 270;
+        const len = 180 + Math.random() * 380;
         fibers.push({
           cx,
           cy,
@@ -64,17 +66,17 @@ export default function HeroFiberGlow({ className = "" }: HeroFiberGlowProps) {
           opacity: 0.4 + Math.random() * 0.6,
           w1: {
             freq: 0.004 + Math.random() * 0.006,
-            amp: 0.06 + Math.random() * 0.1,
+            amp: 0.08 + Math.random() * 0.12,
             phase: Math.random() * Math.PI * 2,
           },
           w2: {
             freq: 0.007 + Math.random() * 0.01,
-            amp: 0.03 + Math.random() * 0.06,
+            amp: 0.05 + Math.random() * 0.08,
             phase: Math.random() * Math.PI * 2,
           },
           w3: {
             freq: 0.0015 + Math.random() * 0.003,
-            amp: 0.04 + Math.random() * 0.08,
+            amp: 0.06 + Math.random() * 0.1,
             phase: Math.random() * Math.PI * 2,
           },
         });
@@ -144,23 +146,23 @@ export default function HeroFiberGlow({ className = "" }: HeroFiberGlowProps) {
         fiber.tipX += fiber.velX;
         fiber.tipY += fiber.velY;
 
-        const midX = (fiber.cx + fiber.tipX) * 0.5 + Math.sin(tick * fiber.w2.freq * 1.3 + fiber.w2.phase) * 18;
-        const midY = (fiber.cy + fiber.tipY) * 0.5 + Math.cos(tick * fiber.w1.freq * 1.7 + fiber.w1.phase) * 12;
+        const midX = (fiber.cx + fiber.tipX) * 0.5 + Math.sin(tick * fiber.w2.freq * 1.3 + fiber.w2.phase) * 28;
+        const midY = (fiber.cy + fiber.tipY) * 0.5 + Math.cos(tick * fiber.w1.freq * 1.7 + fiber.w1.phase) * 18;
 
         const gradient = ctx.createLinearGradient(fiber.cx, fiber.cy, fiber.tipX, fiber.tipY);
         gradient.addColorStop(0, "rgba(255,255,255,0)");
-        gradient.addColorStop(0.45, `rgba(190,205,255,${fiber.opacity * 0.35})`);
+        gradient.addColorStop(0.35, `rgba(190,205,255,${fiber.opacity * 0.28})`);
         gradient.addColorStop(1, `rgba(255,255,255,${fiber.opacity})`);
 
         ctx.beginPath();
         ctx.moveTo(fiber.cx, fiber.cy);
         ctx.quadraticCurveTo(midX, midY, fiber.tipX, fiber.tipY);
         ctx.strokeStyle = gradient;
-        ctx.lineWidth = 0.9;
+        ctx.lineWidth = 1.35;
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.arc(fiber.tipX, fiber.tipY, 2.4, 0, Math.PI * 2);
+        ctx.arc(fiber.tipX, fiber.tipY, 3.2, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(255,255,255,${fiber.opacity})`;
         ctx.fill();
       });
@@ -168,20 +170,20 @@ export default function HeroFiberGlow({ className = "" }: HeroFiberGlowProps) {
       const originX = width * 0.5;
       const originY = height * 0.9;
 
-      const glowBig = ctx.createRadialGradient(originX, originY, 0, originX, originY, 280);
-      glowBig.addColorStop(0, "rgba(200,210,255,0.13)");
-      glowBig.addColorStop(0.4, "rgba(180,190,255,0.06)");
+      const glowBig = ctx.createRadialGradient(originX, originY, 0, originX, originY, 360);
+      glowBig.addColorStop(0, "rgba(200,210,255,0.18)");
+      glowBig.addColorStop(0.4, "rgba(180,190,255,0.08)");
       glowBig.addColorStop(1, "rgba(255,255,255,0)");
       ctx.beginPath();
-      ctx.arc(originX, originY, 280, 0, Math.PI * 2);
+      ctx.arc(originX, originY, 360, 0, Math.PI * 2);
       ctx.fillStyle = glowBig;
       ctx.fill();
 
-      const glowCore = ctx.createRadialGradient(originX, originY, 0, originX, originY, 30);
-      glowCore.addColorStop(0, "rgba(255,255,255,0.25)");
+      const glowCore = ctx.createRadialGradient(originX, originY, 0, originX, originY, 42);
+      glowCore.addColorStop(0, "rgba(255,255,255,0.32)");
       glowCore.addColorStop(1, "rgba(255,255,255,0)");
       ctx.beginPath();
-      ctx.arc(originX, originY, 30, 0, Math.PI * 2);
+      ctx.arc(originX, originY, 42, 0, Math.PI * 2);
       ctx.fillStyle = glowCore;
       ctx.fill();
 
@@ -201,18 +203,22 @@ export default function HeroFiberGlow({ className = "" }: HeroFiberGlowProps) {
     draw();
 
     window.addEventListener("resize", resize);
+    window.addEventListener("mousemove", handleMouseMove);
     canvasEl.addEventListener("mousemove", handleMouseMove);
     canvasEl.addEventListener("mouseleave", clearPointer);
     canvasEl.addEventListener("touchmove", handleTouchMove, { passive: true });
     canvasEl.addEventListener("touchend", clearPointer);
+    sectionRef.current?.addEventListener("mouseleave", clearPointer);
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
       window.removeEventListener("resize", resize);
+      window.removeEventListener("mousemove", handleMouseMove);
       canvasEl.removeEventListener("mousemove", handleMouseMove);
       canvasEl.removeEventListener("mouseleave", clearPointer);
       canvasEl.removeEventListener("touchmove", handleTouchMove);
       canvasEl.removeEventListener("touchend", clearPointer);
+      sectionRef.current?.removeEventListener("mouseleave", clearPointer);
     };
   }, []);
 
