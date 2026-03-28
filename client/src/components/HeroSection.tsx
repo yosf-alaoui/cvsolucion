@@ -49,17 +49,21 @@ export default function HeroSection() {
 
       {/* Content */}
       <div className="container relative z-10 mx-auto px-4 py-20 text-center">
-        <div className="mx-auto max-w-4xl animate-fade-in rounded-[36px] border border-white/10 bg-black/12 px-6 py-8 shadow-[0_24px_60px_rgba(0,0,0,0.18)] backdrop-blur-[3px] sm:px-10 sm:py-10">
+        <div className="relative mx-auto max-w-4xl animate-fade-in overflow-hidden rounded-[40px] px-6 py-8 sm:px-10 sm:py-10">
+          <div className="absolute inset-0 rounded-[40px] border border-white/14 bg-[linear-gradient(180deg,rgba(9,17,38,0.62)_0%,rgba(9,17,38,0.38)_54%,rgba(9,17,38,0.24)_100%)] shadow-[0_30px_80px_rgba(0,0,0,0.28)] backdrop-blur-[10px]" />
+          <div className="absolute inset-x-12 top-8 h-28 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute inset-x-20 bottom-8 h-24 rounded-full bg-primary/18 blur-3xl" />
+          <div className="relative">
           {/* Main Heading */}
           <h1 
-            className="mb-6 whitespace-pre-line text-4xl font-bold leading-tight text-white drop-shadow-[0_4px_18px_rgba(0,0,0,0.55)] md:text-5xl"
+            className="mb-6 whitespace-pre-line text-4xl font-bold leading-tight text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.72)] md:text-5xl"
             style={{ fontFamily: 'Playfair Display' }}
           >
             {t("hero.title")}
           </h1>
 
           {/* Subheading */}
-          <p className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-white/92 drop-shadow-[0_2px_12px_rgba(0,0,0,0.45)] md:text-xl">
+          <p className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-white/95 drop-shadow-[0_8px_22px_rgba(0,0,0,0.62)] md:text-xl">
             {t("hero.subtitle")}
           </p>
 
@@ -102,6 +106,7 @@ export default function HeroSection() {
                 {contactLabel}
               </Button>
             </a>
+          </div>
           </div>
         </div>
       </div>
