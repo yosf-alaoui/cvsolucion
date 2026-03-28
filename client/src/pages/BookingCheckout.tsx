@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Clock3, ShieldCheck, ShoppingCart } from "lucide-react";
-import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { CardElement, Elements, useElements, useStripe } from "@stripe/react-stripe-js";
 import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
@@ -44,31 +44,53 @@ function BookingPaymentElement({
   submitLabel,
   processingLabel,
   onConfirm,
+  billingDetails,
 }: {
   clientSecret: string;
   publishableKey: string;
   submitLabel: string;
   processingLabel: string;
   onConfirm: (paymentIntentId: string) => Promise<void>;
+  billingDetails: {
+    name: string;
+    email: string;
+    phone: string;
+    country: string;
+  };
 }) {
   const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
   const options = useMemo<StripeElementsOptions>(() => ({ clientSecret, appearance: { theme: "stripe" } }), [clientSecret]);
 
   return (
     <Elements stripe={stripePromise} options={options}>
-      <StripePaymentInner submitLabel={submitLabel} processingLabel={processingLabel} onConfirm={onConfirm} />
+      <StripePaymentInner
+        clientSecret={clientSecret}
+        submitLabel={submitLabel}
+        processingLabel={processingLabel}
+        onConfirm={onConfirm}
+        billingDetails={billingDetails}
+      />
     </Elements>
   );
 }
 
 function StripePaymentInner({
+  clientSecret,
   submitLabel,
   processingLabel,
   onConfirm,
+  billingDetails,
 }: {
+  clientSecret: string;
   submitLabel: string;
   processingLabel: string;
   onConfirm: (paymentIntentId: string) => Promise<void>;
+  billingDetails: {
+    name: string;
+    email: string;
+    phone: string;
+    country: string;
+  };
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -78,9 +100,20 @@ function StripePaymentInner({
     if (!stripe || !elements) return;
     setBusy(true);
     try {
-      const submitResult = await elements.submit();
-      if (submitResult.error) throw new Error(submitResult.error.message || "Payment form is incomplete.");
-      const result = await stripe.confirmPayment({ elements, redirect: "if_required" });
+      const cardElement = elements.getElement(CardElement);
+      if (!cardElement) {
+        throw new Error("Card form is not ready yet.");
+      }
+      const result = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: cardElement,
+          billing_details: {
+            name: billingDetails.name,
+            email: billingDetails.email,
+            phone: billingDetails.phone,
+          },
+        },
+      });
       if (result.error) throw new Error(result.error.message || "Payment confirmation failed.");
       const paymentIntentId = result.paymentIntent?.id;
       if (!paymentIntentId) throw new Error("Stripe did not return a payment intent.");
@@ -92,7 +125,23 @@ function StripePaymentInner({
 
   return (
     <div className="space-y-4">
-      <PaymentElement options={{ layout: "tabs" }} />
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+        <CardElement
+          options={{
+            hidePostalCode: true,
+            style: {
+              base: {
+                fontSize: "16px",
+                color: "#0f172a",
+                fontFamily: "Cairo, ui-sans-serif, system-ui, sans-serif",
+                "::placeholder": {
+                  color: "#94a3b8",
+                },
+              },
+            },
+          }}
+        />
+      </div>
       <Button type="button" className="w-full rounded-full bg-primary text-white hover:bg-primary/90" disabled={!stripe || !elements || busy} onClick={handleSubmit}>
         {busy ? processingLabel : submitLabel}
       </Button>
@@ -443,6 +492,12 @@ export default function BookingCheckout() {
                               publishableKey={stripeConfig.publishableKey}
                               submitLabel={saving ? copy.paying : copy.checkout}
                               processingLabel={copy.paying}
+                              billingDetails={{
+                                name: form.name,
+                                email: form.email,
+                                phone: form.phone,
+                                country: form.country,
+                              }}
                               onConfirm={async (confirmedPaymentIntentId) => {
                                 await finalizeBooking(confirmedPaymentIntentId);
                               }}
