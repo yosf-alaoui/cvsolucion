@@ -121,7 +121,7 @@ export default function Header() {
               </picture>
             </a>
 
-            <nav className="hidden flex-1 items-center justify-center gap-8 md:flex">
+            <nav className="hidden flex-1 items-center justify-center gap-8 xl:flex">
               <a href={trainingHref} className="font-semibold text-foreground transition-colors hover:text-primary">
                 {t("nav.training")}
               </a>
@@ -154,7 +154,7 @@ export default function Header() {
               </button>
             </nav>
 
-            <div className="hidden items-center justify-end gap-3 md:flex">
+            <div className="hidden items-center justify-end gap-3 xl:flex">
               <Button asChild variant="outline" size="sm" className="rounded-full border-slate-200 bg-white/75 backdrop-blur">
                 <a href={contactHref}>
                   <Mail className="h-4 w-4" />
@@ -257,7 +257,7 @@ export default function Header() {
 
             <button
               onClick={() => setIsMenuOpen((value) => !value)}
-              className="rounded-xl p-2 transition-colors hover:bg-white/30 md:hidden"
+              className="rounded-xl p-2 transition-colors hover:bg-white/30 xl:hidden"
               aria-label="Toggle menu"
             >
               {isMenuOpen ? <X className="h-6 w-6 text-foreground" /> : <Menu className="h-6 w-6 text-foreground" />}
@@ -265,7 +265,7 @@ export default function Header() {
           </div>
 
           {isMenuOpen ? (
-            <div className="space-y-2 border-t border-white/20 px-4 py-4 md:hidden">
+            <div className="space-y-2 border-t border-white/20 px-4 py-4 xl:hidden">
               <div data-testid="lang-switch-mobile" className="pb-2 pt-1">
                 <div className="relative" ref={mobileLangMenuRef}>
                   <button
