@@ -36,34 +36,38 @@ export default function HeroSection() {
       </picture>
       
       {/* Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/30 to-black/38" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/52 via-black/36 to-black/42" />
 
       {/* Fiber Glow Effect */}
       <HeroFiberGlow
-        className="absolute inset-0 z-[1] h-full w-full opacity-75 mix-blend-screen"
+        className="absolute inset-0 z-[1] h-full w-full opacity-65 mix-blend-screen"
         style={{
-          maskImage: "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.96) 40%, rgba(0,0,0,0.42) 62%, rgba(0,0,0,0) 80%)",
-          WebkitMaskImage: "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.96) 40%, rgba(0,0,0,0.42) 62%, rgba(0,0,0,0) 80%)",
+          maskImage: "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.96) 34%, rgba(0,0,0,0.3) 54%, rgba(0,0,0,0) 70%)",
+          WebkitMaskImage: "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.96) 34%, rgba(0,0,0,0.3) 54%, rgba(0,0,0,0) 70%)",
         }}
       />
 
       {/* Content */}
       <div className="container relative z-10 mx-auto px-4 py-20 text-center">
-        <div className="relative mx-auto max-w-4xl animate-fade-in overflow-hidden rounded-[40px] px-6 py-8 sm:px-10 sm:py-10">
-          <div className="absolute inset-0 rounded-[40px] border border-white/14 bg-[linear-gradient(180deg,rgba(9,17,38,0.62)_0%,rgba(9,17,38,0.38)_54%,rgba(9,17,38,0.24)_100%)] shadow-[0_30px_80px_rgba(0,0,0,0.28)] backdrop-blur-[10px]" />
-          <div className="absolute inset-x-12 top-8 h-28 rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute inset-x-20 bottom-8 h-24 rounded-full bg-primary/18 blur-3xl" />
-          <div className="relative">
+        <div className="relative mx-auto max-w-4xl animate-fade-in px-4 py-6 sm:px-6 sm:py-8">
+          <div className="absolute inset-0 rounded-[40px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.1),rgba(255,255,255,0)_46%)] blur-2xl" />
+          <div className="relative mx-auto max-w-3xl overflow-hidden rounded-[38px] border border-white/18 bg-[linear-gradient(180deg,rgba(6,12,28,0.72)_0%,rgba(7,15,34,0.62)_45%,rgba(8,17,40,0.54)_100%)] px-6 py-8 shadow-[0_36px_100px_rgba(0,0,0,0.48)] ring-1 ring-white/10 backdrop-blur-[18px] sm:px-10 sm:py-10">
+            <div className="absolute inset-x-10 top-4 h-24 rounded-full bg-white/12 blur-3xl" />
+            <div className="absolute inset-x-16 bottom-5 h-20 rounded-full bg-primary/24 blur-3xl" />
+            <div className="absolute inset-x-0 top-0 h-px bg-white/34" />
+            <div className="absolute inset-y-6 left-0 w-px bg-white/10" />
+            <div className="absolute inset-y-6 right-0 w-px bg-white/10" />
+            <div className="relative">
           {/* Main Heading */}
           <h1 
-            className="mb-6 whitespace-pre-line text-4xl font-bold leading-tight text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.72)] md:text-5xl"
+            className="mb-6 whitespace-pre-line text-4xl font-bold leading-tight text-white drop-shadow-[0_18px_38px_rgba(0,0,0,0.88)] md:text-5xl"
             style={{ fontFamily: 'Playfair Display' }}
           >
             {t("hero.title")}
           </h1>
 
           {/* Subheading */}
-          <p className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-white/95 drop-shadow-[0_8px_22px_rgba(0,0,0,0.62)] md:text-xl">
+          <p className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-white/95 drop-shadow-[0_12px_26px_rgba(0,0,0,0.8)] md:text-xl">
             {t("hero.subtitle")}
           </p>
 
@@ -106,6 +110,7 @@ export default function HeroSection() {
                 {contactLabel}
               </Button>
             </a>
+          </div>
           </div>
           </div>
         </div>
