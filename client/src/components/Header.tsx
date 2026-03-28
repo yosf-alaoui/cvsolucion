@@ -103,6 +103,7 @@ export default function Header() {
   const contactLabel = locale === "ar" ? "تواصل" : locale === "fr" ? "Contact" : "Contact";
   const bookLabel = locale === "ar" ? "احجز استشارة" : locale === "fr" ? "Reserver" : "Book";
   const cartLabel = locale === "ar" ? "السلة" : locale === "fr" ? "Panier" : "Cart";
+  const cartButtonLabel = cartCount > 0 ? `${cartLabel} (${cartCount})` : cartLabel;
 
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
@@ -190,12 +191,19 @@ export default function Header() {
                 </a>
               </Button>
 
-              <Button asChild variant="outline" size="sm" className="relative rounded-full border-slate-200 bg-white/75 backdrop-blur">
+              <Button
+                asChild
+                variant={cartCount > 0 ? "default" : "outline"}
+                size="sm"
+                className={`relative rounded-full backdrop-blur ${
+                  cartCount > 0 ? "bg-primary text-white shadow-sm hover:bg-primary/90" : "border-slate-200 bg-white/75"
+                }`}
+              >
                 <a href={cartHref}>
                   <ShoppingCart className="h-4 w-4" />
-                  {cartLabel}
+                  {cartButtonLabel}
                   {cartCount > 0 ? (
-                    <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                    <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-primary">
                       {cartCount}
                     </span>
                   ) : null}
@@ -424,12 +432,16 @@ export default function Header() {
               )}
 
               <div className="grid gap-2 pt-2">
-                <Button asChild variant="outline" className="relative w-full rounded-full bg-white/80">
+                <Button
+                  asChild
+                  variant={cartCount > 0 ? "default" : "outline"}
+                  className={`relative w-full rounded-full ${cartCount > 0 ? "bg-primary text-white hover:bg-primary/90" : "bg-white/80"}`}
+                >
                   <a href={cartHref} onClick={() => setIsMenuOpen(false)}>
                     <ShoppingCart className="h-4 w-4" />
-                    {cartLabel}
+                    {cartButtonLabel}
                     {cartCount > 0 ? (
-                      <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                      <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-primary">
                         {cartCount}
                       </span>
                     ) : null}

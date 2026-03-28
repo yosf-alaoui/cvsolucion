@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { CreditCard, Lock } from "lucide-react";
-import { CardElement, Elements, useElements, useStripe } from "@stripe/react-stripe-js";
-import { loadStripe } from "@stripe/stripe-js";
-import BookingCartSummary from "@/components/booking/BookingCartSummary";
+import BookingFlowSteps from "@/components/booking/BookingFlowSteps";
+import BookingOrderSummary from "@/components/booking/BookingOrderSummary";
+import StripePaymentForm from "@/components/booking/StripePaymentForm";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
 import Header from "@/components/Header";
@@ -13,10 +12,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import {
+  clearBookingCheckoutDraft,
   getBookingCheckoutDraft,
   getBookingCheckoutEventName,
   removeBookingCheckoutSlot,
-  clearBookingCheckoutDraft,
   type BookingCheckoutDraft,
 } from "@/lib/bookingCheckout";
 import { createBooking } from "@/lib/bookings";
@@ -27,28 +26,22 @@ import { useI18n } from "@/i18n/i18n";
 function getCopy(locale: string) {
   if (locale === "ar") {
     return {
-      title: "إتمام الحجز والدفع",
-      subtitle: "راجع السلة، أكمل بياناتك، ثم ادفع داخل الموقع.",
-      cart: "ملخص الطلب",
-      appointments: "الجلسات المختارة",
-      invoice: "الفاتورة",
-      empty: "لا يوجد أي موعد داخل السلة حالياً.",
+      title: "الدفع وإتمام الحجز",
+      subtitle: "راجع الطلب، أكمل بياناتك، ثم ادفع داخل الموقع مثل أي متجر خدمات رقمي.",
+      empty: "لا توجد مواعيد داخل السلة حالياً.",
+      orderSummary: "ملخص الطلب",
+      lineItems: "الجلسات المختارة",
+      invoice: "تفاصيل الفاتورة",
       service: "الخدمة",
       priority: "الأولوية",
       subtotal: "المجموع الفرعي",
-      tax: "الضرائب",
-      total: "الإجمالي المستحق",
+      taxes: "الضرائب",
+      total: "الإجمالي المستحق الآن",
+      selectedCount: "عدد الجلسات",
+      digitalNote: "خدمة رقمية بدون شحن. كل موعد مختار يُحاسب كجلسة مستقلة ويظهر كسطر منفصل في الفاتورة.",
       remove: "إزالة",
-      item: "جلسة",
-      note: "خدمة رقمية بدون شحن. كل موعد مختار يُحاسب كجلسة مستقلة.",
       details: "بيانات العميل",
-      payment: "الدفع",
-      secure: "دفع آمن عبر Stripe",
-      paymentHint: "أدخل بيانات البطاقة لإتمام الطلب.",
-      cardReady: "أدخل بيانات البطاقة لتفعيل زر الدفع.",
-      backToCart: "العودة إلى السلة",
-      backToBooking: "العودة إلى اختيار المواعيد",
-      signInRequired: "يجب تسجيل الدخول لإكمال الحجز.",
+      signInRequired: "يجب تسجيل الدخول قبل إتمام هذا الطلب.",
       signIn: "تسجيل الدخول",
       name: "الاسم",
       email: "البريد الإلكتروني",
@@ -60,39 +53,45 @@ function getCopy(locale: string) {
       support: "دعم",
       standard: "عادي",
       express: "إكسبريس",
-      payNow: "ادفع وأكد الطلب",
-      processing: "جارٍ تأكيد الدفع...",
-      preparing: "جارٍ تجهيز الدفع الآمن...",
-      paymentUnavailable: "الدفع غير متاح حالياً لهذا النوع.",
+      backToCart: "العودة إلى السلة",
+      backToBooking: "العودة لاختيار المواعيد",
       success: "تم تأكيد الحجز بنجاح.",
-      profileAutoFill: "تم ملء البيانات تلقائياً من حسابك وآخر حجز مسجل.",
+      profileAutoFill: "تم ملء البيانات تلقائياً من حسابك وآخر حجز محفوظ.",
+      paymentTitle: "الدفع",
+      paymentSubtitle: "أدخل بيانات البطاقة ثم أكد الطلب.",
+      secure: "دفع آمن عبر Stripe",
+      cardNumber: "رقم البطاقة",
+      expiry: "تاريخ الانتهاء",
+      cvc: "CVC",
+      missingCustomer: "أكمل بيانات العميل أولاً لتفعيل الدفع.",
+      missingCard: "أدخل بيانات البطاقة كاملة لتفعيل الدفع.",
+      paymentReady: "النموذج جاهز. يمكنك الدفع الآن.",
+      payNow: "ادفع وأكد",
+      processing: "جارٍ تأكيد الدفع...",
+      preparing: "جارٍ تجهيز نموذج الدفع الآمن...",
+      paymentUnavailable: "الدفع غير متاح حالياً لهذا النوع.",
       seoTitle: "الدفع وإتمام الحجز | CVsolucion",
     };
   }
+
   if (locale === "fr") {
     return {
-      title: "Checkout et paiement",
-      subtitle: "Revisez le panier, completez vos coordonnees, puis payez dans le site.",
-      cart: "Resume de commande",
-      appointments: "Sessions choisies",
-      invoice: "Facture",
+      title: "Paiement et validation",
+      subtitle: "Revisez la commande, completez vos coordonnees, puis payez comme sur un vrai checkout de service.",
       empty: "Aucun horaire n'est dans le panier pour le moment.",
+      orderSummary: "Resume de commande",
+      lineItems: "Sessions choisies",
+      invoice: "Facture",
       service: "Service",
       priority: "Priorite",
       subtotal: "Sous-total",
-      tax: "Taxes",
+      taxes: "Taxes",
       total: "Total a payer",
+      selectedCount: "Sessions",
+      digitalNote: "Service numerique sans livraison. Chaque horaire choisi est facture comme une session distincte.",
       remove: "Retirer",
-      item: "Session",
-      note: "Service numerique sans livraison. Chaque horaire choisi est facture comme une session separee.",
       details: "Coordonnees client",
-      payment: "Paiement",
-      secure: "Paiement securise par Stripe",
-      paymentHint: "Entrez les details de la carte pour finaliser la commande.",
-      cardReady: "Entrez la carte pour activer le paiement.",
-      backToCart: "Retour au panier",
-      backToBooking: "Retour au booking",
-      signInRequired: "La connexion est obligatoire pour finaliser le booking.",
+      signInRequired: "La connexion est obligatoire avant de finaliser cette commande.",
       signIn: "Se connecter",
       name: "Nom",
       email: "Email",
@@ -104,38 +103,44 @@ function getCopy(locale: string) {
       support: "Support",
       standard: "Standard",
       express: "Express",
+      backToCart: "Retour au panier",
+      backToBooking: "Retour au booking",
+      success: "Booking confirme avec succes.",
+      profileAutoFill: "Les informations ont ete remplies depuis votre compte et votre dernier booking.",
+      paymentTitle: "Paiement",
+      paymentSubtitle: "Entrez la carte puis confirmez la commande.",
+      secure: "Paiement securise par Stripe",
+      cardNumber: "Numero de carte",
+      expiry: "Expiration",
+      cvc: "CVC",
+      missingCustomer: "Completez d'abord les coordonnees client.",
+      missingCard: "Entrez tous les champs carte pour activer le paiement.",
+      paymentReady: "Le paiement est pret.",
       payNow: "Payer et confirmer",
       processing: "Confirmation du paiement...",
       preparing: "Preparation du paiement securise...",
-      paymentUnavailable: "Le paiement n'est pas disponible pour ce type pour le moment.",
-      success: "Booking confirme avec succes.",
-      profileAutoFill: "Les informations ont ete remplies depuis votre compte et votre dernier booking.",
-      seoTitle: "Checkout et paiement | CVsolucion",
+      paymentUnavailable: "Le paiement n'est pas disponible pour ce type actuellement.",
+      seoTitle: "Paiement et validation | CVsolucion",
     };
   }
+
   return {
     title: "Checkout and payment",
-    subtitle: "Review your cart, complete your details, then pay inside the site.",
-    cart: "Order summary",
-    appointments: "Selected sessions",
-    invoice: "Invoice details",
+    subtitle: "Review the order, complete your details, then pay like a proper digital-service checkout.",
     empty: "There are no appointments in your cart right now.",
+    orderSummary: "Order summary",
+    lineItems: "Selected sessions",
+    invoice: "Invoice details",
     service: "Service",
     priority: "Priority",
     subtotal: "Subtotal",
-    tax: "Taxes",
+    taxes: "Taxes",
     total: "Total due now",
+    selectedCount: "Selected sessions",
+    digitalNote: "This is a digital service with no shipping. Every selected appointment is billed as a separate session.",
     remove: "Remove",
-    item: "Session",
-    note: "Digital service with no shipping. Each selected appointment is billed as a separate session.",
     details: "Customer details",
-    payment: "Payment",
-    secure: "Secure payment by Stripe",
-    paymentHint: "Enter your card details to complete the order.",
-    cardReady: "Enter your card details to enable payment.",
-    backToCart: "Back to cart",
-    backToBooking: "Back to booking",
-    signInRequired: "Sign in is required to complete this booking.",
+    signInRequired: "You must sign in before completing this order.",
     signIn: "Sign in",
     name: "Name",
     email: "Email",
@@ -147,153 +152,32 @@ function getCopy(locale: string) {
     support: "Support",
     standard: "Standard",
     express: "Express",
+    backToCart: "Back to cart",
+    backToBooking: "Back to booking",
+    success: "Booking confirmed successfully.",
+    profileAutoFill: "Your details were auto-filled from your account and latest booking.",
+    paymentTitle: "Payment",
+    paymentSubtitle: "Enter card details and confirm the order.",
+    secure: "Secure payment by Stripe",
+    cardNumber: "Card number",
+    expiry: "Expiry",
+    cvc: "CVC",
+    missingCustomer: "Complete the customer details first.",
+    missingCard: "Enter all card fields to enable payment.",
+    paymentReady: "Payment is ready.",
     payNow: "Pay and confirm",
     processing: "Confirming payment...",
     preparing: "Preparing secure payment...",
     paymentUnavailable: "Payment is not available for this type right now.",
-    success: "Booking confirmed successfully.",
-    profileAutoFill: "Your details were auto-filled from your account and latest booking.",
     seoTitle: "Checkout and payment | CVsolucion",
   };
 }
 
-function StripeCardCheckout({
-  publishableKey,
-  clientSecret,
-  billingReady,
-  billingDetails,
-  submitLabel,
-  processingLabel,
-  helperLabel,
-  onSuccess,
-}: {
-  publishableKey: string;
-  clientSecret: string;
-  billingReady: boolean;
-  billingDetails: { name: string; email: string; phone: string };
-  submitLabel: string;
-  processingLabel: string;
-  helperLabel: string;
-  onSuccess: (paymentIntentId: string) => Promise<void>;
-}) {
-  const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
-  return (
-    <Elements stripe={stripePromise}>
-      <StripeCardCheckoutInner
-        clientSecret={clientSecret}
-        billingReady={billingReady}
-        billingDetails={billingDetails}
-        submitLabel={submitLabel}
-        processingLabel={processingLabel}
-        helperLabel={helperLabel}
-        onSuccess={onSuccess}
-      />
-    </Elements>
-  );
-}
-
-function StripeCardCheckoutInner({
-  clientSecret,
-  billingReady,
-  billingDetails,
-  submitLabel,
-  processingLabel,
-  helperLabel,
-  onSuccess,
-}: {
-  clientSecret: string;
-  billingReady: boolean;
-  billingDetails: { name: string; email: string; phone: string };
-  submitLabel: string;
-  processingLabel: string;
-  helperLabel: string;
-  onSuccess: (paymentIntentId: string) => Promise<void>;
-}) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [cardComplete, setCardComplete] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const canSubmit = Boolean(stripe && elements && billingReady && cardComplete && !busy);
-
-  async function handleSubmit() {
-    if (!stripe || !elements) return;
-    const card = elements.getElement(CardElement);
-    if (!card) {
-      setError("Card form is not ready.");
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await stripe.confirmCardPayment(clientSecret, {
-        payment_method: {
-          card,
-          billing_details: {
-            name: billingDetails.name,
-            email: billingDetails.email,
-            phone: billingDetails.phone,
-          },
-        },
-      });
-
-      if (result.error) {
-        throw new Error(result.error.message || "Payment failed.");
-      }
-      const paymentIntentId = result.paymentIntent?.id;
-      if (!paymentIntentId) {
-        throw new Error("Stripe did not return a payment reference.");
-      }
-      await onSuccess(paymentIntentId);
-    } catch (caught: any) {
-      setError(caught?.message || "Payment failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-[0_14px_35px_rgba(15,23,42,0.04)]">
-        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          <CreditCard className="h-4 w-4 text-primary" />
-          Card details
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-          <CardElement
-            options={{
-              hidePostalCode: true,
-              style: {
-                base: {
-                  fontSize: "16px",
-                  color: "#0f172a",
-                  fontFamily: "ui-sans-serif, system-ui, sans-serif",
-                  "::placeholder": {
-                    color: "#94a3b8",
-                  },
-                },
-                invalid: {
-                  color: "#dc2626",
-                },
-              },
-            }}
-            onChange={(event) => {
-              setCardComplete(event.complete);
-              setError(event.error?.message || null);
-            }}
-          />
-        </div>
-      </div>
-
-      {error ? <div className="text-sm text-rose-600">{error}</div> : <div className="text-sm text-slate-500">{helperLabel}</div>}
-
-      <Button type="button" className="w-full rounded-full bg-primary text-white hover:bg-primary/90" disabled={!canSubmit} onClick={handleSubmit}>
-        {busy ? processingLabel : submitLabel}
-      </Button>
-    </div>
-  );
+function moneyLabel(amount: number, locale: string, currency: string) {
+  return new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amount / 100);
 }
 
 export default function BookingCheckout() {
@@ -318,6 +202,7 @@ export default function BookingCheckout() {
   const bookingHref = locale === "en" ? "/book" : `/${locale}/book`;
   const cartHref = locale === "en" ? "/book/cart" : `/${locale}/book/cart`;
   const checkoutHref = locale === "en" ? "/book/checkout" : `/${locale}/book/checkout`;
+  const dashboardHref = locale === "en" ? "/dashboard" : `/${locale}/dashboard`;
   const loginPath = locale === "en" ? "/login" : `/${locale}/login`;
   const loginHref = `${loginPath}?next=${encodeURIComponent(checkoutHref)}`;
 
@@ -359,6 +244,7 @@ export default function BookingCheckout() {
           country: current.country || response.profile.country || latestBooking?.country || "",
           company: current.company || response.profile.company || latestBooking?.company || "",
         }));
+
         setStatus((current) => current ?? { tone: "success", text: copy.profileAutoFill });
       })
       .catch(() => {});
@@ -366,6 +252,8 @@ export default function BookingCheckout() {
 
   const unitAmount = draft ? stripeConfig?.prices?.[`${draft.priority}:${draft.serviceType}`] ?? 0 : 0;
   const totalAmount = unitAmount * (draft?.slots.length || 0);
+  const currency = stripeConfig?.currency || "cad";
+  const totalLabel = moneyLabel(totalAmount, locale, currency);
   const stripeEnabled = Boolean(stripeConfig?.enabled && stripeConfig.publishableKey && totalAmount > 0);
   const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";
   const priorityLabel = draft ? (draft.priority === "express" ? copy.express : copy.standard) : "";
@@ -376,9 +264,11 @@ export default function BookingCheckout() {
       setPaymentClientSecret(null);
       return;
     }
+
     let cancelled = false;
     setPaymentClientSecret(null);
     setPaymentLoading(true);
+
     createBookingPaymentIntent({
       serviceType: draft.serviceType,
       priority: draft.priority,
@@ -386,15 +276,19 @@ export default function BookingCheckout() {
       locale,
     })
       .then((response) => {
-        if (cancelled) return;
-        setPaymentClientSecret(response.clientSecret);
+        if (!cancelled) {
+          setPaymentClientSecret(response.clientSecret);
+        }
       })
       .catch((error: Error) => {
-        if (cancelled) return;
-        setStatus({ tone: "error", text: error.message });
+        if (!cancelled) {
+          setStatus({ tone: "error", text: error.message });
+        }
       })
       .finally(() => {
-        if (!cancelled) setPaymentLoading(false);
+        if (!cancelled) {
+          setPaymentLoading(false);
+        }
       });
 
     return () => {
@@ -404,9 +298,11 @@ export default function BookingCheckout() {
 
   async function finalizeBooking(paymentIntentId: string) {
     if (!draft || !draft.slots.length) return;
+
     try {
       setSaving(true);
       setStatus(null);
+
       await createBooking({
         serviceType: draft.serviceType,
         priority: draft.priority,
@@ -420,11 +316,12 @@ export default function BookingCheckout() {
         paymentIntentId,
         locale,
       });
+
       clearBookingCheckoutDraft();
       setDraft(null);
       setStatus({ tone: "success", text: copy.success });
       setTimeout(() => {
-        window.location.href = locale === "en" ? "/dashboard" : `/${locale}/dashboard`;
+        window.location.href = dashboardHref;
       }, 1200);
     } catch (error: any) {
       setStatus({ tone: "error", text: error?.message || "Booking failed." });
@@ -444,6 +341,8 @@ export default function BookingCheckout() {
             <p className="mt-5 text-lg leading-8 text-slate-600">{copy.subtitle}</p>
           </div>
 
+          <BookingFlowSteps locale={locale} current="checkout" />
+
           {!draft || !draft.slots.length ? (
             <div className="mx-auto mt-12 max-w-4xl">
               <GlassCard className="card-static rounded-[32px] p-8 text-center">
@@ -459,29 +358,28 @@ export default function BookingCheckout() {
               </GlassCard>
             </div>
           ) : (
-            <div className="mx-auto mt-12 grid max-w-7xl gap-8 xl:grid-cols-[0.9fr_1.1fr]">
-              <div className="space-y-6">
-                <BookingCartSummary
-                  draft={draft}
+            <div className="mx-auto mt-12 grid max-w-7xl gap-8 xl:grid-cols-[0.92fr_1.08fr]">
+              <div className="space-y-6 xl:sticky xl:top-32 xl:self-start">
+                <BookingOrderSummary
                   locale={locale}
-                  currency={stripeConfig?.currency || "cad"}
+                  currency={currency}
+                  draft={draft}
                   unitAmount={unitAmount}
                   serviceLabel={serviceLabel}
                   priorityLabel={priorityLabel}
-                  title={copy.cart}
-                  appointmentsLabel={copy.appointments}
-                  invoiceLabel={copy.invoice}
-                  emptyLabel={copy.empty}
-                  serviceText={copy.service}
-                  priorityText={copy.priority}
-                  subtotalText={copy.subtotal}
-                  taxText={copy.tax}
-                  totalText={copy.total}
-                  removeText={copy.remove}
-                  itemLabel={copy.item}
-                  digitalNote={copy.note}
-                  secondaryActionLabel={copy.backToBooking}
-                  secondaryActionHref={bookingHref}
+                  labels={{
+                    title: copy.orderSummary,
+                    lineItems: copy.lineItems,
+                    invoice: copy.invoice,
+                    service: copy.service,
+                    priority: copy.priority,
+                    subtotal: copy.subtotal,
+                    taxes: copy.taxes,
+                    total: copy.total,
+                    selectedCount: copy.selectedCount,
+                    digitalNote: copy.digitalNote,
+                    remove: copy.remove,
+                  }}
                   onRemoveSlot={(slotId) => {
                     const nextDraft = removeBookingCheckoutSlot(slotId);
                     setDraft(nextDraft);
@@ -491,7 +389,13 @@ export default function BookingCheckout() {
 
               <div className="space-y-6">
                 <GlassCard className="card-static rounded-[32px] p-7">
-                  <h2 className="text-2xl font-bold text-slate-950">{copy.details}</h2>
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <h2 className="text-2xl font-bold text-slate-950">{copy.details}</h2>
+                    <Button asChild variant="outline" className="rounded-full border-slate-200 bg-white/75">
+                      <a href={cartHref}>{copy.backToCart}</a>
+                    </Button>
+                  </div>
+
                   {authLoading ? (
                     <div className="mt-6 text-sm text-slate-500">...</div>
                   ) : !user ? (
@@ -502,7 +406,7 @@ export default function BookingCheckout() {
                       </Button>
                     </div>
                   ) : (
-                    <form className="mt-6 space-y-4" onSubmit={(event) => event.preventDefault()}>
+                    <form className="mt-6 grid gap-4 md:grid-cols-2" onSubmit={(event) => event.preventDefault()}>
                       <div className="space-y-2">
                         <Label htmlFor="booking-name">{copy.name}</Label>
                         <Input id="booking-name" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
@@ -519,15 +423,15 @@ export default function BookingCheckout() {
                         <Label htmlFor="booking-country">{copy.country}</Label>
                         <Input id="booking-country" value={form.country} onChange={(event) => setForm((current) => ({ ...current, country: event.target.value }))} required />
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-2 md:col-span-2">
                         <Label htmlFor="booking-company">{copy.company}</Label>
                         <Input id="booking-company" value={form.company} onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))} />
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-2 md:col-span-2">
                         <Label htmlFor="booking-problem">{copy.problem}</Label>
                         <Textarea
                           id="booking-problem"
-                          className="min-h-32"
+                          className="min-h-36"
                           value={form.problem}
                           onChange={(event) => setForm((current) => ({ ...current, problem: event.target.value }))}
                           required
@@ -537,43 +441,43 @@ export default function BookingCheckout() {
                   )}
                 </GlassCard>
 
-                <GlassCard className="card-static rounded-[32px] p-7">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-2xl font-bold text-slate-950">{copy.payment}</h2>
-                      <p className="mt-2 text-sm text-slate-600">{copy.paymentHint}</p>
-                    </div>
-                    <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
-                      <Lock className="h-4 w-4" />
-                      {copy.secure}
-                    </div>
-                  </div>
-
-                  {!user ? null : stripeEnabled ? (
-                    paymentLoading ? (
-                      <div className="mt-6 text-sm text-slate-500">{copy.preparing}</div>
-                    ) : paymentClientSecret && stripeConfig?.publishableKey ? (
-                      <div className="mt-6">
-                        <StripeCardCheckout
-                          publishableKey={stripeConfig.publishableKey}
-                          clientSecret={paymentClientSecret}
-                          billingReady={billingReady}
-                          billingDetails={{
-                            name: form.name,
-                            email: form.email,
-                            phone: form.phone,
-                          }}
-                          submitLabel={saving ? copy.processing : `${copy.payNow}`}
-                          processingLabel={copy.processing}
-                          helperLabel={copy.cardReady}
-                          onSuccess={finalizeBooking}
-                        />
-                      </div>
-                    ) : null
-                  ) : (
-                    <div className="mt-6 text-sm text-slate-500">{copy.paymentUnavailable}</div>
-                  )}
-                </GlassCard>
+                {!user ? null : stripeEnabled ? (
+                  paymentLoading ? (
+                    <GlassCard className="card-static rounded-[32px] p-7">
+                      <div className="text-sm text-slate-500">{copy.preparing}</div>
+                    </GlassCard>
+                  ) : paymentClientSecret && stripeConfig?.publishableKey ? (
+                    <StripePaymentForm
+                      publishableKey={stripeConfig.publishableKey}
+                      clientSecret={paymentClientSecret}
+                      amountLabel={totalLabel}
+                      billingReady={billingReady}
+                      billingDetails={{
+                        name: form.name,
+                        email: form.email,
+                        phone: form.phone,
+                      }}
+                      copy={{
+                        title: copy.paymentTitle,
+                        subtitle: copy.paymentSubtitle,
+                        secure: copy.secure,
+                        number: copy.cardNumber,
+                        expiry: copy.expiry,
+                        cvc: copy.cvc,
+                        missingCustomer: copy.missingCustomer,
+                        missingCard: copy.missingCard,
+                        ready: copy.paymentReady,
+                        payNow: saving ? copy.processing : copy.payNow,
+                        processing: copy.processing,
+                      }}
+                      onSuccess={finalizeBooking}
+                    />
+                  ) : null
+                ) : (
+                  <GlassCard className="card-static rounded-[32px] p-7">
+                    <div className="text-sm text-slate-500">{copy.paymentUnavailable}</div>
+                  </GlassCard>
+                )}
 
                 {status ? (
                   <div

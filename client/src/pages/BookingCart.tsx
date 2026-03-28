@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import BookingFlowSteps from "@/components/booking/BookingFlowSteps";
+import BookingOrderSummary from "@/components/booking/BookingOrderSummary";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import Seo from "@/components/Seo";
-import BookingCartSummary from "@/components/booking/BookingCartSummary";
 import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,65 +20,79 @@ function getCopy(locale: string) {
   if (locale === "ar") {
     return {
       title: "سلة الحجز",
-      subtitle: "راجع الجلسات المختارة، احذف ما لا تريد، ثم انتقل إلى الدفع.",
-      cart: "سلة الحجز",
-      appointments: "الجلسات المختارة",
-      invoice: "الفاتورة",
+      subtitle: "راجع الجلسات المختارة، احذف ما لا تريده، ثم انتقل إلى الدفع.",
       empty: "لا توجد جلسات داخل السلة حالياً.",
+      orderSummary: "سلة الحجز",
+      lineItems: "الجلسات المختارة",
+      invoice: "تفاصيل الفاتورة",
       service: "الخدمة",
       priority: "الأولوية",
       subtotal: "المجموع الفرعي",
-      tax: "الضرائب",
+      taxes: "الضرائب",
       total: "الإجمالي المستحق",
+      selectedCount: "عدد الجلسات",
+      digitalNote: "كل موعد مختار يُحاسب كجلسة مستقلة ويمكنك حذفه قبل الانتقال إلى الدفع.",
       remove: "إزالة",
-      item: "جلسة",
-      note: "خدمة رقمية بدون شحن. كل موعد مختار يُحاسب كجلسة مستقلة.",
+      consultation: "استشارة",
+      support: "دعم",
+      standard: "عادي",
+      express: "إكسبريس",
       checkout: "الانتقال إلى الدفع",
       back: "متابعة اختيار المواعيد",
-      signIn: "سجّل الدخول لإكمال الدفع",
+      signIn: "سجل الدخول لإتمام الدفع",
       seoTitle: "سلة الحجز | CVsolucion",
     };
   }
+
   if (locale === "fr") {
     return {
       title: "Panier du booking",
-      subtitle: "Revisez les sessions choisies, supprimez ce que vous ne voulez pas, puis passez au paiement.",
-      cart: "Panier du booking",
-      appointments: "Sessions choisies",
-      invoice: "Facture",
+      subtitle: "Revisez les sessions choisies, retirez ce que vous ne voulez pas, puis passez au paiement.",
       empty: "Aucune session n'est dans le panier pour le moment.",
+      orderSummary: "Panier du booking",
+      lineItems: "Sessions choisies",
+      invoice: "Facture",
       service: "Service",
       priority: "Priorite",
       subtotal: "Sous-total",
-      tax: "Taxes",
+      taxes: "Taxes",
       total: "Total a payer",
+      selectedCount: "Sessions",
+      digitalNote: "Chaque horaire choisi est facture comme une session distincte et peut etre retire avant le paiement.",
       remove: "Retirer",
-      item: "Session",
-      note: "Service numerique sans livraison. Chaque horaire choisi est facture comme une session separee.",
-      checkout: "Passer au paiement",
+      consultation: "Consultation",
+      support: "Support",
+      standard: "Standard",
+      express: "Express",
+      checkout: "Continuer vers le paiement",
       back: "Continuer le choix des horaires",
-      signIn: "Connectez-vous pour finaliser le paiement",
+      signIn: "Connectez-vous pour payer",
       seoTitle: "Panier du booking | CVsolucion",
     };
   }
+
   return {
     title: "Booking cart",
-    subtitle: "Review your selected sessions, remove what you do not want, then continue to payment.",
-    cart: "Booking cart",
-    appointments: "Selected sessions",
-    invoice: "Invoice details",
+    subtitle: "Review the sessions you selected, remove what you do not want, then continue to payment.",
     empty: "There are no sessions in your cart right now.",
+    orderSummary: "Booking cart",
+    lineItems: "Selected sessions",
+    invoice: "Invoice details",
     service: "Service",
     priority: "Priority",
     subtotal: "Subtotal",
-    tax: "Taxes",
+    taxes: "Taxes",
     total: "Total due now",
+    selectedCount: "Selected sessions",
+    digitalNote: "Every selected appointment is billed as a separate session and can be removed before payment.",
     remove: "Remove",
-    item: "Session",
-    note: "Digital service with no shipping. Each selected appointment is billed as a separate session.",
+    consultation: "Consultation",
+    support: "Support",
+    standard: "Standard",
+    express: "Express",
     checkout: "Continue to checkout",
     back: "Keep selecting times",
-    signIn: "Sign in to complete payment",
+    signIn: "Sign in to pay",
     seoTitle: "Booking cart | CVsolucion",
   };
 }
@@ -112,30 +127,8 @@ export default function BookingCart() {
   }, []);
 
   const unitAmount = draft ? stripeConfig?.prices?.[`${draft.priority}:${draft.serviceType}`] ?? 0 : 0;
-  const serviceLabel =
-    draft
-      ? draft.serviceType === "support"
-        ? locale === "ar"
-          ? "دعم"
-          : "Support"
-        : locale === "ar"
-          ? "استشارة"
-          : "Consultation"
-      : "";
-  const priorityLabel =
-    draft
-      ? draft.priority === "express"
-        ? locale === "ar"
-          ? "إكسبريس"
-          : locale === "fr"
-            ? "Express"
-            : "Express"
-        : locale === "ar"
-          ? "عادي"
-          : locale === "fr"
-            ? "Standard"
-            : "Standard"
-      : "";
+  const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";
+  const priorityLabel = draft ? (draft.priority === "express" ? copy.express : copy.standard) : "";
 
   return (
     <div className="site-page min-h-screen bg-transparent">
@@ -148,6 +141,8 @@ export default function BookingCart() {
             <p className="mt-5 text-lg leading-8 text-slate-600">{copy.subtitle}</p>
           </div>
 
+          <BookingFlowSteps locale={locale} current="cart" />
+
           <div className="mx-auto mt-12 max-w-6xl">
             {!draft || !draft.slots.length ? (
               <GlassCard className="card-static rounded-[32px] p-8 text-center">
@@ -157,34 +152,42 @@ export default function BookingCart() {
                 </Button>
               </GlassCard>
             ) : (
-              <BookingCartSummary
-                draft={draft}
-                locale={locale}
-                currency={stripeConfig?.currency || "cad"}
-                unitAmount={unitAmount}
-                serviceLabel={serviceLabel}
-                priorityLabel={priorityLabel}
-                title={copy.cart}
-                appointmentsLabel={copy.appointments}
-                invoiceLabel={copy.invoice}
-                emptyLabel={copy.empty}
-                serviceText={copy.service}
-                priorityText={copy.priority}
-                subtotalText={copy.subtotal}
-                taxText={copy.tax}
-                totalText={copy.total}
-                removeText={copy.remove}
-                itemLabel={copy.item}
-                digitalNote={copy.note}
-                actionLabel={user ? copy.checkout : copy.signIn}
-                actionHref={user ? checkoutHref : loginHref}
-                secondaryActionLabel={copy.back}
-                secondaryActionHref={bookingHref}
-                onRemoveSlot={(slotId) => {
-                  const nextDraft = removeBookingCheckoutSlot(slotId);
-                  setDraft(nextDraft);
-                }}
-              />
+              <div className="space-y-6">
+                <BookingOrderSummary
+                  locale={locale}
+                  currency={stripeConfig?.currency || "cad"}
+                  draft={draft}
+                  unitAmount={unitAmount}
+                  serviceLabel={serviceLabel}
+                  priorityLabel={priorityLabel}
+                  labels={{
+                    title: copy.orderSummary,
+                    lineItems: copy.lineItems,
+                    invoice: copy.invoice,
+                    service: copy.service,
+                    priority: copy.priority,
+                    subtotal: copy.subtotal,
+                    taxes: copy.taxes,
+                    total: copy.total,
+                    selectedCount: copy.selectedCount,
+                    digitalNote: copy.digitalNote,
+                    remove: copy.remove,
+                  }}
+                  onRemoveSlot={(slotId) => {
+                    const nextDraft = removeBookingCheckoutSlot(slotId);
+                    setDraft(nextDraft);
+                  }}
+                />
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                  <Button asChild variant="outline" className="rounded-full border-slate-200 bg-white/80">
+                    <a href={bookingHref}>{copy.back}</a>
+                  </Button>
+                  <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90">
+                    <a href={user ? checkoutHref : loginHref}>{user ? copy.checkout : copy.signIn}</a>
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         </section>

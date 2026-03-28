@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Clock3, Zap } from "lucide-react";
 import BookingCartSummary from "@/components/booking/BookingCartSummary";
+import BookingFlowSteps from "@/components/booking/BookingFlowSteps";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
 import Header from "@/components/Header";
@@ -224,6 +225,8 @@ export default function Booking() {
             <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">{copy.title}</h1>
             <p className="mt-5 text-lg leading-8 text-slate-600">{copy.subtitle}</p>
           </div>
+
+          <BookingFlowSteps locale={locale} current="select" />
 
           <div className="mx-auto mt-10 grid max-w-6xl gap-6 lg:grid-cols-2">
             <GlassCard className={`card-static rounded-[30px] p-6 ${priority === "standard" ? "ring-2 ring-primary/30" : ""}`}>
