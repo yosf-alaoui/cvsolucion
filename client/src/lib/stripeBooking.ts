@@ -31,8 +31,7 @@ export function getStripeBookingConfig() {
 export function createBookingPaymentIntent(payload: {
   serviceType: BookingServiceType;
   priority: BookingPriority;
-  date: string;
-  hour: number;
+  slots: Array<{ date: string; hour: number }>;
   locale: string;
 }) {
   return request<{ ok: true; clientSecret: string; paymentIntentId: string }>("/api/stripe/booking-payment-intent", {

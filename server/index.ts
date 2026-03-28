@@ -133,6 +133,25 @@ function summarizeArticle(body: string, maxLength = 180) {
   return `${normalized.slice(0, maxLength).trimEnd()}...`;
 }
 
+function parseRequestedBookingSlots(value: unknown) {
+  const items = Array.isArray(value) ? value : [];
+  const normalized = items
+    .map((item) => {
+      const slot = item as { date?: unknown; hour?: unknown };
+      return {
+        date: String(slot?.date || "").trim(),
+        hour: Number(slot?.hour),
+      };
+    })
+    .filter((slot) => /^\d{4}-\d{2}-\d{2}$/.test(slot.date) && Number.isInteger(slot.hour));
+
+  const unique = new Map<string, { date: string; hour: number }>();
+  for (const slot of normalized) {
+    unique.set(`${slot.date}:${slot.hour}`, slot);
+  }
+  return Array.from(unique.values());
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -931,15 +950,11 @@ async function startServer() {
 
       const serviceType = String(req.body?.serviceType || "consultation").trim() === "support" ? "support" : "consultation";
       const priority = String(req.body?.priority || "standard").trim() === "express" ? "express" : "standard";
-      const date = String(req.body?.date || "").trim();
-      const hour = Number(req.body?.hour);
+      const slots = parseRequestedBookingSlots(req.body?.slots);
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
 
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        return res.status(400).json({ error: "Please choose a valid booking date." });
-      }
-      if (!Number.isInteger(hour)) {
-        return res.status(400).json({ error: "Please choose a valid appointment time." });
+      if (!slots.length) {
+        return res.status(400).json({ error: "Please choose at least one valid appointment time." });
       }
 
       const intent = await createBookingPaymentIntent({
@@ -947,8 +962,7 @@ async function startServer() {
         email: auth.user.email,
         serviceType,
         priority: priority as BookingPriority,
-        date,
-        hour,
+        slots,
         locale,
       });
 
@@ -971,8 +985,7 @@ async function startServer() {
 
       const serviceType = String(req.body?.serviceType || "consultation").trim() === "support" ? "support" : "consultation";
       const priority = String(req.body?.priority || "standard").trim() === "express" ? "express" : "standard";
-      const date = String(req.body?.date || "").trim();
-      const hour = Number(req.body?.hour);
+      const slots = parseRequestedBookingSlots(req.body?.slots);
       const name = String(req.body?.name || "").trim();
       const email = auth.user.email;
       const phone = String(req.body?.phone || "").trim();
@@ -997,11 +1010,8 @@ async function startServer() {
       if (notes.length < 10) {
         return res.status(400).json({ error: "Please describe the issue or request." });
       }
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        return res.status(400).json({ error: "Please choose a valid booking date." });
-      }
-      if (!Number.isInteger(hour)) {
-        return res.status(400).json({ error: "Please choose a valid appointment time." });
+      if (!slots.length) {
+        return res.status(400).json({ error: "Please choose at least one valid appointment time." });
       }
 
       const stripeConfig = getStripePricingSnapshot();
@@ -1016,28 +1026,29 @@ async function startServer() {
           userId: auth.user.id,
           serviceType,
           priority: priority as BookingPriority,
-          date,
-          hour,
+          slots,
         });
       }
 
-      const booking = createBooking({
-        userId: auth.user.id,
-        serviceType,
-        priority: priority as BookingPriority,
-        date,
-        hour,
-        name,
-        email,
-        phone,
-        country,
-        company,
-        notes,
-        locale,
-        paymentStatus: verifiedPayment ? "paid" : "unpaid",
-        paymentProvider: verifiedPayment ? "stripe" : null,
-        paymentReference: verifiedPayment?.id || null,
-      });
+      const bookings = slots.map((slot) =>
+        createBooking({
+          userId: auth.user.id,
+          serviceType,
+          priority: priority as BookingPriority,
+          date: slot.date,
+          hour: slot.hour,
+          name,
+          email,
+          phone,
+          country,
+          company,
+          notes,
+          locale,
+          paymentStatus: verifiedPayment ? "paid" : "unpaid",
+          paymentProvider: verifiedPayment ? "stripe" : null,
+          paymentReference: verifiedPayment?.id || null,
+        })
+      );
 
       upsertCustomerProfile({
         userId: auth.user.id,
@@ -1048,65 +1059,67 @@ async function startServer() {
         company,
       });
 
-      const slotLabel = `${booking.date} ${String(booking.hour).padStart(2, "0")}:00`;
+      const slotLabel = bookings
+        .map((booking) => `${booking.date} ${String(booking.hour).padStart(2, "0")}:00`)
+        .join(", ");
       const destination = (process.env.CONTACT_EMAIL || "contact@cvsolucion.com").trim();
-      const priorityLabel = booking.priority === "express" ? "Express" : "Standard";
-      const serviceLabel = booking.serviceType === "support" ? "Support" : "Consultation";
+      const priorityLabel = priority === "express" ? "Express" : "Standard";
+      const serviceLabel = serviceType === "support" ? "Support" : "Consultation";
 
       await sendAuthEmail({
         to: destination,
-        subject: `New ${priorityLabel} booking - ${booking.name}`,
+        subject: `New ${priorityLabel} booking - ${name}`,
         text: [
-          `Booking ID: ${booking.id}`,
+          `Booking IDs: ${bookings.map((booking) => booking.id).join(", ")}`,
           `Service: ${serviceLabel}`,
           `Priority: ${priorityLabel}`,
-          `Slot (Quebec): ${slotLabel}`,
-          `Name: ${booking.name}`,
-          `Email: ${booking.email}`,
-          `Phone: ${booking.phone}`,
-          booking.company ? `Company: ${booking.company}` : null,
-          booking.notes ? `Notes: ${booking.notes}` : null,
+          `Slots (Quebec): ${slotLabel}`,
+          `Name: ${name}`,
+          `Email: ${email}`,
+          `Phone: ${phone}`,
+          company ? `Company: ${company}` : null,
+          notes ? `Notes: ${notes}` : null,
         ]
           .filter(Boolean)
           .join("\n"),
         html: `
           <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
             <h2 style="margin:0 0 16px">New ${escapeHtml(priorityLabel)} booking</h2>
-            <p><strong>Booking ID:</strong> ${escapeHtml(booking.id)}</p>
+            <p><strong>Booking IDs:</strong> ${escapeHtml(bookings.map((booking) => booking.id).join(", "))}</p>
             <p><strong>Service:</strong> ${escapeHtml(serviceLabel)}</p>
             <p><strong>Priority:</strong> ${escapeHtml(priorityLabel)}</p>
-            <p><strong>Slot (Quebec):</strong> ${escapeHtml(slotLabel)}</p>
-            <p><strong>Name:</strong> ${escapeHtml(booking.name)}</p>
-            <p><strong>Email:</strong> ${escapeHtml(booking.email)}</p>
-            <p><strong>Phone:</strong> ${escapeHtml(booking.phone)}</p>
-            ${booking.company ? `<p><strong>Company:</strong> ${escapeHtml(booking.company)}</p>` : ""}
-            ${booking.notes ? `<p><strong>Notes:</strong> ${escapeHtml(booking.notes)}</p>` : ""}
+            <p><strong>Slots (Quebec):</strong> ${escapeHtml(slotLabel)}</p>
+            <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+            <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+            <p><strong>Phone:</strong> ${escapeHtml(phone)}</p>
+            ${company ? `<p><strong>Company:</strong> ${escapeHtml(company)}</p>` : ""}
+            ${notes ? `<p><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : ""}
           </div>
         `,
       });
 
       await sendAuthEmail({
-        to: booking.email,
+        to: email,
         subject: "Your CVsolucion booking request is confirmed",
         text: [
-          `Hello ${booking.name},`,
+          `Hello ${name},`,
           "",
           `Your ${priorityLabel.toLowerCase()} ${serviceLabel.toLowerCase()} booking request has been recorded.`,
-          `Requested slot (Quebec time): ${slotLabel}`,
+          `Requested slot(s) (Quebec time): ${slotLabel}`,
           "",
           "If any adjustment is needed, our team will contact you using the details you submitted.",
         ].join("\n"),
         html: `
           <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
-            <p>Hello ${escapeHtml(booking.name)},</p>
+            <p>Hello ${escapeHtml(name)},</p>
             <p>Your <strong>${escapeHtml(priorityLabel.toLowerCase())}</strong> ${escapeHtml(serviceLabel.toLowerCase())} booking request has been recorded.</p>
-            <p><strong>Requested slot (Quebec time):</strong> ${escapeHtml(slotLabel)}</p>
+            <p><strong>Requested slot(s) (Quebec time):</strong> ${escapeHtml(slotLabel)}</p>
             <p>If any adjustment is needed, our team will contact you using the details you submitted.</p>
           </div>
         `,
       });
 
-      return res.status(201).json({ ok: true, booking });
+      return res.status(201).json({ ok: true, bookings, booking: bookings[0] });
     } catch (error) {
       return next(error);
     }

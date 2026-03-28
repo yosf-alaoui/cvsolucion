@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import crypto from "crypto";
 import type { BookingPriority, BookingServiceType } from "./bookingStore";
 
 type StripeBookingPriceMap = Record<`${BookingPriority}:${BookingServiceType}`, number>;
@@ -50,6 +51,14 @@ export function getBookingPrice(priority: BookingPriority, serviceType: BookingS
   return priceMap[`${priority}:${serviceType}`];
 }
 
+export function buildBookingSlotsDigest(slots: Array<{ date: string; hour: number }>) {
+  const normalized = [...slots]
+    .map((slot) => `${slot.date}:${String(slot.hour).padStart(2, "0")}`)
+    .sort()
+    .join("|");
+  return crypto.createHash("sha256").update(normalized).digest("hex");
+}
+
 export function getStripePricingSnapshot() {
   return {
     enabled: isStripeConfigured(),
@@ -64,8 +73,7 @@ export async function createBookingPaymentIntent(input: {
   email: string;
   serviceType: BookingServiceType;
   priority: BookingPriority;
-  date: string;
-  hour: number;
+  slots: Array<{ date: string; hour: number }>;
   locale: "en" | "fr" | "ar";
 }) {
   const stripe = getStripeClient();
@@ -73,10 +81,17 @@ export async function createBookingPaymentIntent(input: {
     throw new Error("Stripe is not configured.");
   }
 
-  const amount = getBookingPrice(input.priority, input.serviceType);
+  const unitAmount = getBookingPrice(input.priority, input.serviceType);
+  const slotCount = input.slots.length;
+  const amount = unitAmount * slotCount;
   if (!amount) {
     throw new Error("Stripe pricing is not configured for this booking type.");
   }
+  if (!slotCount) {
+    throw new Error("At least one booking slot is required.");
+  }
+
+  const slotsDigest = buildBookingSlotsDigest(input.slots);
 
   const intent = await stripe.paymentIntents.create({
     amount,
@@ -91,8 +106,8 @@ export async function createBookingPaymentIntent(input: {
       email: input.email,
       serviceType: input.serviceType,
       priority: input.priority,
-      date: input.date,
-      hour: String(input.hour),
+      slotCount: String(slotCount),
+      slotsDigest,
       locale: input.locale,
     },
   });
@@ -109,17 +124,21 @@ export async function verifyBookingPayment(input: {
   userId: string;
   serviceType: BookingServiceType;
   priority: BookingPriority;
-  date: string;
-  hour: number;
+  slots: Array<{ date: string; hour: number }>;
 }) {
   const stripe = getStripeClient();
   if (!stripe) {
     throw new Error("Stripe is not configured.");
   }
 
-  const amount = getBookingPrice(input.priority, input.serviceType);
+  const unitAmount = getBookingPrice(input.priority, input.serviceType);
+  const slotCount = input.slots.length;
+  const amount = unitAmount * slotCount;
   if (!amount) {
     throw new Error("Stripe pricing is not configured for this booking type.");
+  }
+  if (!slotCount) {
+    throw new Error("At least one booking slot is required.");
   }
 
   const intent = await stripe.paymentIntents.retrieve(input.paymentIntentId);
@@ -143,8 +162,12 @@ export async function verifyBookingPayment(input: {
     throw new Error("Payment does not match the selected booking type.");
   }
 
-  if (intent.metadata?.date !== input.date || intent.metadata?.hour !== String(input.hour)) {
-    throw new Error("Payment does not match the selected appointment time.");
+  if (intent.metadata?.slotCount !== String(slotCount)) {
+    throw new Error("Payment does not match the selected number of appointments.");
+  }
+
+  if (intent.metadata?.slotsDigest !== buildBookingSlotsDigest(input.slots)) {
+    throw new Error("Payment does not match the selected appointment slots.");
   }
 
   return intent;

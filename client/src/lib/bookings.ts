@@ -80,8 +80,7 @@ export function getBookingAvailability(priority: BookingPriority) {
 export function createBooking(payload: {
   serviceType: BookingServiceType;
   priority: BookingPriority;
-  date: string;
-  hour: number;
+  slots: Array<{ date: string; hour: number }>;
   name: string;
   email: string;
   phone: string;

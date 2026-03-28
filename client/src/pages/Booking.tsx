@@ -159,13 +159,21 @@ export default function Booking() {
   const weeks = useMemo(() => chunkDays(days, priority === "express" ? 2 : 5), [days, priority]);
   const checkoutHref = locale === "en" ? "/book/checkout" : `/${locale}/book/checkout`;
   const priceKey = `${priority}:${serviceType}`;
-  const amount = stripeConfig?.prices?.[priceKey] ?? 0;
+  const unitAmount = stripeConfig?.prices?.[priceKey] ?? 0;
+  const totalAmount = unitAmount * selectedSlots.length;
   const amountLabel =
-    amount > 0
+    unitAmount > 0
       ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
           style: "currency",
           currency: (stripeConfig?.currency || "cad").toUpperCase(),
-        }).format(amount / 100)
+        }).format(unitAmount / 100)
+      : null;
+  const totalAmountLabel =
+    totalAmount > 0
+      ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
+          style: "currency",
+          currency: (stripeConfig?.currency || "cad").toUpperCase(),
+        }).format(totalAmount / 100)
       : null;
   const serviceLabel = serviceType === "support" ? copy.support : copy.consultation;
   const priorityLabel = priority === "express" ? copy.expressTitle : copy.standardTitle;
@@ -341,13 +349,17 @@ export default function Booking() {
                       <div className="mt-4 border-t border-slate-200 pt-4">
                         <div className="flex items-center justify-between gap-4">
                           <span className="font-semibold text-slate-900">{copy.total}</span>
-                          <span className="text-lg font-bold text-primary">{amountLabel || "—"}</span>
-                        </div>
-                        <p className="mt-3 text-xs leading-6 text-slate-500">{copy.backupNote}</p>
+                        <span className="text-lg font-bold text-primary">{totalAmountLabel || "—"}</span>
+                      </div>
+                        <p className="mt-3 text-xs leading-6 text-slate-500">
+                          {selectedSlots.length > 1
+                            ? `Selected appointments: ${selectedSlots.length}.`
+                            : copy.backupNote}
+                        </p>
                       </div>
                     </div>
                     <Button type="button" className="mt-2 w-full rounded-full bg-primary text-white hover:bg-primary/90" onClick={continueToCheckout}>
-                      {amountLabel ? `${copy.continueCheckout} • ${amountLabel}` : copy.continueCheckout}
+                      {totalAmountLabel ? `${copy.continueCheckout} • ${totalAmountLabel}` : copy.continueCheckout}
                     </Button>
                   </div>
                 ) : (

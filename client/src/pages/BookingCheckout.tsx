@@ -318,14 +318,22 @@ export default function BookingCheckout() {
 
   const primarySlot = draft?.slots[0] ?? null;
   const stripePriceKey = draft ? `${draft.priority}:${draft.serviceType}` : "";
-  const stripeAmount = stripeConfig?.prices?.[stripePriceKey] ?? 0;
-  const stripeEnabled = Boolean(stripeConfig?.enabled && stripeConfig.publishableKey && stripeAmount > 0);
+  const unitAmount = stripeConfig?.prices?.[stripePriceKey] ?? 0;
+  const totalAmount = unitAmount * (draft?.slots.length || 0);
+  const stripeEnabled = Boolean(stripeConfig?.enabled && stripeConfig.publishableKey && totalAmount > 0);
   const stripeAmountLabel =
-    stripeAmount > 0
+    unitAmount > 0
       ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
           style: "currency",
           currency: (stripeConfig?.currency || "cad").toUpperCase(),
-        }).format(stripeAmount / 100)
+        }).format(unitAmount / 100)
+      : null;
+  const totalAmountLabel =
+    totalAmount > 0
+      ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
+          style: "currency",
+          currency: (stripeConfig?.currency || "cad").toUpperCase(),
+        }).format(totalAmount / 100)
       : null;
   const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";
   const priorityLabel = draft ? (draft.priority === "express" ? copy.express : copy.standard) : "";
@@ -341,8 +349,7 @@ export default function BookingCheckout() {
     createBookingPaymentIntent({
       serviceType: draft.serviceType,
       priority: draft.priority,
-      date: primarySlot.date,
-      hour: primarySlot.hour,
+      slots: draft.slots.map((slot) => ({ date: slot.date, hour: slot.hour })),
       locale,
     })
       .then((response) => {
@@ -375,8 +382,7 @@ export default function BookingCheckout() {
       await createBooking({
         serviceType: draft.serviceType,
         priority: draft.priority,
-        date: primarySlot.date,
-        hour: primarySlot.hour,
+        slots: draft.slots.map((slot) => ({ date: slot.date, hour: slot.hour })),
         name: form.name,
         email: form.email,
         phone: form.phone,
@@ -477,9 +483,11 @@ export default function BookingCheckout() {
                     <div className="mt-4 border-t border-slate-200 pt-4">
                       <div className="flex items-center justify-between gap-4">
                         <span className="font-semibold text-slate-900">{copy.total}</span>
-                        <span className="text-lg font-bold text-primary">{stripeAmountLabel || "—"}</span>
+                        <span className="text-lg font-bold text-primary">{totalAmountLabel || "—"}</span>
                       </div>
-                      <p className="mt-3 text-xs leading-6 text-slate-500">{copy.backupNote}</p>
+                      <p className="mt-3 text-xs leading-6 text-slate-500">
+                        {draft.slots.length > 1 ? `Selected appointments: ${draft.slots.length}.` : copy.backupNote}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -527,7 +535,7 @@ export default function BookingCheckout() {
 
                     <div className="rounded-[24px] border border-slate-200 bg-white/70 p-4">
                       <div className="text-sm font-semibold text-slate-900">{copy.payment}</div>
-                      {stripeAmountLabel ? <div className="mt-2 text-sm text-slate-600">{copy.total}: {stripeAmountLabel}</div> : null}
+                      {totalAmountLabel ? <div className="mt-2 text-sm text-slate-600">{copy.total}: {totalAmountLabel}</div> : null}
                       {stripeEnabled ? (
                         paymentLoading ? (
                           <div className="mt-4 text-sm text-slate-500">{copy.paymentLoading}</div>
