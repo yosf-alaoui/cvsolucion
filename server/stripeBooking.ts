@@ -18,15 +18,7 @@ export function getStripeCurrency() {
 }
 
 export function isStripeConfigured() {
-  const prices = getPriceMap();
-  return Boolean(
-    getStripeSecretKey() &&
-      getStripePublishableKey() &&
-      prices["standard:consultation"] &&
-      prices["standard:support"] &&
-      prices["express:consultation"] &&
-      prices["express:support"]
-  );
+  return Boolean(getStripeSecretKey() && getStripePublishableKey());
 }
 
 function getStripeClient() {

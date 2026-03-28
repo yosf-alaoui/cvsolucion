@@ -195,6 +195,7 @@ export default function Booking() {
         payment: "الدفع",
         paymentSecure: "ادفع الآن داخل الموقع لإكمال الحجز.",
         paymentUnavailable: "الدفع غير متاح حالياً. أكمل إعداد Stripe أولاً.",
+        paymentSelectionMissing: "هذا النوع من الحجز لم يُحدَّد له سعر بعد.",
         paymentLoading: "جارٍ تجهيز الدفع الآمن...",
         success: "تم تسجيل الحجز بنجاح. ستصلك رسالة تأكيد عبر البريد.",
         chooseSlot: "اختر موعداً صالحاً قبل الإرسال.",
@@ -235,6 +236,7 @@ export default function Booking() {
         payment: "Paiement",
         paymentSecure: "Payez maintenant dans le site pour finaliser le booking.",
         paymentUnavailable: "Le paiement n'est pas encore disponible. Stripe doit encore être configure.",
+        paymentSelectionMissing: "Ce type de booking n'a pas encore de tarif configure.",
         paymentLoading: "Preparation du paiement securise...",
         success: "Le booking est enregistre. Un email de confirmation sera envoye.",
         chooseSlot: "Choisissez un horaire valide avant de confirmer.",
@@ -274,6 +276,7 @@ export default function Booking() {
       payment: "Payment",
       paymentSecure: "Pay securely inside the site to finalize this booking.",
       paymentUnavailable: "Payment is not available yet. Stripe still needs to be configured.",
+      paymentSelectionMissing: "This booking type does not have a price configured yet.",
       paymentLoading: "Preparing secure payment...",
       success: "Booking recorded successfully. A confirmation email will be sent.",
       chooseSlot: "Choose a valid slot before confirming.",
@@ -396,7 +399,8 @@ export default function Booking() {
   const weeks = useMemo(() => chunkDays(days, priority === "express" ? 2 : 5), [days, priority]);
   const stripePriceKey = `${priority}:${serviceType}`;
   const stripeAmount = stripeConfig?.prices?.[stripePriceKey] ?? 0;
-  const stripeEnabled = Boolean(stripeConfig?.enabled && stripeConfig.publishableKey && stripeAmount > 0);
+  const stripeKeysReady = Boolean(stripeConfig?.enabled && stripeConfig.publishableKey);
+  const stripeEnabled = Boolean(stripeKeysReady && stripeAmount > 0);
   const stripeAmountLabel =
     stripeAmount > 0
       ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
@@ -732,6 +736,8 @@ export default function Booking() {
                         ) : (
                           <div className="mt-4 text-sm text-slate-500">{copy.chooseSlot}</div>
                         )
+                      ) : stripeKeysReady ? (
+                        <div className="mt-4 text-sm text-slate-500">{copy.paymentSelectionMissing}</div>
                       ) : (
                         <div className="mt-4 space-y-4">
                           <div className="text-sm text-slate-500">{copy.paymentUnavailable}</div>
