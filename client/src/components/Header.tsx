@@ -95,13 +95,14 @@ export default function Header() {
   const loginHref = `${prefix}/login`;
   const contactHref = `${homeHref}#contact`;
   const bookingHref = getBookingHref(locale);
-  const cartHref = locale === "en" ? "/book/checkout" : `/${locale}/book/checkout`;
+  const cartHref = locale === "en" ? "/book/cart" : `/${locale}/book/cart`;
   const isAuthed = Boolean(user?.id);
 
   const articlesLabel = locale === "ar" ? "المقالات" : "Articles";
   const aboutLabel = locale === "ar" ? "من نحن" : locale === "fr" ? "A propos" : "About";
   const contactLabel = locale === "ar" ? "تواصل" : locale === "fr" ? "Contact" : "Contact";
   const bookLabel = locale === "ar" ? "احجز استشارة" : locale === "fr" ? "Reserver" : "Book";
+  const cartLabel = locale === "ar" ? "السلة" : locale === "fr" ? "Panier" : "Cart";
 
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
@@ -192,7 +193,7 @@ export default function Header() {
               <Button asChild variant="outline" size="sm" className="relative rounded-full border-slate-200 bg-white/75 backdrop-blur">
                 <a href={cartHref}>
                   <ShoppingCart className="h-4 w-4" />
-                  Cart
+                  {cartLabel}
                   {cartCount > 0 ? (
                     <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
                       {cartCount}
@@ -426,7 +427,7 @@ export default function Header() {
                 <Button asChild variant="outline" className="relative w-full rounded-full bg-white/80">
                   <a href={cartHref} onClick={() => setIsMenuOpen(false)}>
                     <ShoppingCart className="h-4 w-4" />
-                    Cart
+                    {cartLabel}
                     {cartCount > 0 ? (
                       <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
                         {cartCount}

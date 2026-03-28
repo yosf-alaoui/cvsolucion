@@ -19,6 +19,7 @@ const Articles = lazy(() => import("./pages/Articles"));
 const ArticleDetailPage = lazy(() => import("./pages/ArticleDetail"));
 const About = lazy(() => import("./pages/About"));
 const Booking = lazy(() => import("./pages/Booking"));
+const BookingCart = lazy(() => import("./pages/BookingCart"));
 const BookingCheckout = lazy(() => import("./pages/BookingCheckout"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Analytics = lazy(() => import("./components/Analytics"));
@@ -85,6 +86,9 @@ function Router() {
       <Route path={"/about"} component={About} />
       <Route path={"/fr/about"} component={About} />
       <Route path={"/ar/about"} component={About} />
+      <Route path={"/book/cart"} component={BookingCart} />
+      <Route path={"/fr/book/cart"} component={BookingCart} />
+      <Route path={"/ar/book/cart"} component={BookingCart} />
       <Route path={"/book/checkout"} component={BookingCheckout} />
       <Route path={"/fr/book/checkout"} component={BookingCheckout} />
       <Route path={"/ar/book/checkout"} component={BookingCheckout} />

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Clock3, ShieldCheck, ShoppingCart, Zap } from "lucide-react";
+import { Clock3, Zap } from "lucide-react";
+import BookingCartSummary from "@/components/booking/BookingCartSummary";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
 import Header from "@/components/Header";
@@ -39,6 +40,106 @@ function chunkDays(days: BookingAvailabilityDay[], size: number) {
   return chunks;
 }
 
+function getCopy(locale: string) {
+  if (locale === "ar") {
+    return {
+      title: "اختر موعد الحجز",
+      subtitle: "اختر الخدمة والمواعيد، ثم راجع السلة قبل الدفع.",
+      standardTitle: "حجز عادي",
+      standardText: "للاستشارة أو الدعم خلال ساعات العمل العادية.",
+      expressTitle: "أولوية إكسبريس",
+      expressText: "أولوية أعلى مع تكلفة إضافية، متاحة لليوم والغد فقط.",
+      consultation: "استشارة",
+      support: "دعم",
+      timezone: "جميع المواعيد حسب توقيت كيبيك، كندا",
+      lunch: "توقف يومي: 12:00 - 13:00",
+      booked: "محجوز",
+      available: "متاح",
+      summary: "سلة الحجز",
+      summaryEmpty: "اختر موعداً واحداً أو أكثر قبل المتابعة.",
+      loading: "جارٍ تحميل المواعيد...",
+      reviewCart: "مراجعة السلة",
+      chooseSlot: "اختر موعداً صالحاً أولاً.",
+      tooManySlots: "يمكن اختيار حتى 3 مواعيد فقط.",
+      service: "الخدمة",
+      priority: "الأولوية",
+      seoTitle: "حجز موعد | CVsolucion",
+      appointments: "الجلسات المختارة",
+      invoice: "تفاصيل الفاتورة",
+      remove: "إزالة",
+      item: "جلسة",
+      subtotal: "المجموع الفرعي",
+      taxes: "الضرائب",
+      total: "الإجمالي المستحق",
+      note: "خدمة رقمية بدون شحن. كل موعد مختار يُحاسب كجلسة مستقلة.",
+    };
+  }
+  if (locale === "fr") {
+    return {
+      title: "Choisir un booking",
+      subtitle: "Choisissez le service et les horaires, puis revisez le panier avant le paiement.",
+      standardTitle: "Booking standard",
+      standardText: "Pour consultation ou support pendant les heures normales.",
+      expressTitle: "Priorite express",
+      expressText: "Priorite plus forte avec cout supplementaire, seulement aujourd'hui et demain.",
+      consultation: "Consultation",
+      support: "Support",
+      timezone: "Tous les horaires sont en heure du Quebec, Canada",
+      lunch: "Pause quotidienne : 12:00 - 13:00",
+      booked: "Reserve",
+      available: "Disponible",
+      summary: "Panier du booking",
+      summaryEmpty: "Choisissez un ou plusieurs horaires avant de continuer.",
+      loading: "Chargement des horaires...",
+      reviewCart: "Reviser le panier",
+      chooseSlot: "Choisissez d'abord un horaire valide.",
+      tooManySlots: "Vous pouvez choisir jusqu'a 3 horaires seulement.",
+      service: "Service",
+      priority: "Priorite",
+      seoTitle: "Reserver un booking | CVsolucion",
+      appointments: "Sessions choisies",
+      invoice: "Facture",
+      remove: "Retirer",
+      item: "Session",
+      subtotal: "Sous-total",
+      taxes: "Taxes",
+      total: "Total a payer",
+      note: "Service numerique sans livraison. Chaque horaire choisi est facture comme une session separee.",
+    };
+  }
+  return {
+    title: "Choose your booking",
+    subtitle: "Pick the service and sessions, then review your cart before payment.",
+    standardTitle: "Standard booking",
+    standardText: "For consultation or support during normal business hours.",
+    expressTitle: "Express priority",
+    expressText: "Higher priority with extra cost, available only today and tomorrow.",
+    consultation: "Consultation",
+    support: "Support",
+    timezone: "All times are shown in Quebec, Canada time",
+    lunch: "Daily pause: 12:00 - 13:00",
+    booked: "Booked",
+    available: "Available",
+    summary: "Booking cart",
+    summaryEmpty: "Choose one or more time slots before continuing.",
+    loading: "Loading schedule...",
+    reviewCart: "Review cart",
+    chooseSlot: "Choose a valid slot first.",
+    tooManySlots: "You can choose up to 3 time slots only.",
+    service: "Service",
+    priority: "Priority",
+    seoTitle: "Book an appointment | CVsolucion",
+    appointments: "Selected sessions",
+    invoice: "Invoice details",
+    remove: "Remove",
+    item: "Session",
+    subtotal: "Subtotal",
+    taxes: "Taxes",
+    total: "Total due now",
+    note: "Digital service with no shipping. Each selected appointment is billed as a separate session.",
+  };
+}
+
 export default function Booking() {
   const { locale } = useI18n();
   const [priority, setPriority] = useState<BookingPriority>("standard");
@@ -49,96 +150,7 @@ export default function Booking() {
   const [stripeConfig, setStripeConfig] = useState<StripeConfigResponse | null>(null);
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
-  const copy = useMemo(() => {
-    if (locale === "ar") {
-      return {
-        title: "اختر موعد الحجز",
-        subtitle: "اختر الخدمة والموعد أولاً، ثم انتقل إلى صفحة الدفع والتأكيد.",
-        standardTitle: "حجز عادي",
-        standardText: "للاستشارة أو الدعم خلال ساعات العمل العادية.",
-        expressTitle: "Express Priority",
-        expressText: "أولوية أعلى مع تكلفة إضافية، لليوم والغد فقط.",
-        consultation: "استشارة",
-        support: "دعم",
-        timezone: "جميع المواعيد حسب توقيت كيبيك، كندا",
-        lunch: "توقف يومي: 12:00 - 13:00",
-        booked: "محجوز",
-        available: "متاح",
-        summary: "سلة الحجز",
-        summaryEmpty: "اختر موعداً واحداً أو أكثر قبل المتابعة.",
-        loading: "جارٍ تحميل المواعيد...",
-        continueCheckout: "المتابعة إلى الدفع",
-        chooseSlot: "اختر موعداً صالحاً أولاً.",
-        tooManySlots: "يمكن اختيار حتى 3 مواعيد فقط.",
-        primarySlot: "الموعد الأساسي",
-        option: "خيار",
-        service: "الخدمة",
-        priority: "الأولوية",
-        price: "السعر",
-        total: "الإجمالي المستحق",
-        backupNote: "المواعيد الإضافية تبقى بدائل فقط ولا تُحاسب بشكل منفصل.",
-        seoTitle: "حجز موعد | CVsolucion",
-      };
-    }
-    if (locale === "fr") {
-      return {
-        title: "Choisir un booking",
-        subtitle: "Choisissez d'abord le service et l'horaire, puis passez au checkout et au paiement.",
-        standardTitle: "Booking standard",
-        standardText: "Pour consultation ou support pendant les heures normales.",
-        expressTitle: "Express Priority",
-        expressText: "Priorite plus forte avec cout supplementaire, seulement aujourd'hui et demain.",
-        consultation: "Consultation",
-        support: "Support",
-        timezone: "Tous les horaires sont en heure du Quebec, Canada",
-        lunch: "Pause quotidienne : 12:00 - 13:00",
-        booked: "Reserve",
-        available: "Disponible",
-        summary: "Panier du booking",
-        summaryEmpty: "Choisissez un ou plusieurs horaires avant de continuer.",
-        loading: "Chargement des horaires...",
-        continueCheckout: "Continuer vers le checkout",
-        chooseSlot: "Choisissez d'abord un horaire valide.",
-        tooManySlots: "Vous pouvez choisir jusqu'a 3 horaires seulement.",
-        primarySlot: "Horaire principal",
-        option: "Option",
-        service: "Service",
-        priority: "Priorite",
-        price: "Prix",
-        total: "Total a payer",
-        backupNote: "Les horaires supplementaires restent des options de secours et ne sont pas factures separement.",
-        seoTitle: "Reserver un booking | CVsolucion",
-      };
-    }
-    return {
-      title: "Choose your booking",
-      subtitle: "Pick the service and time first, then continue to checkout and payment.",
-      standardTitle: "Standard booking",
-      standardText: "For consultation or support during normal business hours.",
-      expressTitle: "Express Priority",
-      expressText: "Higher priority with extra cost, available only today and tomorrow.",
-      consultation: "Consultation",
-      support: "Support",
-      timezone: "All times are shown in Quebec, Canada time",
-      lunch: "Daily pause: 12:00 - 13:00",
-      booked: "Booked",
-      available: "Available",
-      summary: "Booking cart",
-      summaryEmpty: "Choose one or more time slots before continuing.",
-      loading: "Loading schedule...",
-      continueCheckout: "Continue to checkout",
-      chooseSlot: "Choose a valid slot first.",
-      tooManySlots: "You can choose up to 3 time slots only.",
-      primarySlot: "Primary slot",
-      option: "Option",
-      service: "Service",
-      priority: "Priority",
-      price: "Price",
-      total: "Total due now",
-      backupNote: "Extra selected slots stay as backups only and are not charged separately.",
-      seoTitle: "Book an appointment | CVsolucion",
-    };
-  }, [locale]);
+  const copy = useMemo(() => getCopy(locale), [locale]);
 
   useEffect(() => {
     setLoading(true);
@@ -157,17 +169,10 @@ export default function Booking() {
   }, []);
 
   const weeks = useMemo(() => chunkDays(days, priority === "express" ? 2 : 5), [days, priority]);
-  const checkoutHref = locale === "en" ? "/book/checkout" : `/${locale}/book/checkout`;
+  const cartHref = locale === "en" ? "/book/cart" : `/${locale}/book/cart`;
   const priceKey = `${priority}:${serviceType}`;
   const unitAmount = stripeConfig?.prices?.[priceKey] ?? 0;
   const totalAmount = unitAmount * selectedSlots.length;
-  const amountLabel =
-    unitAmount > 0
-      ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
-          style: "currency",
-          currency: (stripeConfig?.currency || "cad").toUpperCase(),
-        }).format(unitAmount / 100)
-      : null;
   const totalAmountLabel =
     totalAmount > 0
       ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
@@ -191,18 +196,19 @@ export default function Booking() {
     });
   }
 
-  function continueToCheckout() {
+  function continueToCart() {
     if (!selectedSlots.length) {
       setStatus({ tone: "error", text: copy.chooseSlot });
       return;
     }
+
     saveBookingCheckoutDraft({
       priority,
       serviceType,
       slots: selectedSlots.map((slot) => ({ id: slot.id, date: slot.date, hour: slot.hour })),
       createdAt: Date.now(),
     });
-    window.location.href = checkoutHref;
+    window.location.href = cartHref;
   }
 
   return (
@@ -241,7 +247,12 @@ export default function Booking() {
                 </div>
                 <Zap className="h-6 w-6 text-amber-500" />
               </div>
-              <Button type="button" variant="outline" className="mt-5 rounded-full border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => setPriority("express")}>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-5 rounded-full border-amber-300 text-amber-700 hover:bg-amber-50"
+                onClick={() => setPriority("express")}
+              >
                 {copy.expressTitle}
               </Button>
             </GlassCard>
@@ -256,10 +267,20 @@ export default function Booking() {
             <div className="space-y-6">
               <GlassCard className="card-static rounded-[32px] p-7">
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button type="button" variant={serviceType === "consultation" ? "default" : "outline"} className="rounded-full" onClick={() => setServiceType("consultation")}>
+                  <Button
+                    type="button"
+                    variant={serviceType === "consultation" ? "default" : "outline"}
+                    className="rounded-full"
+                    onClick={() => setServiceType("consultation")}
+                  >
                     {copy.consultation}
                   </Button>
-                  <Button type="button" variant={serviceType === "support" ? "default" : "outline"} className="rounded-full" onClick={() => setServiceType("support")}>
+                  <Button
+                    type="button"
+                    variant={serviceType === "support" ? "default" : "outline"}
+                    className="rounded-full"
+                    onClick={() => setServiceType("support")}
+                  >
                     {copy.support}
                   </Button>
                 </div>
@@ -292,7 +313,9 @@ export default function Booking() {
                                     }`}
                                   >
                                     <span>{timeLabel(slot.hour, locale)}</span>
-                                    <span className="text-xs font-semibold uppercase tracking-[0.18em]">{booked ? copy.booked : copy.available}</span>
+                                    <span className="text-xs font-semibold uppercase tracking-[0.18em]">
+                                      {booked ? copy.booked : copy.available}
+                                    </span>
                                   </button>
                                 );
                               })}
@@ -307,75 +330,45 @@ export default function Booking() {
             </div>
 
             <div className="space-y-6">
-              <GlassCard className="card-static rounded-[32px] p-7">
-                <div className="flex items-center gap-3">
-                  <ShoppingCart className="h-6 w-6 text-primary" />
-                  <h2 className="text-2xl font-bold text-slate-950">{copy.summary}</h2>
-                </div>
-                {selectedSlots.length ? (
-                  <div className="mt-5 space-y-4 text-slate-700">
-                    {selectedSlots.map((slot, index) => (
-                      <div key={slot.id} className="rounded-2xl border border-slate-200 bg-white/70 p-4">
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          {index === 0 ? copy.primarySlot : `${copy.option} ${index + 1}`}
-                        </div>
-                        <div className="mt-3 flex items-center gap-3">
-                          <CalendarDays className="h-5 w-5 text-primary" />
-                          <span>{dateLabel(slot.date, locale)}</span>
-                        </div>
-                        <div className="mt-2 flex items-center gap-3">
-                          <Clock3 className="h-5 w-5 text-primary" />
-                          <span>{timeLabel(slot.hour, locale)}</span>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="flex items-center gap-3">
-                      <ShieldCheck className={`h-5 w-5 ${priority === "express" ? "text-amber-500" : "text-primary"}`} />
-                      <span>{priority === "express" ? copy.expressTitle : copy.standardTitle}</span>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 text-sm">
-                      <div className="flex items-center justify-between gap-4">
-                        <span className="text-slate-500">{copy.service}</span>
-                        <span className="font-semibold text-slate-900">{serviceLabel}</span>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between gap-4">
-                        <span className="text-slate-500">{copy.priority}</span>
-                        <span className="font-semibold text-slate-900">{priorityLabel}</span>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between gap-4">
-                        <span className="text-slate-500">{copy.price}</span>
-                        <span className="font-semibold text-slate-900">{amountLabel || "—"}</span>
-                      </div>
-                      <div className="mt-4 border-t border-slate-200 pt-4">
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="font-semibold text-slate-900">{copy.total}</span>
-                        <span className="text-lg font-bold text-primary">{totalAmountLabel || "—"}</span>
-                      </div>
-                        <p className="mt-3 text-xs leading-6 text-slate-500">
-                          {selectedSlots.length > 1
-                            ? `Selected appointments: ${selectedSlots.length}.`
-                            : copy.backupNote}
-                        </p>
-                      </div>
-                    </div>
-                    <Button type="button" className="mt-2 w-full rounded-full bg-primary text-white hover:bg-primary/90" onClick={continueToCheckout}>
-                      {totalAmountLabel ? `${copy.continueCheckout} • ${totalAmountLabel}` : copy.continueCheckout}
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="mt-5 text-base leading-7 text-slate-600">{copy.summaryEmpty}</p>
-                )}
+              <BookingCartSummary
+                draft={{
+                  priority,
+                  serviceType,
+                  slots: selectedSlots.map((slot) => ({ id: slot.id, date: slot.date, hour: slot.hour })),
+                  createdAt: Date.now(),
+                }}
+                locale={locale}
+                currency={stripeConfig?.currency || "cad"}
+                unitAmount={unitAmount}
+                serviceLabel={serviceLabel}
+                priorityLabel={priorityLabel}
+                title={copy.summary}
+                appointmentsLabel={copy.appointments}
+                invoiceLabel={copy.invoice}
+                emptyLabel={copy.summaryEmpty}
+                serviceText={copy.service}
+                priorityText={copy.priority}
+                subtotalText={copy.subtotal}
+                taxText={copy.taxes}
+                totalText={copy.total}
+                removeText={copy.remove}
+                itemLabel={copy.item}
+                digitalNote={copy.note}
+                actionLabel={selectedSlots.length ? (totalAmountLabel ? `${copy.reviewCart} • ${totalAmountLabel}` : copy.reviewCart) : undefined}
+                actionDisabled={!selectedSlots.length}
+                onAction={continueToCart}
+                onRemoveSlot={(slotId) => setSelectedSlots((current) => current.filter((slot) => slot.id !== slotId))}
+              />
 
-                {status ? (
-                  <div
-                    className={`mt-5 rounded-2xl border px-4 py-3 text-sm ${
-                      status.tone === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"
-                    }`}
-                  >
-                    {status.text}
-                  </div>
-                ) : null}
-              </GlassCard>
+              {status ? (
+                <div
+                  className={`rounded-2xl border px-4 py-3 text-sm ${
+                    status.tone === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"
+                  }`}
+                >
+                  {status.text}
+                </div>
+              ) : null}
             </div>
           </div>
         </section>

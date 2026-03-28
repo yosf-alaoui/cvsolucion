@@ -16,9 +16,26 @@ export type BookingCheckoutDraft = {
 const STORAGE_KEY = "cvsolucion-booking-checkout";
 const EVENT_NAME = "cvsolucion-booking-cart-change";
 
+function normalizeDraft(draft: BookingCheckoutDraft): BookingCheckoutDraft {
+  const seen = new Set<string>();
+  const slots = draft.slots.filter((slot) => {
+    if (!slot?.id || !slot?.date || typeof slot.hour !== "number") return false;
+    if (seen.has(slot.id)) return false;
+    seen.add(slot.id);
+    return true;
+  });
+
+  return {
+    priority: draft.priority,
+    serviceType: draft.serviceType,
+    slots,
+    createdAt: draft.createdAt || Date.now(),
+  };
+}
+
 export function saveBookingCheckoutDraft(draft: BookingCheckoutDraft) {
   if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeDraft(draft)));
   window.dispatchEvent(new CustomEvent(EVENT_NAME));
 }
 
@@ -32,10 +49,31 @@ export function getBookingCheckoutDraft(): BookingCheckoutDraft | null {
     if (!parsed || !Array.isArray(parsed.slots) || !parsed.priority || !parsed.serviceType) {
       return null;
     }
-    return parsed;
+    return normalizeDraft(parsed);
   } catch {
     return null;
   }
+}
+
+export function updateBookingCheckoutDraft(updater: (draft: BookingCheckoutDraft | null) => BookingCheckoutDraft | null) {
+  if (typeof window === "undefined") return null;
+  const nextDraft = updater(getBookingCheckoutDraft());
+  if (!nextDraft || !nextDraft.slots.length) {
+    clearBookingCheckoutDraft();
+    return null;
+  }
+  saveBookingCheckoutDraft(nextDraft);
+  return nextDraft;
+}
+
+export function removeBookingCheckoutSlot(slotId: string) {
+  return updateBookingCheckoutDraft((draft) => {
+    if (!draft) return null;
+    return {
+      ...draft,
+      slots: draft.slots.filter((slot) => slot.id !== slotId),
+    };
+  });
 }
 
 export function clearBookingCheckoutDraft() {
