@@ -44,7 +44,9 @@ export type AuthEventType =
   | "admin_user_deleted"
   | "admin_verification_sent"
   | "admin_session_revoked"
-  | "admin_all_sessions_revoked";
+  | "admin_all_sessions_revoked"
+  | "admin_booking_cancelled"
+  | "admin_booking_refund_requested";
 
 export type AuthEvent = {
   id: string;

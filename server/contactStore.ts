@@ -63,3 +63,8 @@ export function storeContactLead(input: {
   saveDb(db);
   return lead;
 }
+
+export function listContactLeads() {
+  const db = loadDb();
+  return [...db.leads].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}

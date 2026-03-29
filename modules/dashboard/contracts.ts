@@ -11,6 +11,12 @@ export type CustomerProfile = {
   updatedAt: string;
 };
 
+export type CustomerInvoicePlaceholder = {
+  bookingId: string;
+  status: "pending" | "scheduled" | "ready";
+  note: string;
+};
+
 export type CustomerDashboardResponse = {
   user: {
     id: string;
@@ -19,6 +25,18 @@ export type CustomerDashboardResponse = {
   };
   profile: CustomerProfile;
   bookings: BookingRecord[];
+  invoices?: CustomerInvoicePlaceholder[];
+};
+
+export type DashboardLead = {
+  id: string;
+  name: string;
+  email: string;
+  company: string | null;
+  phone: string | null;
+  interest: string | null;
+  message: string;
+  createdAt: string;
 };
 
 export type AdminCatalogPackageTranslation = {
@@ -57,6 +75,8 @@ export type AdminDashboardResponse = {
   admin: { email: string };
   stats: Record<string, number>;
   users: Array<Record<string, unknown>>;
+  bookings: BookingRecord[];
+  leads: DashboardLead[];
   sessions: Array<Record<string, unknown>>;
   events: Array<Record<string, unknown>>;
   insights: Record<string, unknown>;
@@ -67,4 +87,3 @@ export type AdminDashboardResponse = {
     enabled: boolean;
   };
 };
-

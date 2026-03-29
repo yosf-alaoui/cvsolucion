@@ -170,6 +170,37 @@ export async function verifyBookingPayment(input: {
   return intent;
 }
 
+export async function createBookingRefund(input: {
+  paymentIntentId: string;
+  amount: number;
+  bookingIds: string[];
+  reason?: Stripe.RefundCreateParams.Reason;
+}) {
+  const stripe = getStripeClient();
+  if (!stripe) {
+    throw new Error("Stripe is not configured.");
+  }
+
+  if (!input.paymentIntentId.trim()) {
+    throw new Error("Payment reference is required.");
+  }
+
+  if (!Number.isInteger(input.amount) || input.amount <= 0) {
+    throw new Error("Refund amount must be greater than zero.");
+  }
+
+  const refund = await stripe.refunds.create({
+    payment_intent: input.paymentIntentId,
+    amount: input.amount,
+    reason: input.reason || "requested_by_customer",
+    metadata: {
+      bookingIds: input.bookingIds.join(","),
+    },
+  });
+
+  return refund;
+}
+
 export function constructStripeEvent(payload: Buffer, signature: string) {
   const stripe = getStripeClient();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim() || null;

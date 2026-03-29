@@ -55,17 +55,27 @@ import {
 } from "./articleStore";
 import {
   applyStripeRefundUpdate,
+  cancelBookingByAdmin,
   createBooking,
+  getBookingById,
   getBookingAvailability,
+  listBookings,
   listBookingsForUser,
+  markBookingRefundPendingByAdmin,
   rescheduleBooking,
   serializeCustomerBooking,
   type BookingPriority,
 } from "./bookingStore";
-import { storeContactLead } from "./contactStore";
+import { listContactLeads, storeContactLead } from "./contactStore";
 import { buildRobotsTxt, buildSitemapXml, renderSeoHtml } from "./seo";
 import { getCustomerProfile, updateCustomerProfile, upsertCustomerProfile } from "./customerProfileStore";
-import { constructStripeEvent, createBookingPaymentIntent, getStripePricingSnapshot, verifyBookingPayment } from "./stripeBooking";
+import {
+  constructStripeEvent,
+  createBookingPaymentIntent,
+  createBookingRefund,
+  getStripePricingSnapshot,
+  verifyBookingPayment,
+} from "./stripeBooking";
 import { hasProcessedStripeEvent, markStripeEventProcessed } from "./stripeEventStore";
 import { createCatalogPackage, deleteCatalogPackage, getCatalogSnapshot, getPublicCatalog, updateCatalogBookingPrices, updateCatalogPackage } from "./catalogStore";
 
@@ -471,6 +481,10 @@ async function startServer() {
             refundAmount: refund.amount || 0,
             currency: refund.currency || null,
             refundStatus,
+            bookingIds: String(refund.metadata?.bookingIds || "")
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean),
           });
 
           if (syncResult) {
@@ -1543,11 +1557,15 @@ async function startServer() {
     res.setHeader("Cache-Control", "no-store");
     const ga4 = await getGa4DashboardSnapshot();
     const visitors = getVisitorsSnapshot();
+    const bookings = listBookings().map(serializeCustomerBooking);
+    const leads = listContactLeads();
     return res.json({
       admin: {
         email: auth.user.email,
       },
       ...getAdminSnapshot(),
+      bookings,
+      leads,
       visitors,
       conversations: getConversationsSnapshot(visitors),
       ga4,
@@ -1771,6 +1789,92 @@ async function startServer() {
         userAgent: `admin:user-sessions:${userId}:${revoked}`,
       });
       return res.json({ ok: true, revoked });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post("/api/admin/bookings/:bookingId/cancel", rateLimit({ key: "admin-booking-cancel", windowMs: 1000 * 60 * 5, limit: 80 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const bookingId = String(req.params.bookingId || "").trim();
+      if (!bookingId) {
+        return res.status(400).json({ error: "Booking is required." });
+      }
+
+      const booking = cancelBookingByAdmin({ bookingId });
+
+      recordEvent({
+        type: "admin_booking_cancelled",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:booking-cancel:${booking.id}`,
+      });
+
+      return res.json({ ok: true, booking: serializeCustomerBooking(booking) });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post("/api/admin/bookings/:bookingId/refund", rateLimit({ key: "admin-booking-refund", windowMs: 1000 * 60 * 5, limit: 40 }), async (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const bookingId = String(req.params.bookingId || "").trim();
+      if (!bookingId) {
+        return res.status(400).json({ error: "Booking is required." });
+      }
+
+      const booking = getBookingById(bookingId);
+      if (!booking) {
+        return res.status(404).json({ error: "Booking not found." });
+      }
+
+      if (!booking.paymentReference || booking.paymentProvider !== "stripe") {
+        return res.status(400).json({ error: "This booking has no Stripe payment to refund." });
+      }
+
+      if (booking.paymentStatus === "refunded") {
+        return res.status(400).json({ error: "This booking has already been refunded." });
+      }
+
+      const refund = await createBookingRefund({
+        paymentIntentId: booking.paymentReference,
+        amount: booking.unitAmount,
+        bookingIds: [booking.id],
+      });
+
+      const updated = markBookingRefundPendingByAdmin({
+        bookingId: booking.id,
+        refundId: refund.id,
+        refundAmount: refund.amount || booking.unitAmount,
+      });
+
+      recordEvent({
+        type: "admin_booking_refund_requested",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:booking-refund:${booking.id}:${refund.id}`,
+      });
+
+      return res.json({
+        ok: true,
+        booking: serializeCustomerBooking(updated),
+        refund: {
+          id: refund.id,
+          status: refund.status,
+          amount: refund.amount,
+          currency: refund.currency,
+        },
+      });
     } catch (error) {
       return next(error);
     }

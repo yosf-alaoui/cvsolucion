@@ -6,8 +6,10 @@ import Seo from "@/components/Seo";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
 import {
+  cancelAdminBooking,
   deleteAdminUser,
   getAdminDashboard,
+  refundAdminBooking,
   resendAdminVerification,
   revokeAdminSession,
   revokeAdminUserSessions,
@@ -21,7 +23,9 @@ import {
 } from "@/lib/admin";
 import ConversationsPanel from "@/components/admin/ConversationsPanel";
 import ArticlesManager from "@/components/admin/ArticlesManager";
+import BookingsManager from "@/components/admin/BookingsManager";
 import CatalogManager from "@/components/admin/CatalogManager";
+import RequestsManager from "@/components/admin/RequestsManager";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -662,6 +666,40 @@ export default function AdminDashboard() {
     });
   }, [data?.visitors, query]);
 
+  const filteredBookings = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return [...(data?.bookings ?? [])]
+      .sort((a, b) => `${b.date}-${String(b.hour).padStart(2, "0")}`.localeCompare(`${a.date}-${String(a.hour).padStart(2, "0")}`))
+      .filter((booking) => {
+        if (!normalizedQuery) return true;
+        return [
+          booking.name,
+          booking.email,
+          booking.phone,
+          booking.country,
+          booking.company,
+          booking.notes,
+          booking.paymentReference,
+          booking.refundReference,
+          booking.date,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+      });
+  }, [data?.bookings, query]);
+
+  const filteredLeads = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return [...(data?.leads ?? [])]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .filter((lead) => {
+        if (!normalizedQuery) return true;
+        return [lead.name, lead.email, lead.phone, lead.company, lead.interest, lead.message]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+      });
+  }, [data?.leads, query]);
+
   const filteredConversations = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return (data?.conversations ?? []).filter((item) => {
@@ -799,6 +837,18 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleCancelBooking = async (bookingId: string) => {
+    setError(null);
+    await cancelAdminBooking(bookingId);
+    await load(true);
+  };
+
+  const handleRefundBooking = async (bookingId: string) => {
+    setError(null);
+    await refundAdminBooking(bookingId);
+    await load(true);
+  };
+
   const eventLabels: Record<string, string> = {
     signup: locale === "ar" ? "تسجيل" : locale === "fr" ? "Inscription" : "Signup",
     login: locale === "ar" ? "دخول" : locale === "fr" ? "Connexion" : "Login",
@@ -819,6 +869,11 @@ export default function AdminDashboard() {
     admin_all_sessions_revoked:
       locale === "ar" ? "إلغاء كل الجلسات" : locale === "fr" ? "Toutes les sessions revoquees" : "All sessions revoked",
   };
+
+  eventLabels.admin_booking_cancelled =
+    locale === "ar" ? "إلغاء موعد" : locale === "fr" ? "Booking annule par admin" : "Admin booking cancelled";
+  eventLabels.admin_booking_refund_requested =
+    locale === "ar" ? "طلب استرجاع إداري" : locale === "fr" ? "Remboursement demande par admin" : "Admin booking refund requested";
 
   const usersCsv = filteredUsers.map((item) => ({
     email: item.email,
@@ -1119,10 +1174,12 @@ export default function AdminDashboard() {
                     </Card>
 
                     <Tabs defaultValue="users" className="space-y-6">
-                      <TabsList className="grid w-full grid-cols-5">
+                      <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
                         <TabsTrigger value="users">{copy.users}</TabsTrigger>
                         <TabsTrigger value="visitors">{copy.visitors}</TabsTrigger>
                         <TabsTrigger value="conversations">{conversationCopy.conversations}</TabsTrigger>
+                        <TabsTrigger value="bookings">Bookings</TabsTrigger>
+                        <TabsTrigger value="requests">Requests</TabsTrigger>
                         <TabsTrigger value="sessions">{copy.sessions}</TabsTrigger>
                         <TabsTrigger value="events">{copy.events}</TabsTrigger>
                       </TabsList>
@@ -1174,6 +1231,19 @@ export default function AdminDashboard() {
                           selectedConversationId={selectedConversationId}
                           onSelect={setSelectedConversationId}
                         />
+                      </TabsContent>
+
+                      <TabsContent value="bookings">
+                        <BookingsManager
+                          locale={locale}
+                          bookings={filteredBookings}
+                          onCancelBooking={handleCancelBooking}
+                          onRefundBooking={handleRefundBooking}
+                        />
+                      </TabsContent>
+
+                      <TabsContent value="requests">
+                        <RequestsManager locale={locale} leads={filteredLeads} />
                       </TabsContent>
 
                       <TabsContent value="sessions">

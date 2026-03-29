@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Clock3, Mail, MapPin, Phone, RefreshCcw, UserRound } from "lucide-react";
+import { CalendarDays, Clock3, Mail, MapPin, Phone, ReceiptText, RefreshCcw, UserRound } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Seo from "@/components/Seo";
@@ -159,6 +159,31 @@ export default function CustomerDashboard() {
       cancelled: "Cancelled",
       refunded: "Refunded",
       partiallyRefunded: "Partially refunded",
+    };
+  }, [locale]);
+
+  const invoiceCopy = useMemo(() => {
+    if (locale === "ar") {
+      return {
+        title: "الفواتير",
+        subtitle: "سيتم إنتاج الفاتورة وتصديرها بعد مرور الموعد.",
+        pending: "الفاتورة غير مفعلة حالياً",
+        action: "ستتوفر بعد الموعد",
+      };
+    }
+    if (locale === "fr") {
+      return {
+        title: "Factures",
+        subtitle: "La facture sera generee et exportee apres le rendez-vous.",
+        pending: "Facture non active pour le moment",
+        action: "Disponible apres le rendez-vous",
+      };
+    }
+    return {
+      title: "Invoices",
+      subtitle: "The invoice will be generated and exported after the appointment has passed.",
+      pending: "Invoice not active yet",
+      action: "Available after the appointment",
     };
   }, [locale]);
 
@@ -442,69 +467,105 @@ export default function CustomerDashboard() {
               </TabsContent>
 
               <TabsContent value="profile" className="mt-6">
-                <GlassCard className="card-static rounded-[32px] p-7">
-                  <form className="grid gap-5 md:grid-cols-2" onSubmit={handleProfileSave}>
-                    <div className="space-y-2">
-                      <Label htmlFor="customer-name">{copy.name}</Label>
-                      <div className="relative">
-                        <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+                  <GlassCard className="card-static rounded-[32px] p-7">
+                    <form className="grid gap-5 md:grid-cols-2" onSubmit={handleProfileSave}>
+                      <div className="space-y-2">
+                        <Label htmlFor="customer-name">{copy.name}</Label>
+                        <div className="relative">
+                          <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                          <Input
+                            id="customer-name"
+                            className="pl-9"
+                            value={profileForm.name}
+                            onChange={(event) => setProfileForm((current) => ({ ...current, name: event.target.value }))}
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="customer-email">{copy.email}</Label>
+                        <div className="relative">
+                          <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                          <Input id="customer-email" className="pl-9" value={data.user.email} readOnly disabled />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="customer-phone">{copy.phone}</Label>
+                        <div className="relative">
+                          <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                          <Input
+                            id="customer-phone"
+                            className="pl-9"
+                            value={profileForm.phone}
+                            onChange={(event) => setProfileForm((current) => ({ ...current, phone: event.target.value }))}
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="customer-country">{copy.country}</Label>
+                        <div className="relative">
+                          <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                          <Input
+                            id="customer-country"
+                            className="pl-9"
+                            value={profileForm.country}
+                            onChange={(event) => setProfileForm((current) => ({ ...current, country: event.target.value }))}
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="customer-company">{copy.company}</Label>
                         <Input
-                          id="customer-name"
-                          className="pl-9"
-                          value={profileForm.name}
-                          onChange={(event) => setProfileForm((current) => ({ ...current, name: event.target.value }))}
-                          required
+                          id="customer-company"
+                          value={profileForm.company}
+                          onChange={(event) => setProfileForm((current) => ({ ...current, company: event.target.value }))}
                         />
                       </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="customer-email">{copy.email}</Label>
-                      <div className="relative">
-                        <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                        <Input id="customer-email" className="pl-9" value={data.user.email} readOnly disabled />
+                      <div className="md:col-span-2">
+                        <Button type="submit" className="rounded-full" disabled={savingProfile}>
+                          {copy.save}
+                        </Button>
+                      </div>
+                    </form>
+                  </GlassCard>
+
+                  <GlassCard className="card-static rounded-[32px] p-7">
+                    <div className="flex items-center gap-3">
+                      <ReceiptText className="h-6 w-6 text-primary" />
+                      <div>
+                        <h2 className="text-2xl font-bold text-slate-950">{invoiceCopy.title}</h2>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{invoiceCopy.subtitle}</p>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="customer-phone">{copy.phone}</Label>
-                      <div className="relative">
-                        <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                        <Input
-                          id="customer-phone"
-                          className="pl-9"
-                          value={profileForm.phone}
-                          onChange={(event) => setProfileForm((current) => ({ ...current, phone: event.target.value }))}
-                          required
-                        />
-                      </div>
+
+                    <div className="mt-6 space-y-4">
+                      {(data.bookings.length ? data.bookings : [null]).map((booking, index) => (
+                        <div key={booking ? booking.id : `placeholder-${index}`} className="rounded-[24px] border border-slate-200 bg-white/70 p-5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <div className="font-semibold text-slate-900">
+                                {booking ? formatDateTime(booking.date, booking.hour, locale) : invoiceCopy.pending}
+                              </div>
+                              <div className="mt-2 text-sm text-slate-600">
+                                {booking
+                                  ? `${booking.serviceType === "support" ? copy.support : copy.consultation} • ${
+                                      booking.priority === "express" ? copy.express : copy.standard
+                                    }`
+                                  : invoiceCopy.subtitle}
+                              </div>
+                            </div>
+                            <Button type="button" variant="outline" className="rounded-full" disabled>
+                              {invoiceCopy.action}
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="customer-country">{copy.country}</Label>
-                      <div className="relative">
-                        <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                        <Input
-                          id="customer-country"
-                          className="pl-9"
-                          value={profileForm.country}
-                          onChange={(event) => setProfileForm((current) => ({ ...current, country: event.target.value }))}
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <Label htmlFor="customer-company">{copy.company}</Label>
-                      <Input
-                        id="customer-company"
-                        value={profileForm.company}
-                        onChange={(event) => setProfileForm((current) => ({ ...current, company: event.target.value }))}
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <Button type="submit" className="rounded-full" disabled={savingProfile}>
-                        {copy.save}
-                      </Button>
-                    </div>
-                  </form>
-                </GlassCard>
+                  </GlassCard>
+                </div>
               </TabsContent>
             </Tabs>
           </div>

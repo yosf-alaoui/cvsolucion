@@ -1,3 +1,5 @@
+import type { BookingRecord } from "@/lib/bookings";
+
 export type AdminDashboardStats = {
   totalUsers: number;
   verifiedUsers: number;
@@ -177,6 +179,17 @@ export type AdminDashboardConversation = {
   } | null;
 };
 
+export type AdminContactLead = {
+  id: string;
+  name: string;
+  email: string;
+  company: string | null;
+  phone: string | null;
+  interest: string | null;
+  message: string;
+  createdAt: string;
+};
+
 export type AdminDashboardGa4 = {
   enabled: boolean;
   propertyId: string | null;
@@ -205,6 +218,8 @@ export type AdminDashboardResponse = {
   admin: { email: string };
   stats: AdminDashboardStats;
   users: AdminDashboardUser[];
+  bookings: BookingRecord[];
+  leads: AdminContactLead[];
   sessions: AdminDashboardSession[];
   events: AdminDashboardEvent[];
   insights: AdminDashboardInsights;
@@ -345,5 +360,21 @@ export function revokeAdminSession(sessionId: string) {
 export function revokeAdminUserSessions(userId: string) {
   return adminRequest<{ ok: true; revoked: number }>(`/api/admin/users/${userId}/sessions`, {
     method: "DELETE",
+  });
+}
+
+export function cancelAdminBooking(bookingId: string) {
+  return adminRequest<{ ok: true; booking: BookingRecord }>(`/api/admin/bookings/${encodeURIComponent(bookingId)}/cancel`, {
+    method: "POST",
+  });
+}
+
+export function refundAdminBooking(bookingId: string) {
+  return adminRequest<{
+    ok: true;
+    booking: BookingRecord;
+    refund: { id: string; status: string | null; amount: number; currency: string | null };
+  }>(`/api/admin/bookings/${encodeURIComponent(bookingId)}/refund`, {
+    method: "POST",
   });
 }

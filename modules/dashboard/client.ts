@@ -27,6 +27,19 @@ export function createDashboardModuleClient(options: JsonHttpClientOptions = {})
     getAdminDashboard() {
       return request<AdminDashboardResponse>("/api/admin/dashboard", { method: "GET" });
     },
+    cancelAdminBooking(bookingId: string) {
+      return request<{ ok: true; booking: AdminDashboardResponse["bookings"][number] }>(
+        `/api/admin/bookings/${encodeURIComponent(bookingId)}/cancel`,
+        { method: "POST" }
+      );
+    },
+    refundAdminBooking(bookingId: string) {
+      return request<{
+        ok: true;
+        booking: AdminDashboardResponse["bookings"][number];
+        refund: { id: string; status: string | null; amount: number; currency: string | null };
+      }>(`/api/admin/bookings/${encodeURIComponent(bookingId)}/refund`, { method: "POST" });
+    },
     getAdminCatalog() {
       return request<AdminCatalogResponse>("/api/admin/catalog", { method: "GET" });
     },
@@ -63,4 +76,3 @@ export function createDashboardModuleClient(options: JsonHttpClientOptions = {})
     },
   };
 }
-

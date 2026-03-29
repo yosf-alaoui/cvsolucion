@@ -9,9 +9,10 @@ Reusable Stripe layer for service businesses that sell virtual sessions, audits,
 ## Reusable entrypoints
 - `contracts.ts`: payment config, line items, and payment-intent response shapes
 - `client.ts`: browser-side payment config and intent client
-- `server.ts`: Stripe helpers for intents, verification, and webhooks
+- `server.ts`: Stripe helpers for intents, verification, refunds, and webhooks
 - `env.ts`: required Stripe environment variables
 
 ## Notes
 - This module is generic and should stay independent from appointment logic.
 - Bookings, courses, retainers, and other digital services can all sit on top of it.
+- Refund actions should be initiated from the platform dashboard when possible so Stripe remains the payment source of truth and the platform remains the booking source of truth.

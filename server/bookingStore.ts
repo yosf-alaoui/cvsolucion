@@ -36,6 +36,8 @@ export type BookingRecord = {
   refundedAt: string | null;
 };
 
+export type BookingInvoiceStatus = "pending" | "scheduled" | "ready";
+
 type BookingDb = {
   bookings: BookingRecord[];
 };
@@ -299,6 +301,11 @@ export function listBookings() {
   return sortBookings(db.bookings);
 }
 
+export function getBookingById(bookingId: string) {
+  const db = loadDb();
+  return db.bookings.find((booking) => booking.id === bookingId) ?? null;
+}
+
 export function listBookingsForUser(userId: string, email?: string | null) {
   const db = loadDb();
   const normalizedEmail = email?.trim().toLowerCase() || null;
@@ -490,6 +497,11 @@ export type StripeRefundSyncResult = {
   } | null;
 };
 
+type RefundSelectionResult = {
+  scope: "full" | "partial" | "manual" | "none";
+  affectedBookings: BookingRecord[];
+};
+
 function getRefundableBookings(bookings: BookingRecord[]) {
   return bookings.filter((booking) => booking.paymentStatus !== "refunded");
 }
@@ -502,10 +514,28 @@ function sortBookingsLatestFirst(bookings: BookingRecord[]) {
   });
 }
 
-function selectBookingsForRefund(bookings: BookingRecord[], refundAmount: number) {
+function selectBookingsForRefund(
+  bookings: BookingRecord[],
+  refundAmount: number,
+  preferredBookingIds: string[] = []
+): RefundSelectionResult {
   const refundable = sortBookingsLatestFirst(getRefundableBookings(bookings));
   if (!refundable.length || refundAmount <= 0) {
     return { scope: "none" as const, affectedBookings: [] as BookingRecord[] };
+  }
+
+  const preferred = preferredBookingIds.length
+    ? refundable.filter((booking) => preferredBookingIds.includes(booking.id))
+    : [];
+
+  if (preferred.length) {
+    const preferredTotal = preferred.reduce((sum, booking) => sum + booking.unitAmount, 0);
+    if (refundAmount >= preferredTotal) {
+      return {
+        scope: preferred.length === refundable.length ? ("full" as const) : ("partial" as const),
+        affectedBookings: preferred,
+      };
+    }
   }
 
   const totalAmount = refundable.reduce((sum, booking) => sum + booking.unitAmount, 0);
@@ -536,6 +566,7 @@ export function applyStripeRefundUpdate(input: {
   refundAmount: number;
   currency?: string | null;
   refundStatus: StripeRefundSyncStatus;
+  bookingIds?: string[];
 }) {
   const db = loadDb();
   const relatedBookings = sortBookings(
@@ -546,7 +577,11 @@ export function applyStripeRefundUpdate(input: {
     return null;
   }
 
-  const { scope, affectedBookings } = selectBookingsForRefund(relatedBookings, input.refundAmount);
+  const { scope, affectedBookings } = selectBookingsForRefund(
+    relatedBookings,
+    input.refundAmount,
+    input.bookingIds ?? []
+  );
   const timestamp = nowIso();
   const normalizedRefundStatus: BookingRefundStatus =
     input.refundStatus === "failed"
@@ -616,6 +651,53 @@ export function applyStripeRefundUpdate(input: {
         }
       : null,
   } satisfies StripeRefundSyncResult;
+}
+
+export function cancelBookingByAdmin(input: { bookingId: string }) {
+  const db = loadDb();
+  const booking = db.bookings.find((item) => item.id === input.bookingId);
+
+  if (!booking) {
+    throw new Error("Booking not found.");
+  }
+
+  booking.status = "cancelled";
+  booking.updatedAt = nowIso();
+  saveDb(db);
+  return booking;
+}
+
+export function markBookingRefundPendingByAdmin(input: {
+  bookingId: string;
+  refundId: string;
+  refundAmount: number;
+}) {
+  const db = loadDb();
+  const booking = db.bookings.find((item) => item.id === input.bookingId);
+
+  if (!booking) {
+    throw new Error("Booking not found.");
+  }
+
+  booking.refundStatus = "pending";
+  booking.refundReference = input.refundId;
+  booking.refundAmount = input.refundAmount;
+  booking.updatedAt = nowIso();
+  saveDb(db);
+  return booking;
+}
+
+export function getBookingInvoiceStatus(booking: BookingRecord): BookingInvoiceStatus {
+  if (booking.status === "cancelled" || booking.paymentStatus === "refunded") {
+    return "pending";
+  }
+
+  const bookingUtcMs = getBookingUtcMs(booking.date, booking.hour);
+  if (bookingUtcMs > Date.now()) {
+    return "scheduled";
+  }
+
+  return "pending";
 }
 
 export function rescheduleBooking(input: {
