@@ -18,6 +18,32 @@ import {
 import { saveBookingCheckoutDraft } from "@/lib/bookingCheckout";
 import { getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
 
+function isBookingPriority(value: string | null): value is BookingPriority {
+  return value === "standard" || value === "express";
+}
+
+function isBookingServiceType(value: string | null): value is BookingServiceType {
+  return value === "consultation" || value === "support";
+}
+
+function getInitialBookingFilters() {
+  if (typeof window === "undefined") {
+    return {
+      priority: "standard" as BookingPriority,
+      serviceType: "consultation" as BookingServiceType,
+    };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const priority = params.get("priority");
+  const serviceType = params.get("service");
+
+  return {
+    priority: isBookingPriority(priority) ? priority : ("standard" as BookingPriority),
+    serviceType: isBookingServiceType(serviceType) ? serviceType : ("consultation" as BookingServiceType),
+  };
+}
+
 function dateLabel(date: string, locale: string) {
   return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
     timeZone: "UTC",
@@ -143,8 +169,8 @@ function getCopy(locale: string) {
 
 export default function Booking() {
   const { locale } = useI18n();
-  const [priority, setPriority] = useState<BookingPriority>("standard");
-  const [serviceType, setServiceType] = useState<BookingServiceType>("consultation");
+  const [priority, setPriority] = useState<BookingPriority>(() => getInitialBookingFilters().priority);
+  const [serviceType, setServiceType] = useState<BookingServiceType>(() => getInitialBookingFilters().serviceType);
   const [days, setDays] = useState<BookingAvailabilityDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlots, setSelectedSlots] = useState<BookingAvailabilitySlot[]>([]);

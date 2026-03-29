@@ -232,8 +232,8 @@ export const translations: Record<Locale, any> = {
     },
     packages: {
       title: "Service Packages",
-      subtitle: "Choose based on urgency and depth. We'll confirm scope quickly on WhatsApp.",
-      cta: "Contact on WhatsApp",
+      subtitle: "Choose based on urgency and depth, then open the booking flow with the right service already selected.",
+      cta: "Book a session",
       priceHidden: "Log in to see price",
       note:
         "Annual Support Plan is billed yearly (pricing shared on request). Audit and Fix Day are fixed-price.",
@@ -813,8 +813,8 @@ export const translations: Record<Locale, any> = {
     packages: {
       title: "Forfaits",
       subtitle:
-        "Choisissez selon l'urgence et la profondeur. On valide le périmètre sur WhatsApp.",
-      cta: "Contacter sur WhatsApp",
+        "Choisissez selon l'urgence et la profondeur, puis ouvrez directement le booking avec le bon service déjà sélectionné.",
+      cta: "Réserver une session",
       priceHidden: "Connectez-vous pour voir le prix",
       note:
         "Le Plan de Support Annuel est facturé à l'année (tarif sur demande). Audit et Fix Day sont à prix fixe.",
@@ -1390,8 +1390,8 @@ export const translations: Record<Locale, any> = {
     packages: {
       title: "الباقات",
       subtitle:
-        "اختر وفق درجة الاستعجال والعمق. نؤكد النطاق سريعًا عبر واتساب.",
-      cta: "تواصل عبر واتساب",
+        "اختر حسب درجة الاستعجال والعمق، ثم افتح الحجز مباشرة مع تحديد الخدمة المناسبة مسبقًا.",
+      cta: "احجز حصة",
       priceHidden: "سجّل الدخول لرؤية السعر",
       note:
         "خطة الدعم السنوية تُفوتر سنويًا (السعر عند الطلب). باقة Audit وFix Day بسعر ثابت.",

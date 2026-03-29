@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
-import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
+import { useI18n } from "@/i18n/i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { getPublicCatalog, type PublicCatalogPackage } from "@/lib/catalog";
+import { getBookingHref } from "@/lib/site";
 
 /**
  * Packages Section - CV Solution (Upgraded)
@@ -13,7 +14,6 @@ import { getPublicCatalog, type PublicCatalogPackage } from "@/lib/catalog";
 export default function PackagesSection() {
   const { t, locale } = useI18n();
   const { user } = useAuth();
-  const whatsappHref = buildWhatsAppLink("+1 438 807 8747", t("whatsapp.annualPlan"));
 
   type ServicePackage = {
     title: string;
@@ -28,6 +28,40 @@ export default function PackagesSection() {
   const [packages, setPackages] = useState<ServicePackage[]>(fallbackPackages);
   const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
   const canSeePrice = Boolean(user?.emailVerifiedAt);
+
+  function buildPackageBookingHref(pkg: ServicePackage, index: number) {
+    const baseHref = getBookingHref(locale);
+    const normalized = `${pkg.title} ${pkg.subtitle}`.toLowerCase();
+
+    let serviceType: "consultation" | "support" = "consultation";
+    let priority: "standard" | "express" = "standard";
+    let packageKey = `package-${index + 1}`;
+
+    if (normalized.includes("audit")) {
+      serviceType = "consultation";
+      packageKey = "audit";
+    } else if (normalized.includes("fix")) {
+      serviceType = "support";
+      packageKey = "fix-day";
+    } else if (normalized.includes("support") || pkg.highlight) {
+      serviceType = "support";
+      packageKey = "support-plan";
+    } else if (index === 0) {
+      serviceType = "support";
+      packageKey = "support-plan";
+    } else if (index === 2) {
+      serviceType = "support";
+      packageKey = "fix-day";
+    }
+
+    const params = new URLSearchParams({
+      service: serviceType,
+      priority,
+      package: packageKey,
+    });
+
+    return `${baseHref}${baseHref.includes("?") ? "&" : "?"}${params.toString()}`;
+  }
 
   useEffect(() => {
     setPackages(fallbackPackages);
@@ -62,7 +96,7 @@ export default function PackagesSection() {
         </div>
 
         <div className="card-stage mx-auto grid max-w-6xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {packages.map((pkg) => (
+          {packages.map((pkg, index) => (
             <GlassCard key={pkg.title} strong={pkg.highlight} className="p-8">
               <div className="mb-6 text-center">
                 <h3 className="mb-1 text-2xl font-bold text-primary">{pkg.title}</h3>
@@ -95,7 +129,7 @@ export default function PackagesSection() {
                 ))}
               </ul>
 
-              <a href={whatsappHref} target="_blank" rel="noopener noreferrer">
+              <a href={buildPackageBookingHref(pkg, index)}>
                 <Button
                   className={`w-full ${
                     pkg.highlight
