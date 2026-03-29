@@ -6,7 +6,7 @@ import Seo from "@/components/Seo";
 import GlassCard from "@/components/GlassCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
-import { getCustomerDashboard, updateCustomerProfile, type CustomerDashboardResponse } from "@/lib/customer";
+import { getCustomerDashboard, updateCustomerProfile, type CustomerDashboardResponse, type CustomerInvoice } from "@/lib/customer";
 import { getBookingAvailability, rescheduleBooking, type BookingAvailabilitySlot, type BookingRecord } from "@/lib/bookings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,13 @@ function formatDate(value: string, locale: string) {
 
 function slotSummary(slot: BookingAvailabilitySlot, locale: string) {
   return formatDateTime(slot.date, slot.hour, locale);
+}
+
+function formatInvoiceAmount(amount: number, currency: string, locale: string) {
+  return new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amount / 100);
 }
 
 export default function CustomerDashboard() {
@@ -162,7 +169,7 @@ export default function CustomerDashboard() {
     };
   }, [locale]);
 
-  const invoiceCopy = useMemo(() => {
+  const invoiceCopy = useMemo<any>(() => {
     if (locale === "ar") {
       return {
         title: "الفواتير",
@@ -177,6 +184,9 @@ export default function CustomerDashboard() {
         subtitle: "La facture sera generee et exportee apres le rendez-vous.",
         pending: "Facture non active pour le moment",
         action: "Disponible apres le rendez-vous",
+        download: "Telecharger la facture",
+        issued: "Emise le",
+        empty: "Aucune facture pour le moment.",
       };
     }
     return {
@@ -184,6 +194,9 @@ export default function CustomerDashboard() {
       subtitle: "The invoice will be generated and exported after the appointment has passed.",
       pending: "Invoice not active yet",
       action: "Available after the appointment",
+      download: "Download invoice",
+      issued: "Issued",
+      empty: "No invoices yet.",
     };
   }, [locale]);
 
@@ -228,6 +241,16 @@ export default function CustomerDashboard() {
       ),
     [data?.bookings, now]
   );
+  const invoicesByBookingId = useMemo(() => {
+    const map = new Map<string, CustomerInvoice>();
+    for (const invoice of data?.invoices || []) {
+      map.set(invoice.bookingId, invoice);
+    }
+    return map;
+  }, [data?.invoices]);
+  const invoiceDownloadLabel = invoiceCopy.download || invoiceCopy.action;
+  const invoiceIssuedLabel = invoiceCopy.issued || copy.created;
+  const invoiceEmptyLabel = invoiceCopy.empty || copy.noBookings;
 
   async function handleProfileSave(event: React.FormEvent) {
     event.preventDefault();
@@ -542,27 +565,49 @@ export default function CustomerDashboard() {
                     </div>
 
                     <div className="mt-6 space-y-4">
-                      {(data.bookings.length ? data.bookings : [null]).map((booking, index) => (
-                        <div key={booking ? booking.id : `placeholder-${index}`} className="rounded-[24px] border border-slate-200 bg-white/70 p-5">
-                          <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <div className="font-semibold text-slate-900">
-                                {booking ? formatDateTime(booking.date, booking.hour, locale) : invoiceCopy.pending}
+                      {(data.bookings.length ? data.bookings : [null]).map((booking, index) => {
+                        const invoice = booking ? invoicesByBookingId.get(booking.id) : null;
+                        return (
+                          <div key={booking ? booking.id : `placeholder-${index}`} className="rounded-[24px] border border-slate-200 bg-white/70 p-5">
+                            <div className="flex items-start justify-between gap-4">
+                              <div>
+                                <div className="font-semibold text-slate-900">
+                                  {booking ? formatDateTime(booking.date, booking.hour, locale) : invoiceEmptyLabel}
+                                </div>
+                                <div className="mt-2 text-sm text-slate-600">
+                                  {booking
+                                    ? `${booking.serviceType === "support" ? copy.support : copy.consultation} • ${
+                                        booking.priority === "express" ? copy.express : copy.standard
+                                      }`
+                                    : invoiceCopy.subtitle}
+                                </div>
+                                {invoice ? (
+                                  <div className="mt-4 space-y-1 text-sm text-slate-600">
+                                    <div className="font-medium text-slate-900">{invoice.invoiceNumber}</div>
+                                    <div>
+                                      {invoiceIssuedLabel}: {formatDate(invoice.issuedAt, locale)}
+                                    </div>
+                                    <div>{formatInvoiceAmount(invoice.totalAmount, invoice.currency, locale)}</div>
+                                  </div>
+                                ) : booking ? (
+                                  <div className="mt-4 text-sm text-slate-500">{invoiceCopy.pending}</div>
+                                ) : null}
                               </div>
-                              <div className="mt-2 text-sm text-slate-600">
-                                {booking
-                                  ? `${booking.serviceType === "support" ? copy.support : copy.consultation} • ${
-                                      booking.priority === "express" ? copy.express : copy.standard
-                                    }`
-                                  : invoiceCopy.subtitle}
-                              </div>
+                              {invoice ? (
+                                <Button type="button" variant="outline" className="rounded-full" asChild>
+                                  <a href={invoice.downloadUrl} target="_blank" rel="noreferrer">
+                                    {invoiceDownloadLabel}
+                                  </a>
+                                </Button>
+                              ) : (
+                                <Button type="button" variant="outline" className="rounded-full" disabled>
+                                  {invoiceCopy.action}
+                                </Button>
+                              )}
                             </div>
-                            <Button type="button" variant="outline" className="rounded-full" disabled>
-                              {invoiceCopy.action}
-                            </Button>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </GlassCard>
                 </div>

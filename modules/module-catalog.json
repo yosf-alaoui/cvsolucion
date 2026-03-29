@@ -210,6 +210,29 @@
     }
   },
   {
+    "name": "invoices",
+    "summary": "Invoice issuance after appointments, customer invoice summaries, and PDF export for paid services.",
+    "runtime": ["client", "server"],
+    "entrypoints": [
+      "modules/invoices/contracts.ts",
+      "modules/invoices/client.ts",
+      "modules/invoices/server.ts",
+      "modules/invoices/env.ts"
+    ],
+    "currentProject": {
+      "client": [
+        "client/src/lib/customer.ts",
+        "client/src/pages/CustomerDashboard.tsx"
+      ],
+      "server": [
+        "server/invoiceStore.ts",
+        "server/invoicePdf.ts",
+        "server/index.ts"
+      ],
+      "data": ["data/invoices-db.json"]
+    }
+  },
+  {
     "name": "i18n",
     "summary": "Localized path helpers, translation lookup, locale switching, and direction management.",
     "runtime": ["client"],

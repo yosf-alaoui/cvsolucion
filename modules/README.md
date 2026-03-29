@@ -17,6 +17,7 @@ This folder turns the main services of CVsolucion into reusable module kits that
 | `contact` | Lead capture, storage, and submission adapters | client + server |
 | `catalog` | Service packages, booking prices, and catalog administration | client + server |
 | `payments` | Generic Stripe payment intents, config, webhook verification, refunds | client + server |
+| `invoices` | Invoice issuance, customer invoice summaries, and PDF export for services | client + server |
 | `i18n` | Locale routing, translation lookup, and localized path helpers | client |
 | `customer-profile` | Account profile storage and reusable profile APIs | client + server |
 | `visitor-tracking` | First-party visitor telemetry, page views, and interaction logs | client + server |

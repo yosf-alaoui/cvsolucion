@@ -291,6 +291,10 @@ function getBookingUtcMs(dateKey: string, hour: number) {
   return utcMs;
 }
 
+export function hasBookingPassed(booking: Pick<BookingRecord, "date" | "hour">) {
+  return getBookingUtcMs(booking.date, booking.hour) <= Date.now();
+}
+
 function canRescheduleBooking(booking: BookingRecord) {
   const bookingUtcMs = getBookingUtcMs(booking.date, booking.hour);
   return bookingUtcMs - Date.now() > 1000 * 60 * 60 * 12;
@@ -688,16 +692,21 @@ export function markBookingRefundPendingByAdmin(input: {
 }
 
 export function getBookingInvoiceStatus(booking: BookingRecord): BookingInvoiceStatus {
-  if (booking.status === "cancelled" || booking.paymentStatus === "refunded") {
+  if (
+    booking.status === "cancelled" ||
+    booking.paymentStatus === "unpaid" ||
+    booking.paymentStatus === "pending" ||
+    booking.paymentStatus === "refunded" ||
+    booking.refundStatus === "succeeded"
+  ) {
     return "pending";
   }
 
-  const bookingUtcMs = getBookingUtcMs(booking.date, booking.hour);
-  if (bookingUtcMs > Date.now()) {
+  if (!hasBookingPassed(booking)) {
     return "scheduled";
   }
 
-  return "pending";
+  return "ready";
 }
 
 export function rescheduleBooking(input: {

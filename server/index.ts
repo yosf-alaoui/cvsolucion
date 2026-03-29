@@ -69,6 +69,8 @@ import {
 import { listContactLeads, storeContactLead } from "./contactStore";
 import { buildRobotsTxt, buildSitemapXml, renderSeoHtml } from "./seo";
 import { getCustomerProfile, updateCustomerProfile, upsertCustomerProfile } from "./customerProfileStore";
+import { buildInvoiceFilename, renderInvoicePdf } from "./invoicePdf";
+import { getInvoiceById, issueInvoicesForBookings, listInvoicesForUser, type InvoiceRecord } from "./invoiceStore";
 import {
   constructStripeEvent,
   createBookingPaymentIntent,
@@ -174,6 +176,25 @@ function escapeHtml(value: string) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function serializeCustomerInvoice(invoice: InvoiceRecord) {
+  return {
+    id: invoice.id,
+    bookingId: invoice.bookingId,
+    invoiceNumber: invoice.invoiceNumber,
+    status: invoice.status,
+    issuedAt: invoice.issuedAt,
+    currency: invoice.currency,
+    subtotalAmount: invoice.subtotalAmount,
+    taxAmount: invoice.taxAmount,
+    totalAmount: invoice.totalAmount,
+    serviceType: invoice.serviceType,
+    priority: invoice.priority,
+    date: invoice.date,
+    hour: invoice.hour,
+    downloadUrl: `/api/customer/invoices/${encodeURIComponent(invoice.id)}/download`,
+  };
 }
 
 function normalizeStripeRefundStatus(status: string | null | undefined) {
@@ -648,14 +669,49 @@ async function startServer() {
         email: auth.user.email,
       });
 
-    const bookings = listBookingsForUser(auth.user.id, auth.user.email).map(serializeCustomerBooking);
+    const userBookings = listBookingsForUser(auth.user.id, auth.user.email);
+    issueInvoicesForBookings(userBookings);
+    const bookings = userBookings.map(serializeCustomerBooking);
+    const invoices = listInvoicesForUser(auth.user.id, auth.user.email).map(serializeCustomerInvoice);
 
     return res.json({
       user: serializePublicUser(auth.user),
       profile,
       bookings,
+      invoices,
     });
   });
+
+  app.get(
+    "/api/customer/invoices/:invoiceId/download",
+    rateLimit({ key: "customer-invoice-download", windowMs: 1000 * 60, limit: 120 }),
+    async (req, res, next) => {
+      try {
+        const auth = getCurrentUser(req);
+        if (!auth) {
+          return res.status(401).json({ error: "Authentication required." });
+        }
+
+        const invoiceId = String(req.params.invoiceId || "").trim();
+        const invoice = getInvoiceById(invoiceId);
+
+        if (!invoice) {
+          return res.status(404).json({ error: "Invoice not found." });
+        }
+
+        if (invoice.userId !== auth.user.id && invoice.email !== auth.user.email) {
+          return res.status(403).json({ error: "You do not have access to this invoice." });
+        }
+
+        const pdf = await renderInvoicePdf(invoice);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${buildInvoiceFilename(invoice)}"`);
+        return res.send(pdf);
+      } catch (error) {
+        return next(error);
+      }
+    }
+  );
 
   app.patch("/api/customer/profile", rateLimit({ key: "customer-profile", windowMs: 1000 * 60 * 10, limit: 40 }), (req, res) => {
     const auth = getCurrentUser(req);

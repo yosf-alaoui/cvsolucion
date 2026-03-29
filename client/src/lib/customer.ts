@@ -19,6 +19,24 @@ export type CustomerDashboardResponse = {
   };
   profile: CustomerProfile;
   bookings: BookingRecord[];
+  invoices: CustomerInvoice[];
+};
+
+export type CustomerInvoice = {
+  id: string;
+  bookingId: string;
+  invoiceNumber: string;
+  status: "issued";
+  issuedAt: string;
+  currency: string;
+  subtotalAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  serviceType: BookingRecord["serviceType"];
+  priority: BookingRecord["priority"];
+  date: string;
+  hour: number;
+  downloadUrl: string;
 };
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {

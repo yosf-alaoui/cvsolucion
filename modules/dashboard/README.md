@@ -3,7 +3,7 @@
 Reusable dashboard layer for:
 - customer profile
 - booking history
-- invoice placeholder/status area
+- invoice status and customer downloads
 - admin pricing controls
 - package management
 - customer requests

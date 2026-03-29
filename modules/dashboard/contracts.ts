@@ -11,10 +11,21 @@ export type CustomerProfile = {
   updatedAt: string;
 };
 
-export type CustomerInvoicePlaceholder = {
+export type CustomerInvoiceSummary = {
+  id: string;
   bookingId: string;
-  status: "pending" | "scheduled" | "ready";
-  note: string;
+  invoiceNumber: string;
+  status: "issued";
+  issuedAt: string;
+  currency: string;
+  subtotalAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  serviceType: BookingRecord["serviceType"];
+  priority: BookingRecord["priority"];
+  date: string;
+  hour: number;
+  downloadUrl: string;
 };
 
 export type CustomerDashboardResponse = {
@@ -25,7 +36,7 @@ export type CustomerDashboardResponse = {
   };
   profile: CustomerProfile;
   bookings: BookingRecord[];
-  invoices?: CustomerInvoicePlaceholder[];
+  invoices?: CustomerInvoiceSummary[];
 };
 
 export type DashboardLead = {

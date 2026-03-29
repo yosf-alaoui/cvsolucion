@@ -51,6 +51,11 @@ export * from "./payments/client";
 export * from "./payments/server";
 export * from "./payments/env";
 
+export * from "./invoices/contracts";
+export * from "./invoices/client";
+export * from "./invoices/server";
+export * from "./invoices/env";
+
 export * from "./i18n/contracts";
 export * from "./i18n/client";
 export * from "./i18n/env";
