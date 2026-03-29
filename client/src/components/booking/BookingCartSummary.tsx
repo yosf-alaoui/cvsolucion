@@ -34,12 +34,14 @@ type BookingCartSummaryProps = {
   unitAmount: number;
   serviceLabel: string;
   priorityLabel: string;
+  packageLabel?: string | null;
   title: string;
   appointmentsLabel: string;
   invoiceLabel: string;
   emptyLabel: string;
   serviceText: string;
   priorityText: string;
+  packageText: string;
   subtotalText: string;
   taxText: string;
   totalText: string;
@@ -124,12 +126,14 @@ export default function BookingCartSummary({
   unitAmount,
   serviceLabel,
   priorityLabel,
+  packageLabel,
   title,
   appointmentsLabel,
   invoiceLabel,
   emptyLabel,
   serviceText,
   priorityText,
+  packageText,
   subtotalText,
   taxText,
   totalText,
@@ -209,6 +213,12 @@ export default function BookingCartSummary({
                 <span className="text-slate-500">{priorityText}</span>
                 <span className="font-semibold text-slate-900">{priorityLabel}</span>
               </div>
+              {packageLabel ? (
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-slate-500">{packageText}</span>
+                  <span className="font-semibold text-slate-900">{packageLabel}</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between gap-4">
                 <span className="text-slate-500">{subtotalText}</span>
                 <span className="font-semibold text-slate-900">{moneyLabel(subtotal, locale, currency)}</span>

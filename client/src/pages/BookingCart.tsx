@@ -27,6 +27,7 @@ function getCopy(locale: string) {
       invoice: "تفاصيل الفاتورة",
       service: "الخدمة",
       priority: "الأولوية",
+      package: "الباقة",
       subtotal: "المجموع الفرعي",
       taxes: "الضرائب",
       total: "الإجمالي المستحق",
@@ -54,6 +55,7 @@ function getCopy(locale: string) {
       invoice: "Facture",
       service: "Service",
       priority: "Priorite",
+      package: "Forfait",
       subtotal: "Sous-total",
       taxes: "Taxes",
       total: "Total a payer",
@@ -80,6 +82,7 @@ function getCopy(locale: string) {
     invoice: "Invoice details",
     service: "Service",
     priority: "Priority",
+    package: "Package",
     subtotal: "Subtotal",
     taxes: "Taxes",
     total: "Total due now",
@@ -95,6 +98,19 @@ function getCopy(locale: string) {
     signIn: "Sign in to pay",
     seoTitle: "Booking cart | CVsolucion",
   };
+}
+
+function getPackageLabel(packageKey: string | null | undefined, locale: string) {
+  if (!packageKey) return null;
+
+  const labels = {
+    en: { audit: "Audit", "fix-day": "Fix Day", "support-plan": "Annual Support Plan" },
+    fr: { audit: "Audit", "fix-day": "Fix Day", "support-plan": "Plan de Support Annuel" },
+    ar: { audit: "Audit", "fix-day": "Fix Day", "support-plan": "خطة الدعم السنوية" },
+  } as const;
+
+  const language = locale === "ar" ? "ar" : locale === "fr" ? "fr" : "en";
+  return labels[language][packageKey as keyof typeof labels.en] || packageKey;
 }
 
 export default function BookingCart() {
@@ -129,6 +145,7 @@ export default function BookingCart() {
   const unitAmount = draft ? stripeConfig?.prices?.[`${draft.priority}:${draft.serviceType}`] ?? 0 : 0;
   const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";
   const priorityLabel = draft ? (draft.priority === "express" ? copy.express : copy.standard) : "";
+  const packageLabel = draft ? getPackageLabel(draft.packageKey, locale) : null;
 
   return (
     <div className="site-page min-h-screen bg-transparent">
@@ -160,12 +177,14 @@ export default function BookingCart() {
                   unitAmount={unitAmount}
                   serviceLabel={serviceLabel}
                   priorityLabel={priorityLabel}
+                  packageLabel={packageLabel}
                   labels={{
                     title: copy.orderSummary,
                     lineItems: copy.lineItems,
                     invoice: copy.invoice,
                     service: copy.service,
                     priority: copy.priority,
+                    package: copy.package,
                     subtotal: copy.subtotal,
                     taxes: copy.taxes,
                     total: copy.total,

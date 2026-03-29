@@ -13,6 +13,7 @@ export type BookingRecord = {
   userId: string;
   serviceType: BookingServiceType;
   priority: BookingPriority;
+  packageKey: string | null;
   date: string;
   hour: number;
   name: string;
@@ -64,6 +65,7 @@ function loadDb(): BookingDb {
     bookings: (parsed.bookings ?? []).map((booking) => ({
       ...booking,
       userId: booking.userId ?? "",
+      packageKey: typeof booking.packageKey === "string" && booking.packageKey.trim() ? booking.packageKey.trim() : null,
       country: booking.country ?? null,
       status: booking.status ?? "confirmed",
       updatedAt: booking.updatedAt ?? booking.createdAt ?? nowIso(),
@@ -386,6 +388,7 @@ export function createBooking(input: {
   userId: string;
   serviceType: BookingServiceType;
   priority: BookingPriority;
+  packageKey?: string | null;
   date: string;
   hour: number;
   name: string;
@@ -452,6 +455,7 @@ export function createBooking(input: {
     userId: input.userId,
     serviceType: input.serviceType,
     priority: input.priority,
+    packageKey: input.packageKey?.trim() || null,
     date: input.date,
     hour: input.hour,
     name: input.name.trim(),

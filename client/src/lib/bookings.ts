@@ -38,6 +38,7 @@ export type BookingRecord = {
   userId: string;
   serviceType: BookingServiceType;
   priority: BookingPriority;
+  packageKey: string | null;
   date: string;
   hour: number;
   name: string;
@@ -88,6 +89,7 @@ export function getBookingAvailability(priority: BookingPriority) {
 export function createBooking(payload: {
   serviceType: BookingServiceType;
   priority: BookingPriority;
+  packageKey?: string | null;
   slots: Array<{ date: string; hour: number }>;
   name: string;
   email: string;

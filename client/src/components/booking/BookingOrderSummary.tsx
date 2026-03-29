@@ -34,12 +34,14 @@ type BookingOrderSummaryProps = {
   unitAmount: number;
   serviceLabel: string;
   priorityLabel: string;
+  packageLabel?: string | null;
   labels: {
     title: string;
     lineItems: string;
     invoice: string;
     service: string;
     priority: string;
+    package: string;
     subtotal: string;
     taxes: string;
     total: string;
@@ -107,6 +109,7 @@ export default function BookingOrderSummary({
   unitAmount,
   serviceLabel,
   priorityLabel,
+  packageLabel,
   labels,
   onRemoveSlot,
 }: BookingOrderSummaryProps) {
@@ -164,6 +167,12 @@ export default function BookingOrderSummary({
             <span className="text-slate-500">{labels.priority}</span>
             <span className="font-semibold text-slate-900">{priorityLabel}</span>
           </div>
+          {packageLabel ? (
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-slate-500">{labels.package}</span>
+              <span className="font-semibold text-slate-900">{packageLabel}</span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-4">
             <span className="text-slate-500">{labels.subtotal}</span>
             <span className="font-semibold text-slate-900">{moneyLabel(subtotal, locale, currency)}</span>

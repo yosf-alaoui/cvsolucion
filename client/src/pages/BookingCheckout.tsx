@@ -34,6 +34,7 @@ function getCopy(locale: string) {
       invoice: "تفاصيل الفاتورة",
       service: "الخدمة",
       priority: "الأولوية",
+      package: "الباقة",
       subtotal: "المجموع الفرعي",
       taxes: "الضرائب",
       total: "الإجمالي المستحق الآن",
@@ -84,6 +85,7 @@ function getCopy(locale: string) {
       invoice: "Facture",
       service: "Service",
       priority: "Priorite",
+      package: "Forfait",
       subtotal: "Sous-total",
       taxes: "Taxes",
       total: "Total a payer",
@@ -133,6 +135,7 @@ function getCopy(locale: string) {
     invoice: "Invoice details",
     service: "Service",
     priority: "Priority",
+    package: "Package",
     subtotal: "Subtotal",
     taxes: "Taxes",
     total: "Total due now",
@@ -171,6 +174,19 @@ function getCopy(locale: string) {
     paymentUnavailable: "Payment is not available for this type right now.",
     seoTitle: "Checkout and payment | CVsolucion",
   };
+}
+
+function getPackageLabel(packageKey: string | null | undefined, locale: string) {
+  if (!packageKey) return null;
+
+  const labels = {
+    en: { audit: "Audit", "fix-day": "Fix Day", "support-plan": "Annual Support Plan" },
+    fr: { audit: "Audit", "fix-day": "Fix Day", "support-plan": "Plan de Support Annuel" },
+    ar: { audit: "Audit", "fix-day": "Fix Day", "support-plan": "خطة الدعم السنوية" },
+  } as const;
+
+  const language = locale === "ar" ? "ar" : locale === "fr" ? "fr" : "en";
+  return labels[language][packageKey as keyof typeof labels.en] || packageKey;
 }
 
 function moneyLabel(amount: number, locale: string, currency: string) {
@@ -257,6 +273,7 @@ export default function BookingCheckout() {
   const stripeEnabled = Boolean(stripeConfig?.enabled && stripeConfig.publishableKey && totalAmount > 0);
   const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";
   const priorityLabel = draft ? (draft.priority === "express" ? copy.express : copy.standard) : "";
+  const packageLabel = draft ? getPackageLabel(draft.packageKey, locale) : null;
   const billingReady = Boolean(form.name.trim() && form.email.trim() && form.phone.trim() && form.country.trim() && form.problem.trim());
 
   useEffect(() => {
@@ -306,6 +323,7 @@ export default function BookingCheckout() {
       await createBooking({
         serviceType: draft.serviceType,
         priority: draft.priority,
+        packageKey: draft.packageKey || undefined,
         slots: draft.slots.map((slot) => ({ date: slot.date, hour: slot.hour })),
         name: form.name,
         email: form.email,
@@ -367,12 +385,14 @@ export default function BookingCheckout() {
                   unitAmount={unitAmount}
                   serviceLabel={serviceLabel}
                   priorityLabel={priorityLabel}
+                  packageLabel={packageLabel}
                   labels={{
                     title: copy.orderSummary,
                     lineItems: copy.lineItems,
                     invoice: copy.invoice,
                     service: copy.service,
                     priority: copy.priority,
+                    package: copy.package,
                     subtotal: copy.subtotal,
                     taxes: copy.taxes,
                     total: copy.total,

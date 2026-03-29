@@ -31,17 +31,33 @@ function getInitialBookingFilters() {
     return {
       priority: "standard" as BookingPriority,
       serviceType: "consultation" as BookingServiceType,
+      packageKey: null as string | null,
     };
   }
 
   const params = new URLSearchParams(window.location.search);
   const priority = params.get("priority");
   const serviceType = params.get("service");
+  const packageKey = params.get("package");
 
   return {
     priority: isBookingPriority(priority) ? priority : ("standard" as BookingPriority),
     serviceType: isBookingServiceType(serviceType) ? serviceType : ("consultation" as BookingServiceType),
+    packageKey: typeof packageKey === "string" && packageKey.trim() ? packageKey.trim() : null,
   };
+}
+
+function getPackageLabel(packageKey: string | null, locale: string) {
+  if (!packageKey) return null;
+
+  const labels = {
+    en: { audit: "Audit", "fix-day": "Fix Day", "support-plan": "Annual Support Plan" },
+    fr: { audit: "Audit", "fix-day": "Fix Day", "support-plan": "Plan de Support Annuel" },
+    ar: { audit: "Audit", "fix-day": "Fix Day", "support-plan": "خطة الدعم السنوية" },
+  } as const;
+
+  const language = locale === "ar" ? "ar" : locale === "fr" ? "fr" : "en";
+  return labels[language][packageKey as keyof typeof labels.en] || packageKey;
 }
 
 function dateLabel(date: string, locale: string) {
@@ -90,6 +106,8 @@ function getCopy(locale: string) {
       tooManySlots: "يمكن اختيار حتى 3 مواعيد فقط.",
       service: "الخدمة",
       priority: "الأولوية",
+      package: "الباقة",
+      selectedPackage: "الباقة المختارة",
       seoTitle: "حجز موعد | CVsolucion",
       appointments: "الجلسات المختارة",
       invoice: "تفاصيل الفاتورة",
@@ -123,6 +141,8 @@ function getCopy(locale: string) {
       tooManySlots: "Vous pouvez choisir jusqu'a 3 horaires seulement.",
       service: "Service",
       priority: "Priorite",
+      package: "Forfait",
+      selectedPackage: "Forfait choisi",
       seoTitle: "Reserver un booking | CVsolucion",
       appointments: "Sessions choisies",
       invoice: "Facture",
@@ -151,11 +171,13 @@ function getCopy(locale: string) {
     summaryEmpty: "Choose one or more time slots before continuing.",
     loading: "Loading schedule...",
     reviewCart: "Review cart",
-    chooseSlot: "Choose a valid slot first.",
-    tooManySlots: "You can choose up to 3 time slots only.",
-    service: "Service",
-    priority: "Priority",
-    seoTitle: "Book an appointment | CVsolucion",
+      chooseSlot: "Choose a valid slot first.",
+      tooManySlots: "You can choose up to 3 time slots only.",
+      service: "Service",
+      priority: "Priority",
+      package: "Package",
+      selectedPackage: "Selected package",
+      seoTitle: "Book an appointment | CVsolucion",
     appointments: "Selected sessions",
     invoice: "Invoice details",
     remove: "Remove",
@@ -171,6 +193,7 @@ export default function Booking() {
   const { locale } = useI18n();
   const [priority, setPriority] = useState<BookingPriority>(() => getInitialBookingFilters().priority);
   const [serviceType, setServiceType] = useState<BookingServiceType>(() => getInitialBookingFilters().serviceType);
+  const [packageKey] = useState<string | null>(() => getInitialBookingFilters().packageKey);
   const [days, setDays] = useState<BookingAvailabilityDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlots, setSelectedSlots] = useState<BookingAvailabilitySlot[]>([]);
@@ -209,6 +232,7 @@ export default function Booking() {
       : null;
   const serviceLabel = serviceType === "support" ? copy.support : copy.consultation;
   const priorityLabel = priority === "express" ? copy.expressTitle : copy.standardTitle;
+  const packageLabel = useMemo(() => getPackageLabel(packageKey, locale), [locale, packageKey]);
 
   function toggleSlot(slot: BookingAvailabilitySlot) {
     setStatus(null);
@@ -232,6 +256,7 @@ export default function Booking() {
     saveBookingCheckoutDraft({
       priority,
       serviceType,
+      packageKey,
       slots: selectedSlots.map((slot) => ({ id: slot.id, date: slot.date, hour: slot.hour })),
       createdAt: Date.now(),
     });
@@ -296,6 +321,11 @@ export default function Booking() {
             <div className="space-y-6">
               <GlassCard className="card-static rounded-[32px] p-7">
                 <div className="flex flex-wrap items-center gap-3">
+                  {packageLabel ? (
+                    <span className="glass-chip rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+                      {copy.selectedPackage}: {packageLabel}
+                    </span>
+                  ) : null}
                   <Button
                     type="button"
                     variant={serviceType === "consultation" ? "default" : "outline"}
@@ -363,6 +393,7 @@ export default function Booking() {
                 draft={{
                   priority,
                   serviceType,
+                  packageKey,
                   slots: selectedSlots.map((slot) => ({ id: slot.id, date: slot.date, hour: slot.hour })),
                   createdAt: Date.now(),
                 }}
@@ -371,12 +402,14 @@ export default function Booking() {
                 unitAmount={unitAmount}
                 serviceLabel={serviceLabel}
                 priorityLabel={priorityLabel}
+                packageLabel={packageLabel}
                 title={copy.summary}
                 appointmentsLabel={copy.appointments}
                 invoiceLabel={copy.invoice}
                 emptyLabel={copy.summaryEmpty}
                 serviceText={copy.service}
                 priorityText={copy.priority}
+                packageText={copy.package}
                 subtotalText={copy.subtotal}
                 taxText={copy.taxes}
                 totalText={copy.total}

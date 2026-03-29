@@ -9,6 +9,7 @@ export type BookingCheckoutSlot = {
 export type BookingCheckoutDraft = {
   priority: BookingPriority;
   serviceType: BookingServiceType;
+  packageKey?: string | null;
   slots: BookingCheckoutSlot[];
   createdAt: number;
 };
@@ -28,6 +29,7 @@ function normalizeDraft(draft: BookingCheckoutDraft): BookingCheckoutDraft {
   return {
     priority: draft.priority,
     serviceType: draft.serviceType,
+    packageKey: typeof draft.packageKey === "string" && draft.packageKey.trim() ? draft.packageKey.trim() : null,
     slots,
     createdAt: draft.createdAt || Date.now(),
   };

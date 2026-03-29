@@ -1271,6 +1271,7 @@ async function startServer() {
       const country = String(req.body?.country || "").trim();
       const company = String(req.body?.company || "").trim();
       const notes = String(req.body?.notes || "").trim();
+      const packageKey = String(req.body?.packageKey || "").trim() || null;
       const paymentIntentId = String(req.body?.paymentIntentId || "").trim();
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
 
@@ -1314,6 +1315,7 @@ async function startServer() {
           userId: auth.user.id,
           serviceType,
           priority: priority as BookingPriority,
+          packageKey,
           date: slot.date,
           hour: slot.hour,
           name,
