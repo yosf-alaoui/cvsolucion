@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { getAppDataDir } from "./dataDir";
 import type { VisitorRecord } from "./visitorStore";
 
 export type ChatMessageRole = "user" | "assistant";
@@ -90,7 +91,7 @@ export type ChatConversationSnapshot = {
   } | null;
 };
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
+const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "chat-db.json");
 
 function ensureDbFile() {

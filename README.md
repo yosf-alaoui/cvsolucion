@@ -80,6 +80,7 @@ Required variables:
 
 ```env
 APP_ORIGIN=http://localhost:3000
+APP_DATA_DIR=./data
 SMTP_HOST=
 SMTP_PORT=
 SMTP_USER=
@@ -119,7 +120,7 @@ shared/
 - The app builds client assets into `dist/public`
 - The Node server builds to `dist/index.js`
 - In production, Express serves the built app and static assets
-- Auth data is stored locally in `data/auth-db.json`
+- Persistent JSON data is stored under `APP_DATA_DIR` and should point to a shared path outside each release folder in production
 - Reverse proxy and CSP are expected to be handled by Nginx
 - Keep `.env` only on the server and never commit secrets
 

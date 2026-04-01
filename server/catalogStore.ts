@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { getAppDataDir } from "./dataDir";
 
 export type CatalogLocale = "en" | "fr" | "ar";
 
@@ -34,7 +35,7 @@ type CatalogDb = {
   servicePackages: CatalogPackageRecord[];
 };
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
+const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "catalog-db.json");
 
 function nowIso() {

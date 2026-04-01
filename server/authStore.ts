@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { getAppDataDir } from "./dataDir";
 
 export type AuthUser = {
   id: string;
@@ -83,7 +84,7 @@ type AdminSnapshotUser = {
   signupLocale: string | null;
 };
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
+const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "auth-db.json");
 
 function ensureDbFile() {

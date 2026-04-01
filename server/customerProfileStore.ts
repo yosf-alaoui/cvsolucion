@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { getAppDataDir } from "./dataDir";
 
 export type CustomerProfileRecord = {
   userId: string;
@@ -16,7 +17,7 @@ type CustomerProfileDb = {
   profiles: CustomerProfileRecord[];
 };
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
+const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "customer-profiles-db.json");
 
 function nowIso() {

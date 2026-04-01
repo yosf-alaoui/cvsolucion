@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { getAppDataDir } from "./dataDir";
 
 type StripeEventRecord = {
   id: string;
@@ -11,7 +12,7 @@ type StripeEventDb = {
   processed: StripeEventRecord[];
 };
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
+const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "stripe-events-db.json");
 const MAX_STORED_EVENTS = 2000;
 

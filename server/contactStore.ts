@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { getAppDataDir } from "./dataDir";
 
 export type ContactLead = {
   id: string;
@@ -17,7 +18,7 @@ type ContactDb = {
   leads: ContactLead[];
 };
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
+const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "contact-leads.json");
 
 function ensureDbFile() {

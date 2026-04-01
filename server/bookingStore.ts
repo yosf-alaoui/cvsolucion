@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { getAppDataDir } from "./dataDir";
 import { getBookingScheduleSettings, isBookingScheduleOpen } from "./bookingSettingsStore";
 
 export type BookingPriority = "standard" | "express";
@@ -84,7 +85,7 @@ type BookingDb = {
   blockedSlots: BlockedBookingSlotRecord[];
 };
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
+const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "bookings-db.json");
 const QUEBEC_TIMEZONE = "America/Toronto";
 const STANDARD_HOURS = [8, 9, 10, 11, 13, 14, 15, 16, 17];

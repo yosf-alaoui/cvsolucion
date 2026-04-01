@@ -85,6 +85,7 @@ import {
 } from "./stripeBooking";
 import { hasProcessedStripeEvent, markStripeEventProcessed } from "./stripeEventStore";
 import { createCatalogPackage, deleteCatalogPackage, getCatalogSnapshot, getPublicCatalog, updateCatalogBookingPrices, updateCatalogPackage } from "./catalogStore";
+import { getAppDataDir } from "./dataDir";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2295,7 +2296,7 @@ async function startServer() {
     })
   );
 
-  app.use("/uploads", express.static(path.resolve(process.cwd(), "data", "uploads"), { maxAge: "30d", etag: true, lastModified: true }));
+  app.use("/uploads", express.static(path.join(getAppDataDir(), "uploads"), { maxAge: "30d", etag: true, lastModified: true }));
 
   app.get("*", (req, res) => {
     try {

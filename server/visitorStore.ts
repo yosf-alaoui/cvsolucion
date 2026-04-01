@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { getAppDataDir } from "./dataDir";
 
 export type VisitorPageView = {
   path: string;
@@ -77,7 +78,7 @@ type VisitorDb = {
   visitors: VisitorRecord[];
 };
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
+const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "visitors-db.json");
 
 function ensureDbFile() {

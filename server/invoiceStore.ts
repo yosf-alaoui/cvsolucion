@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { getAppDataDir } from "./dataDir";
 import type { BookingRecord } from "./bookingStore";
 import { getBookingInvoiceStatus } from "./bookingStore";
 
@@ -36,7 +37,7 @@ type InvoiceDb = {
   invoices: InvoiceRecord[];
 };
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
+const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "invoices-db.json");
 
 function nowIso() {

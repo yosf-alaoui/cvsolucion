@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { getAppDataDir } from "./dataDir";
 import { translateArticleContent } from "./articleTranslation";
 
 export const ARTICLE_LOCALES = ["en", "fr", "ar"] as const;
@@ -51,7 +52,7 @@ type LegacyArticleRecord = {
   updatedAt?: string;
 };
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
+const DATA_DIR = getAppDataDir();
 const ARTICLES_DB_PATH = path.join(DATA_DIR, "articles-db.json");
 const ARTICLE_UPLOADS_DIR = path.join(DATA_DIR, "uploads", "articles");
 
