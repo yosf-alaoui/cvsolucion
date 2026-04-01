@@ -62,6 +62,7 @@ import {
   getBookingById,
   getBookingAvailability,
   listBookings,
+  listBookingsByPaymentReference,
   listBookingsForUser,
   markBookingRefundPendingByAdmin,
   rescheduleBooking,
@@ -1328,6 +1329,24 @@ async function startServer() {
         });
       }
 
+      if (verifiedPayment?.id) {
+        const existingBookings = listBookingsByPaymentReference(verifiedPayment.id).filter(
+          (booking) => booking.userId === auth.user.id
+        );
+        if (existingBookings.length > 0) {
+          upsertCustomerProfile({
+            userId: auth.user.id,
+            email: auth.user.email,
+            name,
+            country,
+            phone,
+            company,
+          });
+
+          return res.status(201).json({ ok: true, bookings: existingBookings, booking: existingBookings[0] });
+        }
+      }
+
       const bookings = slots.map((slot) =>
         createBooking({
           userId: auth.user.id,
@@ -1365,60 +1384,75 @@ async function startServer() {
       const priorityLabel = priority === "express" ? "Express" : "Standard";
       const serviceLabel = serviceType === "support" ? "Support" : "Consultation";
 
-      await sendAuthEmail({
-        to: destination,
-        subject: `New ${priorityLabel} booking - ${name}`,
-        text: [
-          `Booking IDs: ${bookings.map((booking) => booking.id).join(", ")}`,
-          `Service: ${serviceLabel}`,
-          `Priority: ${priorityLabel}`,
-          `Slots (Quebec): ${slotLabel}`,
-          `Name: ${name}`,
-          `Email: ${email}`,
-          `Phone: ${phone}`,
-          company ? `Company: ${company}` : null,
-          notes ? `Notes: ${notes}` : null,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        html: `
-          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
-            <h2 style="margin:0 0 16px">New ${escapeHtml(priorityLabel)} booking</h2>
-            <p><strong>Booking IDs:</strong> ${escapeHtml(bookings.map((booking) => booking.id).join(", "))}</p>
-            <p><strong>Service:</strong> ${escapeHtml(serviceLabel)}</p>
-            <p><strong>Priority:</strong> ${escapeHtml(priorityLabel)}</p>
-            <p><strong>Slots (Quebec):</strong> ${escapeHtml(slotLabel)}</p>
-            <p><strong>Name:</strong> ${escapeHtml(name)}</p>
-            <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-            <p><strong>Phone:</strong> ${escapeHtml(phone)}</p>
-            ${company ? `<p><strong>Company:</strong> ${escapeHtml(company)}</p>` : ""}
-            ${notes ? `<p><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : ""}
-          </div>
-        `,
+      const bookingResponse = { ok: true, bookings, booking: bookings[0] };
+      res.status(201).json(bookingResponse);
+
+      void Promise.allSettled([
+        sendAuthEmail({
+          to: destination,
+          subject: `New ${priorityLabel} booking - ${name}`,
+          text: [
+            `Booking IDs: ${bookings.map((booking) => booking.id).join(", ")}`,
+            `Service: ${serviceLabel}`,
+            `Priority: ${priorityLabel}`,
+            `Slots (Quebec): ${slotLabel}`,
+            `Name: ${name}`,
+            `Email: ${email}`,
+            `Phone: ${phone}`,
+            company ? `Company: ${company}` : null,
+            notes ? `Notes: ${notes}` : null,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          html: `
+            <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+              <h2 style="margin:0 0 16px">New ${escapeHtml(priorityLabel)} booking</h2>
+              <p><strong>Booking IDs:</strong> ${escapeHtml(bookings.map((booking) => booking.id).join(", "))}</p>
+              <p><strong>Service:</strong> ${escapeHtml(serviceLabel)}</p>
+              <p><strong>Priority:</strong> ${escapeHtml(priorityLabel)}</p>
+              <p><strong>Slots (Quebec):</strong> ${escapeHtml(slotLabel)}</p>
+              <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+              <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+              <p><strong>Phone:</strong> ${escapeHtml(phone)}</p>
+              ${company ? `<p><strong>Company:</strong> ${escapeHtml(company)}</p>` : ""}
+              ${notes ? `<p><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : ""}
+            </div>
+          `,
+        }),
+        sendAuthEmail({
+          to: email,
+          subject: "Your CVsolucion booking request is confirmed",
+          text: [
+            `Hello ${name},`,
+            "",
+            `Your ${priorityLabel.toLowerCase()} ${serviceLabel.toLowerCase()} booking request has been recorded.`,
+            `Requested slot(s) (Quebec time): ${slotLabel}`,
+            "",
+            "If any adjustment is needed, our team will contact you using the details you submitted.",
+          ].join("\n"),
+          html: `
+            <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+              <p>Hello ${escapeHtml(name)},</p>
+              <p>Your <strong>${escapeHtml(priorityLabel.toLowerCase())}</strong> ${escapeHtml(serviceLabel.toLowerCase())} booking request has been recorded.</p>
+              <p><strong>Requested slot(s) (Quebec time):</strong> ${escapeHtml(slotLabel)}</p>
+              <p>If any adjustment is needed, our team will contact you using the details you submitted.</p>
+            </div>
+          `,
+        }),
+      ]).then((results) => {
+        results.forEach((result, index) => {
+          if (result.status === "rejected") {
+            const target = index === 0 ? "admin" : "customer";
+            console.error("[booking:email:failed]", {
+              target,
+              bookingIds: bookings.map((booking) => booking.id),
+              error: result.reason instanceof Error ? result.reason.stack || result.reason.message : String(result.reason),
+            });
+          }
+        });
       });
 
-      await sendAuthEmail({
-        to: email,
-        subject: "Your CVsolucion booking request is confirmed",
-        text: [
-          `Hello ${name},`,
-          "",
-          `Your ${priorityLabel.toLowerCase()} ${serviceLabel.toLowerCase()} booking request has been recorded.`,
-          `Requested slot(s) (Quebec time): ${slotLabel}`,
-          "",
-          "If any adjustment is needed, our team will contact you using the details you submitted.",
-        ].join("\n"),
-        html: `
-          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
-            <p>Hello ${escapeHtml(name)},</p>
-            <p>Your <strong>${escapeHtml(priorityLabel.toLowerCase())}</strong> ${escapeHtml(serviceLabel.toLowerCase())} booking request has been recorded.</p>
-            <p><strong>Requested slot(s) (Quebec time):</strong> ${escapeHtml(slotLabel)}</p>
-            <p>If any adjustment is needed, our team will contact you using the details you submitted.</p>
-          </div>
-        `,
-      });
-
-      return res.status(201).json({ ok: true, bookings, booking: bookings[0] });
+      return;
     } catch (error) {
       return next(error);
     }
