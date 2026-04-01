@@ -55,8 +55,10 @@ import {
 } from "./articleStore";
 import {
   applyStripeRefundUpdate,
+  blockBookingSlotByAdmin,
   cancelBookingByAdmin,
   createBooking,
+  getAdminBookingSlotsForDate,
   getBookingById,
   getBookingAvailability,
   listBookings,
@@ -64,6 +66,7 @@ import {
   markBookingRefundPendingByAdmin,
   rescheduleBooking,
   serializeCustomerBooking,
+  unblockBookingSlotByAdmin,
   type BookingPriority,
 } from "./bookingStore";
 import { getBookingScheduleSettings, isBookingScheduleOpen, updateBookingScheduleSettings } from "./bookingSettingsStore";
@@ -1863,6 +1866,112 @@ async function startServer() {
         userAgent: `admin:user-sessions:${userId}:${revoked}`,
       });
       return res.json({ ok: true, revoked });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.get("/api/admin/bookings/slots", rateLimit({ key: "admin-booking-slots", windowMs: 1000 * 60, limit: 180 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const date = String(req.query.date || "").trim();
+      const priority = String(req.query.priority || "standard").trim() === "express" ? "express" : "standard";
+      if (!date) {
+        return res.status(400).json({ error: "Date is required." });
+      }
+
+      const payload = getAdminBookingSlotsForDate({
+        date,
+        priority: priority as BookingPriority,
+      });
+
+      return res.json({ ok: true, ...payload });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post("/api/admin/bookings/slots/block", rateLimit({ key: "admin-booking-slot-block", windowMs: 1000 * 60 * 5, limit: 120 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const date = String(req.body?.date || "").trim();
+      const hour = Number(req.body?.hour);
+      const priority = String(req.body?.priority || "standard").trim() === "express" ? "express" : "standard";
+      const reason = typeof req.body?.reason === "string" ? req.body.reason : null;
+
+      if (!date || !Number.isInteger(hour)) {
+        return res.status(400).json({ error: "Valid date and hour are required." });
+      }
+
+      const slot = blockBookingSlotByAdmin({
+        date,
+        hour,
+        priority: priority as BookingPriority,
+        reason,
+        adminUserId: auth.user.id,
+      });
+
+      recordEvent({
+        type: "admin_booking_slot_blocked",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:booking-slot-block:${date}:${hour}:${priority}`,
+      });
+
+      const slots = getAdminBookingSlotsForDate({
+        date,
+        priority: priority as BookingPriority,
+      });
+
+      return res.json({ ok: true, slot, ...slots });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post("/api/admin/bookings/slots/unblock", rateLimit({ key: "admin-booking-slot-unblock", windowMs: 1000 * 60 * 5, limit: 120 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const date = String(req.body?.date || "").trim();
+      const hour = Number(req.body?.hour);
+      const priority = String(req.body?.priority || "standard").trim() === "express" ? "express" : "standard";
+
+      if (!date || !Number.isInteger(hour)) {
+        return res.status(400).json({ error: "Valid date and hour are required." });
+      }
+
+      const slot = unblockBookingSlotByAdmin({
+        date,
+        hour,
+        priority: priority as BookingPriority,
+      });
+      if (!slot) {
+        return res.status(404).json({ error: "Blocked slot not found." });
+      }
+
+      recordEvent({
+        type: "admin_booking_slot_unblocked",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:booking-slot-unblock:${date}:${hour}:${priority}`,
+      });
+
+      const slots = getAdminBookingSlotsForDate({
+        date,
+        priority: priority as BookingPriority,
+      });
+
+      return res.json({ ok: true, slot, ...slots });
     } catch (error) {
       return next(error);
     }

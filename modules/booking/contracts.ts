@@ -16,7 +16,7 @@ export type BookingAvailabilitySlot = {
   utcStart: string;
   priority: BookingPriority;
   status: "available" | "booked";
-  source: "available" | "real";
+  source: "available" | "real" | "blocked";
 };
 
 export type BookingAvailabilityDay = {
@@ -96,4 +96,38 @@ export type CreateBookingPayload = {
   notes: string;
   paymentIntentId?: string;
   locale: string;
+};
+
+export type AdminBookingSlotView = {
+  id: string;
+  date: string;
+  hour: number;
+  utcStart: string;
+  priority: BookingPriority;
+  status: "booked" | "available";
+  source: "real" | "blocked" | "available";
+  booking:
+    | {
+        id: string;
+        name: string;
+        email: string;
+        status: BookingStatus;
+        paymentStatus: BookingPaymentStatus;
+      }
+    | null;
+  block:
+    | {
+        id: string;
+        reason: string | null;
+        createdAt: string;
+        updatedAt: string;
+      }
+    | null;
+};
+
+export type AdminBookingSlotsResponse = {
+  ok: true;
+  date: string;
+  priority: BookingPriority;
+  slots: AdminBookingSlotView[];
 };

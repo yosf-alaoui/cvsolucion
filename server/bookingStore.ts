@@ -9,6 +9,44 @@ export type BookingStatus = "confirmed" | "cancelled";
 export type BookingPaymentStatus = "pending" | "paid" | "unpaid" | "partially_refunded" | "refunded";
 export type BookingRefundStatus = "none" | "pending" | "succeeded" | "failed" | "canceled";
 
+export type BlockedBookingSlotRecord = {
+  id: string;
+  date: string;
+  hour: number;
+  priority: BookingPriority;
+  reason: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminBookingSlotView = {
+  id: string;
+  date: string;
+  hour: number;
+  utcStart: string;
+  priority: BookingPriority;
+  status: "booked" | "available";
+  source: "real" | "blocked" | "available";
+  booking:
+    | {
+        id: string;
+        name: string;
+        email: string;
+        status: BookingStatus;
+        paymentStatus: BookingPaymentStatus;
+      }
+    | null;
+  block:
+    | {
+        id: string;
+        reason: string | null;
+        createdAt: string;
+        updatedAt: string;
+      }
+    | null;
+};
+
 export type BookingRecord = {
   id: string;
   userId: string;
@@ -43,6 +81,7 @@ export type BookingInvoiceStatus = "pending" | "scheduled" | "ready";
 
 type BookingDb = {
   bookings: BookingRecord[];
+  blockedSlots: BlockedBookingSlotRecord[];
 };
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
@@ -56,7 +95,7 @@ function ensureDbFile() {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
   if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ bookings: [] }, null, 2), "utf8");
+    fs.writeFileSync(DB_PATH, JSON.stringify({ bookings: [], blockedSlots: [] }, null, 2), "utf8");
   }
 }
 
@@ -81,6 +120,16 @@ function loadDb(): BookingDb {
       refundReference: booking.refundReference ?? null,
       refundAmount: Number.isFinite(booking.refundAmount) ? Number(booking.refundAmount) : 0,
       refundedAt: booking.refundedAt ?? null,
+    })),
+    blockedSlots: (parsed.blockedSlots ?? []).map((slot) => ({
+      id: slot.id || buildSlotId(slot.date || "", Number(slot.hour || 0), slot.priority === "express" ? "express" : "standard"),
+      date: String(slot.date || ""),
+      hour: Number(slot.hour || 0),
+      priority: slot.priority === "express" ? "express" : "standard",
+      reason: typeof slot.reason === "string" && slot.reason.trim() ? slot.reason.trim() : null,
+      createdByUserId: typeof slot.createdByUserId === "string" && slot.createdByUserId.trim() ? slot.createdByUserId.trim() : null,
+      createdAt: slot.createdAt || nowIso(),
+      updatedAt: slot.updatedAt || slot.createdAt || nowIso(),
     })),
   };
 }
@@ -216,6 +265,10 @@ function getBookableHoursForDate(priority: BookingPriority, date: string, startD
   return hours;
 }
 
+function isDateKeyValid(dateKey: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateKey);
+}
+
 function buildSlotId(date: string, hour: number, priority: BookingPriority) {
   return `${date}:${String(hour).padStart(2, "0")}:${priority}`;
 }
@@ -295,7 +348,7 @@ export function getBookingAvailability(priority: BookingPriority) {
       utcStart: string;
       priority: BookingPriority;
       status: "booked" | "available";
-      source: "real" | "available";
+      source: "real" | "blocked" | "available";
     }>;
   }> = [];
 
@@ -333,9 +386,12 @@ export function getBookingAvailability(priority: BookingPriority) {
         const actualBooking = db.bookings.find(
           (booking) => booking.date === date && booking.hour === hour && booking.priority === priority && booking.status === "confirmed"
         );
+        const blockedSlot = db.blockedSlots.find(
+          (slot) => slot.date === date && slot.hour === hour && slot.priority === priority
+        );
         const utcStart = new Date(getBookingUtcMs(date, hour)).toISOString();
-        const status: "booked" | "available" = actualBooking ? "booked" : "available";
-        const source: "real" | "available" = actualBooking ? "real" : "available";
+        const status: "booked" | "available" = actualBooking || blockedSlot ? "booked" : "available";
+        const source: "real" | "blocked" | "available" = actualBooking ? "real" : blockedSlot ? "blocked" : "available";
 
         return {
           id: slotId,
@@ -438,6 +494,11 @@ export function createBooking(input: {
 
   if (alreadyBooked) {
     throw new Error("This slot has just been taken. Please choose another time.");
+  }
+
+  const blockedSlot = db.blockedSlots.find((slot) => slot.id === slotId);
+  if (blockedSlot) {
+    throw new Error("This slot is closed by admin. Please choose another time.");
   }
 
   const booking: BookingRecord = {
@@ -764,6 +825,11 @@ export function rescheduleBooking(input: {
     throw new Error("This slot has just been taken. Please choose another time.");
   }
 
+  const blockedSlot = db.blockedSlots.find((slot) => slot.id === buildSlotId(input.date, input.hour, booking.priority));
+  if (blockedSlot) {
+    throw new Error("This slot is closed by admin. Please choose another time.");
+  }
+
   booking.date = input.date;
   booking.hour = input.hour;
   booking.updatedAt = nowIso();
@@ -776,4 +842,132 @@ export function serializeCustomerBooking(booking: BookingRecord) {
     ...booking,
     canReschedule: canRescheduleBooking(booking),
   };
+}
+
+export function getAdminBookingSlotsForDate(input: { date: string; priority: BookingPriority }) {
+  const db = loadDb();
+  const date = String(input.date || "").trim();
+  if (!isDateKeyValid(date)) {
+    throw new Error("Invalid date.");
+  }
+
+  const weekdayIndex = getWeekdayIndex(date);
+  if (input.priority === "standard" && weekdayIndex > 5) {
+    return {
+      date,
+      priority: input.priority,
+      slots: [] as AdminBookingSlotView[],
+    };
+  }
+
+  const hours = getHoursForPriority(input.priority);
+
+  const slots = hours.map((hour) => {
+    const slotId = buildSlotId(date, hour, input.priority);
+    const actualBooking = db.bookings.find(
+      (booking) => booking.date === date && booking.hour === hour && booking.priority === input.priority && booking.status === "confirmed"
+    );
+    const blockedSlot = db.blockedSlots.find(
+      (slot) => slot.date === date && slot.hour === hour && slot.priority === input.priority
+    );
+    const utcStart = new Date(getBookingUtcMs(date, hour)).toISOString();
+    const status: "booked" | "available" = actualBooking || blockedSlot ? "booked" : "available";
+    const source: "real" | "blocked" | "available" = actualBooking ? "real" : blockedSlot ? "blocked" : "available";
+
+    return {
+      id: slotId,
+      date,
+      hour,
+      utcStart,
+      priority: input.priority,
+      status,
+      source,
+      booking: actualBooking
+        ? {
+            id: actualBooking.id,
+            name: actualBooking.name,
+            email: actualBooking.email,
+            status: actualBooking.status,
+            paymentStatus: actualBooking.paymentStatus,
+          }
+        : null,
+      block: blockedSlot
+        ? {
+            id: blockedSlot.id,
+            reason: blockedSlot.reason,
+            createdAt: blockedSlot.createdAt,
+            updatedAt: blockedSlot.updatedAt,
+          }
+        : null,
+    } satisfies AdminBookingSlotView;
+  });
+
+  return {
+    date,
+    priority: input.priority,
+    slots,
+  };
+}
+
+export function blockBookingSlotByAdmin(input: {
+  date: string;
+  hour: number;
+  priority: BookingPriority;
+  reason?: string | null;
+  adminUserId?: string | null;
+}) {
+  const db = loadDb();
+  const date = String(input.date || "").trim();
+  if (!isDateKeyValid(date)) {
+    throw new Error("Invalid date.");
+  }
+
+  const hours = getHoursForPriority(input.priority);
+  if (!hours.includes(input.hour)) {
+    throw new Error("Hour is outside this booking priority range.");
+  }
+
+  const slotId = buildSlotId(date, input.hour, input.priority);
+  const actualBooking = db.bookings.find(
+    (booking) => booking.date === date && booking.hour === input.hour && booking.priority === input.priority && booking.status === "confirmed"
+  );
+  if (actualBooking) {
+    throw new Error("This hour is already booked by a customer.");
+  }
+
+  const now = nowIso();
+  const existing = db.blockedSlots.find((slot) => slot.id === slotId);
+  if (existing) {
+    existing.reason = typeof input.reason === "string" && input.reason.trim() ? input.reason.trim() : null;
+    existing.updatedAt = now;
+    saveDb(db);
+    return existing;
+  }
+
+  const slot: BlockedBookingSlotRecord = {
+    id: slotId,
+    date,
+    hour: input.hour,
+    priority: input.priority,
+    reason: typeof input.reason === "string" && input.reason.trim() ? input.reason.trim() : null,
+    createdByUserId: input.adminUserId?.trim() || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  db.blockedSlots.push(slot);
+  saveDb(db);
+  return slot;
+}
+
+export function unblockBookingSlotByAdmin(input: { date: string; hour: number; priority: BookingPriority }) {
+  const db = loadDb();
+  const slotId = buildSlotId(String(input.date || "").trim(), input.hour, input.priority);
+  const before = db.blockedSlots.length;
+  db.blockedSlots = db.blockedSlots.filter((slot) => slot.id !== slotId);
+  if (db.blockedSlots.length === before) {
+    return null;
+  }
+  saveDb(db);
+  return { id: slotId };
 }

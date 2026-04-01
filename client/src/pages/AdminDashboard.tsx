@@ -6,13 +6,16 @@ import Seo from "@/components/Seo";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
 import {
+  blockAdminBookingSlot,
   cancelAdminBooking,
   deleteAdminUser,
+  getAdminBookingSlots,
   getAdminDashboard,
   refundAdminBooking,
   resendAdminVerification,
   revokeAdminSession,
   revokeAdminUserSessions,
+  unblockAdminBookingSlot,
   updateAdminBookingSchedule,
   updateAdminUser,
   type AdminDashboardConversation,
@@ -865,6 +868,30 @@ export default function AdminDashboard() {
     await load(true);
   };
 
+  const handleLoadBookingSlots = useCallback(
+    async (payload: { date: string; priority: "standard" | "express" }) => {
+      setError(null);
+      return getAdminBookingSlots(payload);
+    },
+    []
+  );
+
+  const handleBlockBookingSlot = useCallback(
+    async (payload: { date: string; hour: number; priority: "standard" | "express"; reason?: string | null }) => {
+      setError(null);
+      return blockAdminBookingSlot(payload);
+    },
+    []
+  );
+
+  const handleUnblockBookingSlot = useCallback(
+    async (payload: { date: string; hour: number; priority: "standard" | "express" }) => {
+      setError(null);
+      return unblockAdminBookingSlot(payload);
+    },
+    []
+  );
+
   const eventLabels: Record<string, string> = {
     signup: locale === "ar" ? "تسجيل" : locale === "fr" ? "Inscription" : "Signup",
     login: locale === "ar" ? "دخول" : locale === "fr" ? "Connexion" : "Login",
@@ -890,6 +917,10 @@ export default function AdminDashboard() {
     locale === "ar" ? "إلغاء موعد" : locale === "fr" ? "Booking annule par admin" : "Admin booking cancelled";
   eventLabels.admin_booking_refund_requested =
     locale === "ar" ? "طلب استرجاع إداري" : locale === "fr" ? "Remboursement demande par admin" : "Admin booking refund requested";
+  eventLabels.admin_booking_slot_blocked =
+    locale === "ar" ? "إغلاق ساعة من الإدارة" : locale === "fr" ? "Heure bloquee par admin" : "Admin slot blocked";
+  eventLabels.admin_booking_slot_unblocked =
+    locale === "ar" ? "فتح ساعة من الإدارة" : locale === "fr" ? "Heure reouverte par admin" : "Admin slot reopened";
 
   const usersCsv = filteredUsers.map((item) => ({
     email: item.email,
@@ -1263,6 +1294,9 @@ export default function AdminDashboard() {
                           onCancelBooking={handleCancelBooking}
                           onRefundBooking={handleRefundBooking}
                           onUpdateSchedule={handleUpdateBookingSchedule}
+                          onLoadSlots={handleLoadBookingSlots}
+                          onBlockSlot={handleBlockBookingSlot}
+                          onUnblockSlot={handleUnblockBookingSlot}
                         />
                       </TabsContent>
 

@@ -4,9 +4,11 @@ import { CalendarDays, CreditCard, Receipt, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { BookingRecord } from "@/lib/bookings";
+import type { AdminBookingSlotsResponse } from "@/lib/admin";
+import type { BookingPriority, BookingRecord } from "@/lib/bookings";
 
 function formatDateTime(date: string, hour: number, locale: string) {
   const dt = new Date(`${date}T${String(hour).padStart(2, "0")}:00:00`);
@@ -21,6 +23,13 @@ function moneyLabel(amount: number, locale: string, currency: string) {
     style: "currency",
     currency: currency.toUpperCase(),
   }).format(amount / 100);
+}
+
+function formatHour(hour: number, locale: string) {
+  const dt = new Date(`2000-01-01T${String(hour).padStart(2, "0")}:00:00`);
+  return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
+    timeStyle: "short",
+  }).format(dt);
 }
 
 function getCopy(locale: string) {
@@ -59,6 +68,29 @@ function getCopy(locale: string) {
       cancelSuccess: "تم إلغاء الموعد.",
       refundSuccess: "تم إنشاء طلب الاسترجاع.",
       cannotRefund: "لا يمكن استرجاع هذا الموعد.",
+      slotControl: "التحكم بالساعات",
+      slotControlSubtitle: "اختر يوما وساعة لإغلاقها يدويا أو فتحها من جديد.",
+      slotDate: "التاريخ",
+      slotPriority: "الأولوية",
+      slotReason: "سبب الإغلاق (اختياري)",
+      slotReasonPlaceholder: "صيانة، اجتماع داخلي، عطلة...",
+      slotReload: "تحديث الساعات",
+      slotHour: "الساعة",
+      slotState: "الحالة",
+      slotSource: "المصدر",
+      slotActions: "الإجراء",
+      slotAvailable: "متاحة",
+      slotBooked: "محجوزة",
+      slotSourceCustomer: "حجز عميل",
+      slotSourceAdmin: "مغلقة من الإدارة",
+      slotSourceOpen: "مفتوحة",
+      slotBlock: "إغلاق الساعة",
+      slotUnblock: "فتح الساعة",
+      slotBlockSuccess: "تم إغلاق الساعة.",
+      slotUnblockSuccess: "تم فتح الساعة.",
+      slotLoadError: "تعذر تحميل ساعات اليوم.",
+      slotBlockError: "تعذر إغلاق الساعة.",
+      slotUnblockError: "تعذر فتح الساعة.",
     };
   }
 
@@ -97,6 +129,29 @@ function getCopy(locale: string) {
       cancelSuccess: "Booking annule.",
       refundSuccess: "Remboursement demande.",
       cannotRefund: "Ce booking ne peut pas etre rembourse.",
+      slotControl: "Controle horaire",
+      slotControlSubtitle: "Choisissez un jour et gelez/ouvrez chaque heure manuellement.",
+      slotDate: "Date",
+      slotPriority: "Priorite",
+      slotReason: "Raison du blocage (optionnel)",
+      slotReasonPlaceholder: "Maintenance, reunion interne, conge...",
+      slotReload: "Rafraichir les heures",
+      slotHour: "Heure",
+      slotState: "Statut",
+      slotSource: "Source",
+      slotActions: "Action",
+      slotAvailable: "Disponible",
+      slotBooked: "Occupe",
+      slotSourceCustomer: "Booking client",
+      slotSourceAdmin: "Bloque par admin",
+      slotSourceOpen: "Ouvert",
+      slotBlock: "Bloquer l'heure",
+      slotUnblock: "Ouvrir l'heure",
+      slotBlockSuccess: "Heure bloquee.",
+      slotUnblockSuccess: "Heure ouverte.",
+      slotLoadError: "Impossible de charger les heures.",
+      slotBlockError: "Impossible de bloquer l'heure.",
+      slotUnblockError: "Impossible d'ouvrir l'heure.",
     };
   }
 
@@ -134,6 +189,29 @@ function getCopy(locale: string) {
     cancelSuccess: "Booking cancelled.",
     refundSuccess: "Refund request created.",
     cannotRefund: "This booking cannot be refunded.",
+    slotControl: "Hourly slot control",
+    slotControlSubtitle: "Pick a day and lock or reopen each hour manually.",
+    slotDate: "Date",
+    slotPriority: "Priority",
+    slotReason: "Block reason (optional)",
+    slotReasonPlaceholder: "Maintenance, internal meeting, holiday...",
+    slotReload: "Refresh hours",
+    slotHour: "Hour",
+    slotState: "Status",
+    slotSource: "Source",
+    slotActions: "Action",
+    slotAvailable: "Available",
+    slotBooked: "Booked",
+    slotSourceCustomer: "Customer booking",
+    slotSourceAdmin: "Admin blocked",
+    slotSourceOpen: "Open",
+    slotBlock: "Block hour",
+    slotUnblock: "Open hour",
+    slotBlockSuccess: "Hour blocked.",
+    slotUnblockSuccess: "Hour reopened.",
+    slotLoadError: "Failed to load day slots.",
+    slotBlockError: "Failed to block this hour.",
+    slotUnblockError: "Failed to open this hour.",
   };
 }
 
@@ -159,6 +237,9 @@ export default function BookingsManager({
   onCancelBooking,
   onRefundBooking,
   onUpdateSchedule,
+  onLoadSlots,
+  onBlockSlot,
+  onUnblockSlot,
 }: {
   locale: string;
   bookings: BookingRecord[];
@@ -170,11 +251,25 @@ export default function BookingsManager({
   onCancelBooking: (bookingId: string) => Promise<void>;
   onRefundBooking: (bookingId: string) => Promise<void>;
   onUpdateSchedule: (payload: { standardOpen?: boolean; expressOpen?: boolean }) => Promise<void>;
+  onLoadSlots: (payload: { date: string; priority: BookingPriority }) => Promise<AdminBookingSlotsResponse>;
+  onBlockSlot: (payload: {
+    date: string;
+    hour: number;
+    priority: BookingPriority;
+    reason?: string | null;
+  }) => Promise<AdminBookingSlotsResponse>;
+  onUnblockSlot: (payload: { date: string; hour: number; priority: BookingPriority }) => Promise<AdminBookingSlotsResponse>;
 }) {
   const copy = useMemo(() => getCopy(locale), [locale]);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [updatingSchedule, setUpdatingSchedule] = useState<"standard" | "express" | null>(null);
+  const [slotDate, setSlotDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [slotPriority, setSlotPriority] = useState<BookingPriority>("standard");
+  const [slotReason, setSlotReason] = useState("");
+  const [slotData, setSlotData] = useState<AdminBookingSlotsResponse | null>(null);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotActionBusy, setSlotActionBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (!bookings.length) {
@@ -187,6 +282,25 @@ export default function BookingsManager({
   }, [bookings, selectedBookingId]);
 
   const selectedBooking = bookings.find((booking) => booking.id === selectedBookingId) ?? null;
+
+  async function loadSlotData(date = slotDate, priority = slotPriority) {
+    if (!date) return;
+    try {
+      setLoadingSlots(true);
+      const response = await onLoadSlots({ date, priority });
+      setSlotData(response);
+    } catch (error: any) {
+      toast.error(error?.message || copy.slotLoadError);
+    } finally {
+      setLoadingSlots(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!slotDate) return;
+    void loadSlotData(slotDate, slotPriority);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slotDate, slotPriority]);
 
   async function handleCancel(bookingId: string) {
     try {
@@ -219,6 +333,46 @@ export default function BookingsManager({
     } finally {
       setUpdatingSchedule(null);
     }
+  }
+
+  async function handleBlockSlot(hour: number) {
+    try {
+      setSlotActionBusy(`block:${slotDate}:${hour}:${slotPriority}`);
+      const response = await onBlockSlot({
+        date: slotDate,
+        hour,
+        priority: slotPriority,
+        reason: slotReason,
+      });
+      setSlotData(response);
+      toast.success(copy.slotBlockSuccess);
+    } catch (error: any) {
+      toast.error(error?.message || copy.slotBlockError);
+    } finally {
+      setSlotActionBusy(null);
+    }
+  }
+
+  async function handleUnblockSlot(hour: number) {
+    try {
+      setSlotActionBusy(`unblock:${slotDate}:${hour}:${slotPriority}`);
+      const response = await onUnblockSlot({
+        date: slotDate,
+        hour,
+        priority: slotPriority,
+      });
+      setSlotData(response);
+      toast.success(copy.slotUnblockSuccess);
+    } catch (error: any) {
+      toast.error(error?.message || copy.slotUnblockError);
+    } finally {
+      setSlotActionBusy(null);
+    }
+  }
+
+  async function handleCancelFromSlot(bookingId: string) {
+    await handleCancel(bookingId);
+    await loadSlotData();
   }
 
   return (
@@ -309,6 +463,138 @@ export default function BookingsManager({
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{copy.slotControl}</CardTitle>
+          <p className="text-sm text-slate-500">{copy.slotControlSubtitle}</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 lg:grid-cols-[200px_220px_minmax(240px,1fr)_auto] lg:items-end">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">{copy.slotDate}</label>
+              <Input type="date" value={slotDate} onChange={(event) => setSlotDate(event.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">{copy.slotPriority}</label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={slotPriority === "standard" ? "default" : "outline"}
+                  onClick={() => setSlotPriority("standard")}
+                >
+                  {copy.standard}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={slotPriority === "express" ? "default" : "outline"}
+                  onClick={() => setSlotPriority("express")}
+                >
+                  {copy.express}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">{copy.slotReason}</label>
+              <Input
+                value={slotReason}
+                onChange={(event) => setSlotReason(event.target.value)}
+                placeholder={copy.slotReasonPlaceholder}
+              />
+            </div>
+            <Button type="button" variant="outline" onClick={() => void loadSlotData()} disabled={loadingSlots}>
+              {copy.slotReload}
+            </Button>
+          </div>
+
+          <ScrollArea className="w-full">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{copy.slotHour}</TableHead>
+                  <TableHead>{copy.slotState}</TableHead>
+                  <TableHead>{copy.slotSource}</TableHead>
+                  <TableHead>{copy.slotActions}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {slotData?.slots?.length ? (
+                  slotData.slots.map((slot) => {
+                    const actionKey = `${slotDate}:${slot.hour}:${slotPriority}`;
+                    const sourceLabel =
+                      slot.source === "real"
+                        ? copy.slotSourceCustomer
+                        : slot.source === "blocked"
+                          ? copy.slotSourceAdmin
+                          : copy.slotSourceOpen;
+                    return (
+                      <TableRow key={slot.id}>
+                        <TableCell className="font-medium">{formatHour(slot.hour, locale)}</TableCell>
+                        <TableCell>{slot.status === "booked" ? copy.slotBooked : copy.slotAvailable}</TableCell>
+                        <TableCell>
+                          <div>{sourceLabel}</div>
+                          {slot.booking ? (
+                            <div className="mt-1 text-xs text-slate-500">
+                              {slot.booking.name} · {slot.booking.email}
+                            </div>
+                          ) : null}
+                          {slot.block?.reason ? <div className="mt-1 text-xs text-slate-500">{slot.block.reason}</div> : null}
+                        </TableCell>
+                        <TableCell>
+                          {slot.source === "available" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={slotActionBusy === `block:${actionKey}`}
+                              onClick={() => void handleBlockSlot(slot.hour)}
+                            >
+                              {copy.slotBlock}
+                            </Button>
+                          ) : slot.source === "blocked" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={slotActionBusy === `unblock:${actionKey}`}
+                              onClick={() => void handleUnblockSlot(slot.hour)}
+                            >
+                              {copy.slotUnblock}
+                            </Button>
+                          ) : slot.booking ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={busyAction === `cancel:${slot.booking.id}`}
+                              onClick={() => {
+                                if (!slot.booking) return;
+                                void handleCancelFromSlot(slot.booking.id);
+                              }}
+                            >
+                              {copy.cancel}
+                            </Button>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-slate-500">
+                      {loadingSlots ? "..." : copy.noResults}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </ScrollArea>
         </CardContent>
       </Card>
 

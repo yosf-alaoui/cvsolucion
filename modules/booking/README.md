@@ -8,6 +8,7 @@ Reusable virtual-service booking stack with:
 - rescheduling rules
 - refund synchronization
 - admin schedule open/close controls
+- admin per-hour slot controls (block/unblock specific hours)
 - customer-local display timezone with Quebec as the internal booking reference
 - country + province/state selectors for timezone-aware availability display
 

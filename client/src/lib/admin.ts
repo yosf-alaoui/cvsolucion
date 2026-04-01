@@ -1,4 +1,4 @@
-import type { BookingRecord } from "@/lib/bookings";
+import type { BookingPriority, BookingRecord, BookingStatus, BookingPaymentStatus } from "@/lib/bookings";
 
 export type AdminDashboardStats = {
   totalUsers: number;
@@ -268,6 +268,40 @@ export type AdminCatalogResponse = {
   servicePackages: AdminCatalogPackage[];
 };
 
+export type AdminBookingSlotView = {
+  id: string;
+  date: string;
+  hour: number;
+  utcStart: string;
+  priority: BookingPriority;
+  status: "booked" | "available";
+  source: "real" | "blocked" | "available";
+  booking:
+    | {
+        id: string;
+        name: string;
+        email: string;
+        status: BookingStatus;
+        paymentStatus: BookingPaymentStatus;
+      }
+    | null;
+  block:
+    | {
+        id: string;
+        reason: string | null;
+        createdAt: string;
+        updatedAt: string;
+      }
+    | null;
+};
+
+export type AdminBookingSlotsResponse = {
+  ok: true;
+  date: string;
+  priority: BookingPriority;
+  slots: AdminBookingSlotView[];
+};
+
 async function adminRequest<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
@@ -399,4 +433,44 @@ export function updateAdminBookingSchedule(payload: {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+export function getAdminBookingSlots(payload: { date: string; priority: BookingPriority }) {
+  const params = new URLSearchParams({
+    date: payload.date,
+    priority: payload.priority,
+  });
+
+  return adminRequest<AdminBookingSlotsResponse>(`/api/admin/bookings/slots?${params.toString()}`, {
+    method: "GET",
+  });
+}
+
+export function blockAdminBookingSlot(payload: {
+  date: string;
+  hour: number;
+  priority: BookingPriority;
+  reason?: string | null;
+}) {
+  return adminRequest<AdminBookingSlotsResponse & { slot: { id: string } }>(
+    "/api/admin/bookings/slots/block",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function unblockAdminBookingSlot(payload: {
+  date: string;
+  hour: number;
+  priority: BookingPriority;
+}) {
+  return adminRequest<AdminBookingSlotsResponse & { slot: { id: string } }>(
+    "/api/admin/bookings/slots/unblock",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
 }

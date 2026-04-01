@@ -11,7 +11,7 @@ export type BookingAvailabilitySlot = {
   utcStart: string;
   priority: BookingPriority;
   status: "available" | "booked";
-  source: "available" | "real";
+  source: "available" | "real" | "blocked";
 };
 
 export type BookingAvailabilityDay = {
