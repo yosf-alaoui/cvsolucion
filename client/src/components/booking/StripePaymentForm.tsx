@@ -96,6 +96,13 @@ function StripePaymentFormInner({
       });
 
       if (result.error) {
+        const recovered = await stripe.retrievePaymentIntent(clientSecret);
+        const recoveredIntent = recovered.paymentIntent;
+        if (recoveredIntent?.id && recoveredIntent.status === "succeeded") {
+          await onSuccess(recoveredIntent.id);
+          return;
+        }
+
         throw new Error(result.error.message || "Payment failed.");
       }
 
