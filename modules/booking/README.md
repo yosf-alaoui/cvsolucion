@@ -9,6 +9,7 @@ Reusable virtual-service booking stack with:
 - refund synchronization
 - admin schedule open/close controls
 - customer-local display timezone with Quebec as the internal booking reference
+- country + province/state selectors for timezone-aware availability display
 
 ## Current implementation
 - Availability and booking rules: `server/bookingStore.ts`

@@ -26,9 +26,13 @@ import {
   getBookingCountryLabel,
   getBookingCountryOptions,
   getBookingLocalDateKey,
+  getBookingRegionLabel,
+  getBookingRegionOptions,
   getBookingTimeZone,
   guessBookingCountryCode,
+  guessBookingRegionCode,
   type BookingCountryOption,
+  type BookingRegionOption,
 } from "@/lib/bookingTime";
 import { getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
 
@@ -199,11 +203,25 @@ export default function Booking() {
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(true);
   const [selectedCountryCode, setSelectedCountryCode] = useState<string>(() => guessBookingCountryCode(null));
+  const [selectedRegionCode, setSelectedRegionCode] = useState<string>(() =>
+    guessBookingRegionCode(guessBookingCountryCode(null), null)
+  );
 
   const copy = useMemo(() => getCopy(locale), [locale]);
   const countryOptions = useMemo(() => getBookingCountryOptions(locale), [locale]);
-  const displayTimeZone = useMemo(() => getBookingTimeZone(selectedCountryCode), [selectedCountryCode]);
+  const regionOptions = useMemo(
+    () => getBookingRegionOptions(selectedCountryCode, locale),
+    [locale, selectedCountryCode]
+  );
+  const displayTimeZone = useMemo(
+    () => getBookingTimeZone(selectedCountryCode, selectedRegionCode),
+    [selectedCountryCode, selectedRegionCode]
+  );
   const selectedCountryLabel = useMemo(() => getBookingCountryLabel(selectedCountryCode, locale), [locale, selectedCountryCode]);
+  const selectedRegionLabel = useMemo(
+    () => getBookingRegionLabel(selectedCountryCode, selectedRegionCode, locale),
+    [locale, selectedCountryCode, selectedRegionCode]
+  );
   const bookingHref = locale === "en" ? "/book" : `/${locale}/book`;
   const currentBookingHref =
     typeof window === "undefined" ? bookingHref : `${window.location.pathname}${window.location.search}`;
@@ -217,12 +235,14 @@ export default function Booking() {
         ? "Vous devez vous connecter avant de voir les horaires et choisir un booking."
         : "You must sign in before viewing availability and choosing a booking.";
   const countryLabel = locale === "ar" ? "الدولة" : locale === "fr" ? "Pays" : "Country";
+  const regionLabel = locale === "ar" ? "المقاطعة / الولاية" : locale === "fr" ? "Province / Etat" : "Province / State";
+  const localAreaLabel = selectedRegionLabel ? `${selectedCountryLabel} - ${selectedRegionLabel}` : selectedCountryLabel;
   const localTimeLabel =
     locale === "ar"
-      ? `المواعيد المعروضة الآن حسب توقيت ${selectedCountryLabel}`
+      ? `المواعيد المعروضة الآن حسب توقيت ${localAreaLabel}`
       : locale === "fr"
-        ? `Horaires affiches en heure locale de ${selectedCountryLabel}`
-        : `Times now shown in ${selectedCountryLabel} local time`;
+        ? `Horaires affiches en heure locale de ${localAreaLabel}`
+        : `Times now shown in ${localAreaLabel} local time`;
   const quebecReferenceLabel =
     locale === "ar"
       ? "البرنامج الداخلي وإدارة الجلسات يبقيان على توقيت كيبيك، كندا"
@@ -306,13 +326,28 @@ export default function Booking() {
     if (!user) return;
     getCustomerDashboard()
       .then((response) => {
+        const guessedCountry = guessBookingCountryCode(response.profile.country);
         setSelectedCountryCode((current) => {
           if (current && current !== "CA") return current;
-          return guessBookingCountryCode(response.profile.country);
+          return guessedCountry;
+        });
+        setSelectedRegionCode((current) => {
+          if (current) return current;
+          return guessBookingRegionCode(guessedCountry, response.profile.country);
         });
       })
       .catch(() => {});
   }, [user]);
+
+  useEffect(() => {
+    if (!selectedCountryCode) return;
+    setSelectedRegionCode((current) => {
+      if (current && regionOptions.some((option) => option.code === current)) {
+        return current;
+      }
+      return guessBookingRegionCode(selectedCountryCode, null);
+    });
+  }, [regionOptions, selectedCountryCode]);
 
   useEffect(() => {
     getStripeBookingConfig()
@@ -360,6 +395,7 @@ export default function Booking() {
       serviceType,
       packageKey,
       countryCode: selectedCountryCode,
+      regionCode: selectedRegionCode,
       timeZone: displayTimeZone,
       slots: selectedSlots.map((slot) => ({ id: slot.id, date: slot.date, hour: slot.hour, utcStart: slot.utcStart })),
       createdAt: Date.now(),
@@ -462,12 +498,33 @@ export default function Booking() {
                   <div className="mt-8 flex flex-wrap items-end gap-4">
                     <div className="min-w-[220px] flex-1 space-y-2">
                       <Label htmlFor="booking-country">{countryLabel}</Label>
-                      <Select value={selectedCountryCode} onValueChange={setSelectedCountryCode}>
+                      <Select
+                        value={selectedCountryCode}
+                        onValueChange={(nextCountryCode) => {
+                          setSelectedCountryCode(nextCountryCode);
+                          setSelectedRegionCode(guessBookingRegionCode(nextCountryCode, null));
+                        }}
+                      >
                         <SelectTrigger id="booking-country" className="bg-white/85">
                           <SelectValue placeholder={countryLabel} />
                         </SelectTrigger>
                         <SelectContent>
                           {countryOptions.map((option: BookingCountryOption) => (
+                            <SelectItem key={option.code} value={option.code}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="min-w-[220px] flex-1 space-y-2">
+                      <Label htmlFor="booking-region">{regionLabel}</Label>
+                      <Select value={selectedRegionCode} onValueChange={setSelectedRegionCode}>
+                        <SelectTrigger id="booking-region" className="bg-white/85">
+                          <SelectValue placeholder={regionLabel} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {regionOptions.map((option: BookingRegionOption) => (
                             <SelectItem key={option.code} value={option.code}>
                               {option.label}
                             </SelectItem>
@@ -533,6 +590,7 @@ export default function Booking() {
                   serviceType,
                   packageKey,
                   countryCode: selectedCountryCode,
+                  regionCode: selectedRegionCode,
                   timeZone: displayTimeZone,
                   slots: selectedSlots.map((slot) => ({ id: slot.id, date: slot.date, hour: slot.hour, utcStart: slot.utcStart })),
                   createdAt: Date.now(),

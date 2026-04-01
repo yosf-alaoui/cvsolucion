@@ -14,7 +14,7 @@ import {
   removeBookingCheckoutSlot,
   type BookingCheckoutDraft,
 } from "@/lib/bookingCheckout";
-import { getBookingCountryLabel } from "@/lib/bookingTime";
+import { getBookingCountryLabel, getBookingRegionLabel } from "@/lib/bookingTime";
 import { getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
 
 function getCopy(locale: string) {
@@ -147,12 +147,21 @@ export default function BookingCart() {
   const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";
   const priorityLabel = draft ? (draft.priority === "express" ? copy.express : copy.standard) : "";
   const packageLabel = draft ? getPackageLabel(draft.packageKey, locale) : null;
+  const localizedArea = draft?.countryCode
+    ? [
+        getBookingCountryLabel(draft.countryCode, locale),
+        draft.regionCode ? getBookingRegionLabel(draft.countryCode, draft.regionCode, locale) : "",
+      ]
+        .filter(Boolean)
+        .join(" - ")
+    : "";
+
   const timeZoneNote = draft?.countryCode
     ? locale === "ar"
-      ? `المواعيد المعروضة الآن حسب توقيت ${getBookingCountryLabel(draft.countryCode, locale)} بينما يبقى المرجع الداخلي على توقيت كيبيك.`
+      ? `المواعيد المعروضة الآن حسب توقيت ${localizedArea} بينما يبقى المرجع الداخلي على توقيت كيبيك.`
       : locale === "fr"
-        ? `Les horaires sont affiches en heure de ${getBookingCountryLabel(draft.countryCode, locale)} tout en gardant le planning interne sur l'heure du Quebec.`
-        : `Times are shown in ${getBookingCountryLabel(draft.countryCode, locale)} local time while internal scheduling stays on Quebec time.`
+        ? `Les horaires sont affiches en heure de ${localizedArea} tout en gardant le planning interne sur l'heure du Quebec.`
+        : `Times are shown in ${localizedArea} local time while internal scheduling stays on Quebec time.`
     : undefined;
 
   return (

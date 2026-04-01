@@ -12,6 +12,7 @@ export type BookingCheckoutDraft = {
   serviceType: BookingServiceType;
   packageKey?: string | null;
   countryCode?: string | null;
+  regionCode?: string | null;
   timeZone?: string | null;
   slots: BookingCheckoutSlot[];
   createdAt: number;
@@ -34,6 +35,7 @@ function normalizeDraft(draft: BookingCheckoutDraft): BookingCheckoutDraft {
     serviceType: draft.serviceType,
     packageKey: typeof draft.packageKey === "string" && draft.packageKey.trim() ? draft.packageKey.trim() : null,
     countryCode: typeof draft.countryCode === "string" && draft.countryCode.trim() ? draft.countryCode.trim() : null,
+    regionCode: typeof draft.regionCode === "string" && draft.regionCode.trim() ? draft.regionCode.trim() : null,
     timeZone: typeof draft.timeZone === "string" && draft.timeZone.trim() ? draft.timeZone.trim() : null,
     slots,
     createdAt: draft.createdAt || Date.now(),

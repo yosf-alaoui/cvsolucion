@@ -20,7 +20,7 @@ import {
 } from "@/lib/bookingCheckout";
 import { createBooking } from "@/lib/bookings";
 import { getCustomerDashboard } from "@/lib/customer";
-import { getBookingCountryLabel } from "@/lib/bookingTime";
+import { getBookingCountryLabel, getBookingRegionLabel } from "@/lib/bookingTime";
 import { createBookingPaymentIntent, getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
 import { useI18n } from "@/i18n/i18n";
 
@@ -243,12 +243,21 @@ export default function BookingCheckout() {
 
   useEffect(() => {
     if (!user?.email) return;
+    const draftLocation = draft?.countryCode
+      ? [
+          getBookingCountryLabel(draft.countryCode, locale),
+          draft.regionCode ? getBookingRegionLabel(draft.countryCode, draft.regionCode, locale) : "",
+        ]
+          .filter(Boolean)
+          .join(" - ")
+      : "";
+
     setForm((current) => ({
       ...current,
       email: user.email,
-      country: current.country || (draft?.countryCode ? getBookingCountryLabel(draft.countryCode, locale) : ""),
+      country: current.country || draftLocation,
     }));
-  }, [draft?.countryCode, locale, user?.email]);
+  }, [draft?.countryCode, draft?.regionCode, locale, user?.email]);
 
   useEffect(() => {
     if (!user) return;

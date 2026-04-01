@@ -86,6 +86,7 @@ export type CreateBookingPayload = {
   serviceType: BookingServiceType;
   priority: BookingPriority;
   packageKey?: string | null;
+  regionCode?: string | null;
   slots: BookingSlot[];
   name: string;
   email: string;
