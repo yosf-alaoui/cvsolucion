@@ -96,7 +96,6 @@ export async function createBookingPaymentIntent(input: {
     automatic_payment_methods: {
       enabled: true,
     },
-    receipt_email: input.email,
     metadata: {
       type: "booking",
       userId: input.userId,

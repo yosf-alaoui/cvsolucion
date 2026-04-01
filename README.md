@@ -86,6 +86,7 @@ SMTP_PORT=
 SMTP_USER=
 SMTP_PASS=
 SMTP_FROM=
+CONTACT_EMAIL=contact@cvsolucion.com
 ```
 
 Optional analytics variables:

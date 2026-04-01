@@ -25,6 +25,10 @@ function getTransporter() {
   });
 }
 
+function getPublicContactEmail() {
+  return process.env.CONTACT_EMAIL?.trim() || "contact@cvsolucion.com";
+}
+
 export async function sendAuthEmail(options: MailOptions) {
   const transporter = getTransporter();
   if (!transporter) {
@@ -36,10 +40,12 @@ export async function sendAuthEmail(options: MailOptions) {
     return;
   }
 
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@localhost";
+  const from = process.env.SMTP_FROM?.trim() || `CVsolucion <${getPublicContactEmail()}>`;
+  const replyTo = getPublicContactEmail();
   try {
     const info = await transporter.sendMail({
       from,
+      replyTo,
       to: options.to,
       subject: options.subject,
       text: options.text,
