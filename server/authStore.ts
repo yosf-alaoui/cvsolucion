@@ -45,6 +45,7 @@ export type AuthEventType =
   | "admin_verification_sent"
   | "admin_session_revoked"
   | "admin_all_sessions_revoked"
+  | "admin_booking_schedule_updated"
   | "admin_booking_cancelled"
   | "admin_booking_refund_requested";
 

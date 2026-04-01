@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { getBookingScheduleSettings, isBookingScheduleOpen } from "./bookingSettingsStore";
 
 export type BookingPriority = "standard" | "express";
 export type BookingServiceType = "consultation" | "support";
@@ -192,6 +193,12 @@ function getHoursForPriority(priority: BookingPriority) {
   return priority === "express" ? EXPRESS_HOURS : STANDARD_HOURS;
 }
 
+function priorityClosedError(priority: BookingPriority) {
+  return priority === "express"
+    ? "Express booking is currently closed."
+    : "Standard booking is currently closed.";
+}
+
 function getBookableHoursForDate(priority: BookingPriority, date: string, startDate: string, currentHour: number) {
   const hours = getHoursForPriority(priority);
 
@@ -211,68 +218,6 @@ function getBookableHoursForDate(priority: BookingPriority, date: string, startD
 
 function buildSlotId(date: string, hour: number, priority: BookingPriority) {
   return `${date}:${String(hour).padStart(2, "0")}:${priority}`;
-}
-
-function getUpcomingBusinessDates(startDate: string, count: number) {
-  const dates: string[] = [];
-  let cursor = startDate;
-
-  while (dates.length < count) {
-    if (getWeekdayIndex(cursor) <= 5) {
-      dates.push(cursor);
-    }
-    cursor = addDays(cursor, 1);
-  }
-
-  return dates;
-}
-
-function addShowcaseBlock(booked: Set<string>, date: string, startHour: number) {
-  const hours = getHoursForPriority("standard");
-  const index = hours.indexOf(startHour);
-  if (index === -1) return;
-
-  booked.add(buildSlotId(date, startHour, "standard"));
-  const nextHour = hours[index + 1];
-  if (typeof nextHour === "number" && nextHour - startHour === 1) {
-    booked.add(buildSlotId(date, nextHour, "standard"));
-  }
-}
-
-function buildShowcaseBookedIds(startDate: string, daysAhead = 31) {
-  const booked = new Set<string>();
-  const businessDates = getUpcomingBusinessDates(startDate, Math.max(daysAhead, 9));
-  const today = businessDates[0];
-  const nextDay = businessDates[1];
-  const nextSevenDays = businessDates.slice(2, 9);
-
-  if (today === startDate) {
-    STANDARD_HOURS.forEach((hour) => {
-      booked.add(buildSlotId(today, hour, "standard"));
-    });
-  }
-
-  if (nextDay) {
-    [8, 9, 10, 11].forEach((hour) => {
-      booked.add(buildSlotId(nextDay, hour, "standard"));
-    });
-  }
-
-  const patterns = [
-    { dayIndex: 0, hour: 13 },
-    { dayIndex: 1, hour: 9 },
-    { dayIndex: 2, hour: 15 },
-    { dayIndex: 4, hour: 10 },
-    { dayIndex: 6, hour: 14 },
-  ];
-
-  patterns.forEach((pattern, index) => {
-    const date = nextSevenDays[pattern.dayIndex] ?? nextSevenDays[index] ?? null;
-    if (!date) return;
-    addShowcaseBlock(booked, date, pattern.hour);
-  });
-
-  return booked;
 }
 
 function sortBookings(items: BookingRecord[]) {
@@ -339,10 +284,41 @@ export function getBookingAvailability(priority: BookingPriority) {
   const db = loadDb();
   const quebecNow = getQuebecNow();
   const startDate = quebecNow.dateKey;
-  const showcaseBooked = buildShowcaseBookedIds(startDate);
-  const days = [];
+  const schedule = getBookingScheduleSettings();
+  const isOpen = priority === "express" ? schedule.expressOpen : schedule.standardOpen;
+  const days: Array<{
+    date: string;
+    slots: Array<{
+      id: string;
+      date: string;
+      hour: number;
+      utcStart: string;
+      priority: BookingPriority;
+      status: "booked" | "available";
+      source: "real" | "available";
+    }>;
+  }> = [];
 
   const maxDays = priority === "express" ? 2 : 31;
+
+  if (!isOpen) {
+    return {
+      timeZone: QUEBEC_TIMEZONE,
+      priority,
+      isOpen,
+      schedule,
+      days,
+      window: {
+        startDate,
+        endDate: addDays(startDate, priority === "express" ? 1 : 30),
+      },
+      rules: {
+        standardHours: STANDARD_HOURS,
+        expressHours: EXPRESS_HOURS,
+        lunchBreak: "12:00-13:00",
+      },
+    };
+  }
 
   for (let index = 0; index < maxDays; index += 1) {
     const date = addDays(startDate, index);
@@ -357,15 +333,18 @@ export function getBookingAvailability(priority: BookingPriority) {
         const actualBooking = db.bookings.find(
           (booking) => booking.date === date && booking.hour === hour && booking.priority === priority && booking.status === "confirmed"
         );
-        const showcase = showcaseBooked.has(slotId);
+        const utcStart = new Date(getBookingUtcMs(date, hour)).toISOString();
+        const status: "booked" | "available" = actualBooking ? "booked" : "available";
+        const source: "real" | "available" = actualBooking ? "real" : "available";
 
         return {
           id: slotId,
           date,
           hour,
+          utcStart,
           priority,
-          status: actualBooking || showcase ? "booked" : "available",
-          source: actualBooking ? "real" : showcase ? "showcase" : "available",
+          status,
+          source,
         };
       });
 
@@ -377,6 +356,8 @@ export function getBookingAvailability(priority: BookingPriority) {
   return {
     timeZone: QUEBEC_TIMEZONE,
     priority,
+    isOpen,
+    schedule,
     days,
     window: {
       startDate,
@@ -410,7 +391,6 @@ export function createBooking(input: {
 }) {
   const db = loadDb();
   const quebecNow = getQuebecNow();
-  const showcaseBooked = buildShowcaseBookedIds(quebecNow.dateKey);
   const hours =
     input.priority === "express"
       ? getHoursForPriority(input.priority)
@@ -428,6 +408,10 @@ export function createBooking(input: {
 
   if (!hours.includes(input.hour)) {
     throw new Error("Selected slot is outside bookable hours.");
+  }
+
+  if (!isBookingScheduleOpen(input.priority)) {
+    throw new Error(priorityClosedError(input.priority));
   }
 
   if (input.date === quebecNow.dateKey && input.hour <= quebecNow.hour) {
@@ -452,7 +436,7 @@ export function createBooking(input: {
       booking.status === "confirmed"
   );
 
-  if (alreadyBooked || showcaseBooked.has(slotId)) {
+  if (alreadyBooked) {
     throw new Error("This slot has just been taken. Please choose another time.");
   }
 
@@ -739,7 +723,6 @@ export function rescheduleBooking(input: {
 
   const hours = getHoursForPriority(booking.priority);
   const quebecNow = getQuebecNow();
-  const showcaseBooked = buildShowcaseBookedIds(quebecNow.dateKey);
   const dateDiff =
     (parseDateKey(input.date).getTime() - parseDateKey(quebecNow.dateKey).getTime()) / (1000 * 60 * 60 * 24);
 
@@ -755,6 +738,10 @@ export function rescheduleBooking(input: {
     throw new Error("Selected slot is outside bookable hours.");
   }
 
+  if (!isBookingScheduleOpen(booking.priority)) {
+    throw new Error(priorityClosedError(booking.priority));
+  }
+
   if (input.date === quebecNow.dateKey && input.hour <= quebecNow.hour) {
     throw new Error("Selected slot is no longer available.");
   }
@@ -764,7 +751,6 @@ export function rescheduleBooking(input: {
     throw new Error("Bookings are available Monday to Friday only.");
   }
 
-  const slotId = buildSlotId(input.date, input.hour, booking.priority);
   const isTaken = db.bookings.some(
     (item) =>
       item.id !== booking.id &&
@@ -775,10 +761,6 @@ export function rescheduleBooking(input: {
   );
 
   if (isTaken) {
-    throw new Error("This slot has just been taken. Please choose another time.");
-  }
-
-  if (showcaseBooked.has(slotId)) {
     throw new Error("This slot has just been taken. Please choose another time.");
   }
 

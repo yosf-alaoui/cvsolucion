@@ -13,6 +13,7 @@ import {
   resendAdminVerification,
   revokeAdminSession,
   revokeAdminUserSessions,
+  updateAdminBookingSchedule,
   updateAdminUser,
   type AdminDashboardConversation,
   type AdminDashboardEvent,
@@ -746,6 +747,21 @@ export default function AdminDashboard() {
     setEditVerified(Boolean(next.emailVerifiedAt));
   };
 
+  const handleUpdateBookingSchedule = async (payload: { standardOpen?: boolean; expressOpen?: boolean }) => {
+    setError(null);
+    try {
+      await updateAdminBookingSchedule(payload);
+      toast.success(locale === "ar" ? "تم تحديث جدول المواعيد." : locale === "fr" ? "Le planning a ete mis a jour." : "Booking schedule updated.");
+      await load();
+    } catch (err: any) {
+      const message =
+        err?.message ||
+        (locale === "ar" ? "تعذر تحديث جدول المواعيد." : locale === "fr" ? "Impossible de mettre a jour le planning." : "Failed to update booking schedule.");
+      setError(message);
+      toast.error(message);
+    }
+  };
+
   const handleSaveUser = async () => {
     if (!selectedUser) return;
     setSavingUser(true);
@@ -1237,8 +1253,16 @@ export default function AdminDashboard() {
                         <BookingsManager
                           locale={locale}
                           bookings={filteredBookings}
+                          schedule={
+                            data?.bookingSchedule ?? {
+                              standardOpen: true,
+                              expressOpen: true,
+                              updatedAt: new Date(0).toISOString(),
+                            }
+                          }
                           onCancelBooking={handleCancelBooking}
                           onRefundBooking={handleRefundBooking}
+                          onUpdateSchedule={handleUpdateBookingSchedule}
                         />
                       </TabsContent>
 

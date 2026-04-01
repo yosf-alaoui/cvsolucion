@@ -155,17 +155,26 @@ function paymentLabel(booking: BookingRecord, copy: ReturnType<typeof getCopy>) 
 export default function BookingsManager({
   locale,
   bookings,
+  schedule,
   onCancelBooking,
   onRefundBooking,
+  onUpdateSchedule,
 }: {
   locale: string;
   bookings: BookingRecord[];
+  schedule: {
+    standardOpen: boolean;
+    expressOpen: boolean;
+    updatedAt: string;
+  };
   onCancelBooking: (bookingId: string) => Promise<void>;
   onRefundBooking: (bookingId: string) => Promise<void>;
+  onUpdateSchedule: (payload: { standardOpen?: boolean; expressOpen?: boolean }) => Promise<void>;
 }) {
   const copy = useMemo(() => getCopy(locale), [locale]);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [updatingSchedule, setUpdatingSchedule] = useState<"standard" | "express" | null>(null);
 
   useEffect(() => {
     if (!bookings.length) {
@@ -203,6 +212,15 @@ export default function BookingsManager({
     }
   }
 
+  async function handleScheduleToggle(priority: "standard" | "express", nextValue: boolean) {
+    try {
+      setUpdatingSchedule(priority);
+      await onUpdateSchedule(priority === "standard" ? { standardOpen: nextValue } : { expressOpen: nextValue });
+    } finally {
+      setUpdatingSchedule(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -210,6 +228,88 @@ export default function BookingsManager({
           <CardTitle>{copy.title}</CardTitle>
           <p className="text-sm text-slate-500">{copy.subtitle}</p>
         </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {locale === "ar" ? "الجدول العادي" : locale === "fr" ? "Planning standard" : "Standard calendar"}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {schedule.standardOpen
+                    ? locale === "ar"
+                      ? "مفتوح الآن"
+                      : locale === "fr"
+                        ? "Ouvert maintenant"
+                        : "Open now"
+                    : locale === "ar"
+                      ? "مغلق حالياً"
+                      : locale === "fr"
+                        ? "Ferme actuellement"
+                        : "Closed now"}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant={schedule.standardOpen ? "outline" : "default"}
+                disabled={updatingSchedule === "standard"}
+                onClick={() => handleScheduleToggle("standard", !schedule.standardOpen)}
+              >
+                {schedule.standardOpen
+                  ? locale === "ar"
+                    ? "اغلق"
+                    : locale === "fr"
+                      ? "Fermer"
+                      : "Close"
+                  : locale === "ar"
+                    ? "افتح"
+                    : locale === "fr"
+                      ? "Ouvrir"
+                      : "Open"}
+              </Button>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {locale === "ar" ? "الجدول السريع" : locale === "fr" ? "Planning express" : "Express calendar"}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {schedule.expressOpen
+                    ? locale === "ar"
+                      ? "مفتوح الآن"
+                      : locale === "fr"
+                        ? "Ouvert maintenant"
+                        : "Open now"
+                    : locale === "ar"
+                      ? "مغلق حالياً"
+                      : locale === "fr"
+                        ? "Ferme actuellement"
+                        : "Closed now"}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant={schedule.expressOpen ? "outline" : "default"}
+                disabled={updatingSchedule === "express"}
+                onClick={() => handleScheduleToggle("express", !schedule.expressOpen)}
+              >
+                {schedule.expressOpen
+                  ? locale === "ar"
+                    ? "اغلق"
+                    : locale === "fr"
+                      ? "Fermer"
+                      : "Close"
+                  : locale === "ar"
+                    ? "افتح"
+                    : locale === "fr"
+                      ? "Ouvrir"
+                      : "Open"}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">

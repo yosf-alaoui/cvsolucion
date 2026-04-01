@@ -7,6 +7,8 @@ Reusable virtual-service booking stack with:
 - Stripe checkout
 - rescheduling rules
 - refund synchronization
+- admin schedule open/close controls
+- customer-local display timezone with Quebec as the internal booking reference
 
 ## Current implementation
 - Availability and booking rules: `server/bookingStore.ts`
@@ -36,4 +38,5 @@ const payment = await booking.createCheckoutIntent({
 - Prices are per selected slot.
 - This module assumes no physical shipping.
 - Keep business-hour logic server-side.
-
+- Keep persisted appointment slots on Quebec time and only localize display by country/timezone on the client.
+- Availability should require authentication when the project treats bookings as account-bound orders.

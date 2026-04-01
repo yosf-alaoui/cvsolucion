@@ -2,23 +2,7 @@ import { CalendarDays, Clock3, ReceiptText, ShieldCheck, ShoppingCart, Trash2 } 
 import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
 import type { BookingCheckoutDraft, BookingCheckoutSlot } from "@/lib/bookingCheckout";
-
-function dateLabel(date: string, locale: string) {
-  return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
-    timeZone: "UTC",
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  }).format(new Date(`${date}T12:00:00Z`));
-}
-
-function timeLabel(hour: number, locale: string) {
-  return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
-    timeZone: "UTC",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(Date.UTC(2026, 0, 1, hour, 0, 0)));
-}
+import { formatBookingDate, formatBookingTime } from "@/lib/bookingTime";
 
 function moneyLabel(amount: number, locale: string, currency: string) {
   return new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
@@ -48,6 +32,7 @@ type BookingCartSummaryProps = {
   removeText: string;
   itemLabel: string;
   digitalNote: string;
+  timeZoneNote?: string;
   actionLabel?: string;
   actionDisabled?: boolean;
   actionHref?: string;
@@ -66,6 +51,7 @@ function SlotCard({
   itemLabel,
   priorityLabel,
   serviceLabel,
+  timeZone,
   removeText,
   onRemoveSlot,
 }: {
@@ -77,6 +63,7 @@ function SlotCard({
   itemLabel: string;
   priorityLabel: string;
   serviceLabel: string;
+  timeZone: string;
   removeText: string;
   onRemoveSlot?: (slotId: string) => void;
 }) {
@@ -89,11 +76,13 @@ function SlotCard({
           </div>
           <div className="mt-3 flex items-center gap-3 text-slate-900">
             <CalendarDays className="h-5 w-5 text-primary" />
-            <span className="font-semibold">{dateLabel(slot.date, locale)}</span>
+            <span className="font-semibold">
+              {formatBookingDate(slot.utcStart || `${slot.date}T${String(slot.hour).padStart(2, "0")}:00:00.000Z`, locale, timeZone)}
+            </span>
           </div>
           <div className="mt-2 flex items-center gap-3 text-slate-600">
             <Clock3 className="h-5 w-5 text-primary" />
-            <span>{timeLabel(slot.hour, locale)}</span>
+            <span>{formatBookingTime(slot.utcStart || `${slot.date}T${String(slot.hour).padStart(2, "0")}:00:00.000Z`, locale, timeZone)}</span>
           </div>
         </div>
         <div className="text-right">
@@ -140,6 +129,7 @@ export default function BookingCartSummary({
   removeText,
   itemLabel,
   digitalNote,
+  timeZoneNote,
   actionLabel,
   actionDisabled,
   actionHref,
@@ -148,6 +138,7 @@ export default function BookingCartSummary({
   secondaryActionHref,
   onRemoveSlot,
 }: BookingCartSummaryProps) {
+  const timeZone = draft.timeZone || "America/Toronto";
   const subtotal = unitAmount * draft.slots.length;
   const taxes = 0;
   const total = subtotal + taxes;
@@ -177,6 +168,7 @@ export default function BookingCartSummary({
                   itemLabel={itemLabel}
                   priorityLabel={priorityLabel}
                   serviceLabel={serviceLabel}
+                  timeZone={timeZone}
                   removeText={removeText}
                   onRemoveSlot={onRemoveSlot}
                 />
@@ -194,11 +186,11 @@ export default function BookingCartSummary({
               {draft.slots.map((slot) => (
                 <div key={`invoice-${slot.id}`} className="grid grid-cols-[1fr_auto] gap-4 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3">
                   <div>
-                    <div className="font-semibold text-slate-900">{serviceLabel}</div>
-                    <div className="mt-1 text-slate-500">
-                      {dateLabel(slot.date, locale)} · {timeLabel(slot.hour, locale)}
+                      <div className="font-semibold text-slate-900">{serviceLabel}</div>
+                      <div className="mt-1 text-slate-500">
+                      {formatBookingDate(slot.utcStart || `${slot.date}T${String(slot.hour).padStart(2, "0")}:00:00.000Z`, locale, timeZone)} · {formatBookingTime(slot.utcStart || `${slot.date}T${String(slot.hour).padStart(2, "0")}:00:00.000Z`, locale, timeZone)}
+                      </div>
                     </div>
-                  </div>
                   <div className="text-right font-semibold text-slate-900">{moneyLabel(unitAmount, locale, currency)}</div>
                 </div>
               ))}
@@ -235,7 +227,7 @@ export default function BookingCartSummary({
 
             <div className="mt-4 flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
               <ShieldCheck className="h-5 w-5 text-primary" />
-              <span>{digitalNote}</span>
+              <span>{digitalNote}{timeZoneNote ? ` ${timeZoneNote}` : ""}</span>
             </div>
           </div>
 

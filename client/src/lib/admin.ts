@@ -219,6 +219,11 @@ export type AdminDashboardResponse = {
   stats: AdminDashboardStats;
   users: AdminDashboardUser[];
   bookings: BookingRecord[];
+  bookingSchedule: {
+    standardOpen: boolean;
+    expressOpen: boolean;
+    updatedAt: string;
+  };
   leads: AdminContactLead[];
   sessions: AdminDashboardSession[];
   events: AdminDashboardEvent[];
@@ -376,5 +381,22 @@ export function refundAdminBooking(bookingId: string) {
     refund: { id: string; status: string | null; amount: number; currency: string | null };
   }>(`/api/admin/bookings/${encodeURIComponent(bookingId)}/refund`, {
     method: "POST",
+  });
+}
+
+export function updateAdminBookingSchedule(payload: {
+  standardOpen?: boolean;
+  expressOpen?: boolean;
+}) {
+  return adminRequest<{
+    ok: true;
+    schedule: {
+      standardOpen: boolean;
+      expressOpen: boolean;
+      updatedAt: string;
+    };
+  }>("/api/admin/bookings/schedule", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
 }

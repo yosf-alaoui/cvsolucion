@@ -66,6 +66,7 @@ import {
   serializeCustomerBooking,
   type BookingPriority,
 } from "./bookingStore";
+import { getBookingScheduleSettings, isBookingScheduleOpen, updateBookingScheduleSettings } from "./bookingSettingsStore";
 import { listContactLeads, storeContactLead } from "./contactStore";
 import { buildRobotsTxt, buildSitemapXml, renderSeoHtml } from "./seo";
 import { getCustomerProfile, updateCustomerProfile, upsertCustomerProfile } from "./customerProfileStore";
@@ -1212,6 +1213,10 @@ async function startServer() {
   });
 
   app.get("/api/bookings/availability", rateLimit({ key: "booking-availability", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    const auth = getCurrentUser(req);
+    if (!auth) {
+      return res.status(401).json({ error: "Please sign in before viewing appointment times." });
+    }
     const priority = String(req.query.priority || "standard").trim() === "express" ? "express" : "standard";
     return res.json(getBookingAvailability(priority));
   });
@@ -1234,6 +1239,11 @@ async function startServer() {
 
       if (!slots.length) {
         return res.status(400).json({ error: "Please choose at least one valid appointment time." });
+      }
+      if (!isBookingScheduleOpen(priority as BookingPriority)) {
+        return res.status(400).json({
+          error: priority === "express" ? "Express booking is currently closed." : "Standard booking is currently closed.",
+        });
       }
 
       const intent = await createBookingPaymentIntent({
@@ -1292,6 +1302,11 @@ async function startServer() {
       }
       if (!slots.length) {
         return res.status(400).json({ error: "Please choose at least one valid appointment time." });
+      }
+      if (!isBookingScheduleOpen(priority as BookingPriority)) {
+        return res.status(400).json({
+          error: priority === "express" ? "Express booking is currently closed." : "Standard booking is currently closed.",
+        });
       }
 
       const stripeConfig = getStripePricingSnapshot();
@@ -1623,6 +1638,7 @@ async function startServer() {
       },
       ...getAdminSnapshot(),
       bookings,
+      bookingSchedule: getBookingScheduleSettings(),
       leads,
       visitors,
       conversations: getConversationsSnapshot(visitors),
@@ -1933,6 +1949,31 @@ async function startServer() {
           currency: refund.currency,
         },
       });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.patch("/api/admin/bookings/schedule", rateLimit({ key: "admin-booking-schedule", windowMs: 1000 * 60 * 5, limit: 60 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const settings = updateBookingScheduleSettings({
+        standardOpen: typeof req.body?.standardOpen === "boolean" ? req.body.standardOpen : undefined,
+        expressOpen: typeof req.body?.expressOpen === "boolean" ? req.body.expressOpen : undefined,
+      });
+
+      recordEvent({
+        type: "admin_booking_schedule_updated",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:booking-schedule:${settings.standardOpen}:${settings.expressOpen}`,
+      });
+
+      return res.json({ ok: true, schedule: settings });
     } catch (error) {
       return next(error);
     }

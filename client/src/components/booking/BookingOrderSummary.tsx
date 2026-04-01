@@ -2,23 +2,7 @@ import { CalendarDays, Clock3, ReceiptText, ShieldCheck, ShoppingCart, Trash2 } 
 import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
 import type { BookingCheckoutDraft, BookingCheckoutSlot } from "@/lib/bookingCheckout";
-
-function dateLabel(date: string, locale: string) {
-  return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
-    timeZone: "UTC",
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  }).format(new Date(`${date}T12:00:00Z`));
-}
-
-function timeLabel(hour: number, locale: string) {
-  return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
-    timeZone: "UTC",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(Date.UTC(2026, 0, 1, hour, 0, 0)));
-}
+import { formatBookingDate, formatBookingTime } from "@/lib/bookingTime";
 
 function moneyLabel(amount: number, locale: string, currency: string) {
   return new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
@@ -48,6 +32,7 @@ type BookingOrderSummaryProps = {
     selectedCount: string;
     digitalNote: string;
     remove: string;
+    timeZoneNote?: string;
   };
   onRemoveSlot?: (slotId: string) => void;
 };
@@ -58,6 +43,7 @@ function SlotRow({
   amount,
   currency,
   serviceLabel,
+  timeZone,
   removeText,
   onRemoveSlot,
 }: {
@@ -66,6 +52,7 @@ function SlotRow({
   amount: number;
   currency: string;
   serviceLabel: string;
+  timeZone: string;
   removeText: string;
   onRemoveSlot?: (slotId: string) => void;
 }) {
@@ -75,11 +62,13 @@ function SlotRow({
         <div className="space-y-2">
           <div className="flex items-center gap-3 text-slate-900">
             <CalendarDays className="h-5 w-5 text-primary" />
-            <span className="font-semibold">{dateLabel(slot.date, locale)}</span>
+            <span className="font-semibold">
+              {formatBookingDate(slot.utcStart || `${slot.date}T${String(slot.hour).padStart(2, "0")}:00:00.000Z`, locale, timeZone)}
+            </span>
           </div>
           <div className="flex items-center gap-3 text-slate-600">
             <Clock3 className="h-5 w-5 text-primary" />
-            <span>{timeLabel(slot.hour, locale)}</span>
+            <span>{formatBookingTime(slot.utcStart || `${slot.date}T${String(slot.hour).padStart(2, "0")}:00:00.000Z`, locale, timeZone)}</span>
           </div>
           <div className="text-sm text-slate-500">{serviceLabel}</div>
         </div>
@@ -113,6 +102,7 @@ export default function BookingOrderSummary({
   labels,
   onRemoveSlot,
 }: BookingOrderSummaryProps) {
+  const timeZone = draft.timeZone || "America/Toronto";
   const subtotal = unitAmount * draft.slots.length;
   const taxes = 0;
   const total = subtotal + taxes;
@@ -145,6 +135,7 @@ export default function BookingOrderSummary({
               amount={unitAmount}
               currency={currency}
               serviceLabel={serviceLabel}
+              timeZone={timeZone}
               removeText={labels.remove}
               onRemoveSlot={onRemoveSlot}
             />
@@ -189,7 +180,7 @@ export default function BookingOrderSummary({
 
         <div className="mt-5 flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-          <span>{labels.digitalNote}</span>
+          <span>{labels.digitalNote}{labels.timeZoneNote ? ` ${labels.timeZoneNote}` : ""}</span>
         </div>
       </div>
     </GlassCard>

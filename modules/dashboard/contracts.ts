@@ -87,6 +87,11 @@ export type AdminDashboardResponse = {
   stats: Record<string, number>;
   users: Array<Record<string, unknown>>;
   bookings: BookingRecord[];
+  bookingSchedule: {
+    standardOpen: boolean;
+    expressOpen: boolean;
+    updatedAt: string;
+  };
   leads: DashboardLead[];
   sessions: Array<Record<string, unknown>>;
   events: Array<Record<string, unknown>>;

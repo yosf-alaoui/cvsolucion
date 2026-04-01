@@ -14,6 +14,7 @@ import {
   removeBookingCheckoutSlot,
   type BookingCheckoutDraft,
 } from "@/lib/bookingCheckout";
+import { getBookingCountryLabel } from "@/lib/bookingTime";
 import { getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
 
 function getCopy(locale: string) {
@@ -146,6 +147,13 @@ export default function BookingCart() {
   const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";
   const priorityLabel = draft ? (draft.priority === "express" ? copy.express : copy.standard) : "";
   const packageLabel = draft ? getPackageLabel(draft.packageKey, locale) : null;
+  const timeZoneNote = draft?.countryCode
+    ? locale === "ar"
+      ? `المواعيد المعروضة الآن حسب توقيت ${getBookingCountryLabel(draft.countryCode, locale)} بينما يبقى المرجع الداخلي على توقيت كيبيك.`
+      : locale === "fr"
+        ? `Les horaires sont affiches en heure de ${getBookingCountryLabel(draft.countryCode, locale)} tout en gardant le planning interne sur l'heure du Quebec.`
+        : `Times are shown in ${getBookingCountryLabel(draft.countryCode, locale)} local time while internal scheduling stays on Quebec time.`
+    : undefined;
 
   return (
     <div className="site-page min-h-screen bg-transparent">
@@ -191,6 +199,7 @@ export default function BookingCart() {
                     selectedCount: copy.selectedCount,
                     digitalNote: copy.digitalNote,
                     remove: copy.remove,
+                    timeZoneNote,
                   }}
                   onRemoveSlot={(slotId) => {
                     const nextDraft = removeBookingCheckoutSlot(slotId);

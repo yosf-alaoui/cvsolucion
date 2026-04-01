@@ -8,6 +8,7 @@ Reusable dashboard layer for:
 - package management
 - customer requests
 - bookings and refund controls
+- booking calendar open/close controls
 - support and analytics views
 
 ## Current implementation
@@ -25,3 +26,4 @@ Reusable dashboard layer for:
 - Keep the dashboard module as an orchestration layer that consumes other modules.
 - Pricing and package management belong here because they are operational controls.
 - Bookings, leads, invoices, and profile data should be surfaced as separate operational sections instead of one crowded screen.
+- If bookings are account-bound, expose schedule controls and booking operations together so admins can pause live availability without touching code.

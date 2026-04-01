@@ -20,6 +20,7 @@ import {
 } from "@/lib/bookingCheckout";
 import { createBooking } from "@/lib/bookings";
 import { getCustomerDashboard } from "@/lib/customer";
+import { getBookingCountryLabel } from "@/lib/bookingTime";
 import { createBookingPaymentIntent, getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
 import { useI18n } from "@/i18n/i18n";
 
@@ -242,8 +243,12 @@ export default function BookingCheckout() {
 
   useEffect(() => {
     if (!user?.email) return;
-    setForm((current) => ({ ...current, email: user.email }));
-  }, [user?.email]);
+    setForm((current) => ({
+      ...current,
+      email: user.email,
+      country: current.country || (draft?.countryCode ? getBookingCountryLabel(draft.countryCode, locale) : ""),
+    }));
+  }, [draft?.countryCode, locale, user?.email]);
 
   useEffect(() => {
     if (!user) return;

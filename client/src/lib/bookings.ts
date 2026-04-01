@@ -8,9 +8,10 @@ export type BookingAvailabilitySlot = {
   id: string;
   date: string;
   hour: number;
+  utcStart: string;
   priority: BookingPriority;
   status: "available" | "booked";
-  source: "available" | "real" | "showcase";
+  source: "available" | "real";
 };
 
 export type BookingAvailabilityDay = {
@@ -21,6 +22,12 @@ export type BookingAvailabilityDay = {
 export type BookingAvailabilityResponse = {
   timeZone: string;
   priority: BookingPriority;
+  isOpen: boolean;
+  schedule: {
+    standardOpen: boolean;
+    expressOpen: boolean;
+    updatedAt: string;
+  };
   days: BookingAvailabilityDay[];
   window: {
     startDate: string;

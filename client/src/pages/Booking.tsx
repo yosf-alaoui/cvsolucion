@@ -7,6 +7,9 @@ import GlassCard from "@/components/GlassCard";
 import Header from "@/components/Header";
 import Seo from "@/components/Seo";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
 import {
   getBookingAvailability,
@@ -16,6 +19,17 @@ import {
   type BookingServiceType,
 } from "@/lib/bookings";
 import { saveBookingCheckoutDraft } from "@/lib/bookingCheckout";
+import { getCustomerDashboard } from "@/lib/customer";
+import {
+  formatBookingDate,
+  formatBookingTime,
+  getBookingCountryLabel,
+  getBookingCountryOptions,
+  getBookingLocalDateKey,
+  getBookingTimeZone,
+  guessBookingCountryCode,
+  type BookingCountryOption,
+} from "@/lib/bookingTime";
 import { getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
 
 function isBookingPriority(value: string | null): value is BookingPriority {
@@ -60,25 +74,8 @@ function getPackageLabel(packageKey: string | null, locale: string) {
   return labels[language][packageKey as keyof typeof labels.en] || packageKey;
 }
 
-function dateLabel(date: string, locale: string) {
-  return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
-    timeZone: "UTC",
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  }).format(new Date(`${date}T12:00:00Z`));
-}
-
-function timeLabel(hour: number, locale: string) {
-  return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
-    timeZone: "UTC",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(Date.UTC(2026, 0, 1, hour, 0, 0)));
-}
-
-function chunkDays(days: BookingAvailabilityDay[], size: number) {
-  const chunks: BookingAvailabilityDay[][] = [];
+function chunkDays<T>(days: T[], size: number) {
+  const chunks: T[][] = [];
   for (let index = 0; index < days.length; index += size) chunks.push(days.slice(index, index + size));
   return chunks;
 }
@@ -191,6 +188,7 @@ function getCopy(locale: string) {
 
 export default function Booking() {
   const { locale } = useI18n();
+  const { user, loading: authLoading } = useAuth();
   const [priority, setPriority] = useState<BookingPriority>(() => getInitialBookingFilters().priority);
   const [serviceType, setServiceType] = useState<BookingServiceType>(() => getInitialBookingFilters().serviceType);
   const [packageKey] = useState<string | null>(() => getInitialBookingFilters().packageKey);
@@ -199,18 +197,122 @@ export default function Booking() {
   const [selectedSlots, setSelectedSlots] = useState<BookingAvailabilitySlot[]>([]);
   const [stripeConfig, setStripeConfig] = useState<StripeConfigResponse | null>(null);
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(true);
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>(() => guessBookingCountryCode(null));
 
   const copy = useMemo(() => getCopy(locale), [locale]);
+  const countryOptions = useMemo(() => getBookingCountryOptions(locale), [locale]);
+  const displayTimeZone = useMemo(() => getBookingTimeZone(selectedCountryCode), [selectedCountryCode]);
+  const selectedCountryLabel = useMemo(() => getBookingCountryLabel(selectedCountryCode, locale), [locale, selectedCountryCode]);
+  const bookingHref = locale === "en" ? "/book" : `/${locale}/book`;
+  const currentBookingHref =
+    typeof window === "undefined" ? bookingHref : `${window.location.pathname}${window.location.search}`;
+  const loginPath = locale === "en" ? "/login" : `/${locale}/login`;
+  const loginHref = `${loginPath}?next=${encodeURIComponent(currentBookingHref)}`;
+  const signInLabel = locale === "ar" ? "سجل الدخول للمتابعة" : locale === "fr" ? "Connectez-vous pour continuer" : "Sign in to continue";
+  const signInText =
+    locale === "ar"
+      ? "يجب تسجيل الدخول أولاً قبل رؤية المواعيد واختيار الحجز."
+      : locale === "fr"
+        ? "Vous devez vous connecter avant de voir les horaires et choisir un booking."
+        : "You must sign in before viewing availability and choosing a booking.";
+  const countryLabel = locale === "ar" ? "الدولة" : locale === "fr" ? "Pays" : "Country";
+  const localTimeLabel =
+    locale === "ar"
+      ? `المواعيد المعروضة الآن حسب توقيت ${selectedCountryLabel}`
+      : locale === "fr"
+        ? `Horaires affiches en heure locale de ${selectedCountryLabel}`
+        : `Times now shown in ${selectedCountryLabel} local time`;
+  const quebecReferenceLabel =
+    locale === "ar"
+      ? "البرنامج الداخلي وإدارة الجلسات يبقيان على توقيت كيبيك، كندا"
+      : locale === "fr"
+        ? "Le planning interne et la gestion restent en heure du Quebec, Canada"
+        : "Internal scheduling and management remain on Quebec, Canada time";
+  const scheduleClosedLabel =
+    priority === "express"
+      ? locale === "ar"
+        ? "الحجوزات السريعة مغلقة حالياً."
+        : locale === "fr"
+          ? "Les bookings express sont fermes pour le moment."
+          : "Express booking is currently closed."
+      : locale === "ar"
+        ? "الحجوزات العادية مغلقة حالياً."
+        : locale === "fr"
+          ? "Les bookings standards sont fermes pour le moment."
+          : "Standard booking is currently closed.";
+
+  const localizedDays = useMemo(() => {
+    const grouped = new Map<
+      string,
+      {
+        dateKey: string;
+        label: string;
+        slots: BookingAvailabilitySlot[];
+      }
+    >();
+
+    for (const day of days) {
+      for (const slot of day.slots) {
+        const dateKey = getBookingLocalDateKey(slot.utcStart, displayTimeZone);
+        const existing = grouped.get(dateKey);
+        if (existing) {
+          existing.slots.push(slot);
+          continue;
+        }
+
+        grouped.set(dateKey, {
+          dateKey,
+          label: formatBookingDate(slot.utcStart, locale, displayTimeZone),
+          slots: [slot],
+        });
+      }
+    }
+
+    return Array.from(grouped.values())
+      .map((group) => ({
+        ...group,
+        slots: [...group.slots].sort((a, b) => a.utcStart.localeCompare(b.utcStart)),
+      }))
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+  }, [days, displayTimeZone, locale]);
 
   useEffect(() => {
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+
+    if (!user) {
+      setDays([]);
+      setScheduleOpen(true);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setSelectedSlots([]);
     setStatus(null);
     getBookingAvailability(priority)
-      .then((response) => setDays(response.days))
+      .then((response) => {
+        setDays(response.days);
+        setScheduleOpen(response.isOpen);
+      })
       .catch((error: Error) => setStatus({ tone: "error", text: error.message }))
       .finally(() => setLoading(false));
-  }, [priority]);
+  }, [authLoading, priority, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    getCustomerDashboard()
+      .then((response) => {
+        setSelectedCountryCode((current) => {
+          if (current && current !== "CA") return current;
+          return guessBookingCountryCode(response.profile.country);
+        });
+      })
+      .catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     getStripeBookingConfig()
@@ -218,7 +320,7 @@ export default function Booking() {
       .catch(() => setStripeConfig(null));
   }, []);
 
-  const weeks = useMemo(() => chunkDays(days, priority === "express" ? 2 : 5), [days, priority]);
+  const weeks = useMemo(() => chunkDays(localizedDays, priority === "express" ? 2 : 5), [localizedDays, priority]);
   const cartHref = locale === "en" ? "/book/cart" : `/${locale}/book/cart`;
   const priceKey = `${priority}:${serviceType}`;
   const unitAmount = stripeConfig?.prices?.[priceKey] ?? 0;
@@ -257,7 +359,9 @@ export default function Booking() {
       priority,
       serviceType,
       packageKey,
-      slots: selectedSlots.map((slot) => ({ id: slot.id, date: slot.date, hour: slot.hour })),
+      countryCode: selectedCountryCode,
+      timeZone: displayTimeZone,
+      slots: selectedSlots.map((slot) => ({ id: slot.id, date: slot.date, hour: slot.hour, utcStart: slot.utcStart })),
       createdAt: Date.now(),
     });
     window.location.href = cartHref;
@@ -313,7 +417,8 @@ export default function Booking() {
           </div>
 
           <div className="mx-auto mt-5 flex max-w-6xl flex-wrap items-center justify-center gap-3 text-sm text-slate-600">
-            <span className="glass-chip rounded-full px-4 py-2">{copy.timezone}</span>
+            <span className="glass-chip rounded-full px-4 py-2">{localTimeLabel}</span>
+            <span className="glass-chip rounded-full px-4 py-2">{quebecReferenceLabel}</span>
             <span className="glass-chip rounded-full px-4 py-2">{copy.lunch}</span>
           </div>
 
@@ -344,15 +449,48 @@ export default function Booking() {
                   </Button>
                 </div>
 
-                {loading ? (
+                {authLoading ? (
                   <div className="mt-8 text-sm text-slate-500">{copy.loading}</div>
+                ) : !user ? (
+                  <div className="mt-8 rounded-[24px] border border-slate-200 bg-white/70 p-6 text-center">
+                    <p className="text-base leading-7 text-slate-600">{signInText}</p>
+                    <Button asChild className="mt-5 rounded-full bg-primary text-white hover:bg-primary/90">
+                      <a href={loginHref}>{signInLabel}</a>
+                    </Button>
+                  </div>
                 ) : (
+                  <div className="mt-8 flex flex-wrap items-end gap-4">
+                    <div className="min-w-[220px] flex-1 space-y-2">
+                      <Label htmlFor="booking-country">{countryLabel}</Label>
+                      <Select value={selectedCountryCode} onValueChange={setSelectedCountryCode}>
+                        <SelectTrigger id="booking-country" className="bg-white/85">
+                          <SelectValue placeholder={countryLabel} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {countryOptions.map((option: BookingCountryOption) => (
+                            <SelectItem key={option.code} value={option.code}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+
+                {user && loading ? (
+                  <div className="mt-8 text-sm text-slate-500">{copy.loading}</div>
+                ) : user && !scheduleOpen ? (
+                  <div className="mt-8 rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+                    {scheduleClosedLabel}
+                  </div>
+                ) : user ? (
                   <div className="mt-8 space-y-8">
                     {weeks.map((week, weekIndex) => (
                       <div key={`week-${weekIndex}`} className={`grid gap-4 ${priority === "express" ? "md:grid-cols-2" : "md:grid-cols-2 xl:grid-cols-3"}`}>
-                        {week.map((day) => (
-                          <div key={day.date} className="rounded-[24px] border border-slate-200 bg-white/60 p-4">
-                            <div className="text-sm font-semibold text-slate-500">{dateLabel(day.date, locale)}</div>
+                        {week.map((day: { dateKey: string; label: string; slots: BookingAvailabilitySlot[] }) => (
+                          <div key={day.dateKey} className="rounded-[24px] border border-slate-200 bg-white/60 p-4">
+                            <div className="text-sm font-semibold text-slate-500">{day.label}</div>
                             <div className="mt-4 grid gap-2">
                               {day.slots.map((slot) => {
                                 const selected = selectedSlots.some((item) => item.id === slot.id);
@@ -371,7 +509,7 @@ export default function Booking() {
                                           : "border-slate-200 bg-white text-slate-700 hover:border-primary/35 hover:bg-primary/5"
                                     }`}
                                   >
-                                    <span>{timeLabel(slot.hour, locale)}</span>
+                                    <span>{formatBookingTime(slot.utcStart, locale, displayTimeZone)}</span>
                                     <span className="text-xs font-semibold uppercase tracking-[0.18em]">
                                       {booked ? copy.booked : copy.available}
                                     </span>
@@ -384,7 +522,7 @@ export default function Booking() {
                       </div>
                     ))}
                   </div>
-                )}
+                ) : null}
               </GlassCard>
             </div>
 
@@ -394,7 +532,9 @@ export default function Booking() {
                   priority,
                   serviceType,
                   packageKey,
-                  slots: selectedSlots.map((slot) => ({ id: slot.id, date: slot.date, hour: slot.hour })),
+                  countryCode: selectedCountryCode,
+                  timeZone: displayTimeZone,
+                  slots: selectedSlots.map((slot) => ({ id: slot.id, date: slot.date, hour: slot.hour, utcStart: slot.utcStart })),
                   createdAt: Date.now(),
                 }}
                 locale={locale}
@@ -416,6 +556,7 @@ export default function Booking() {
                 removeText={copy.remove}
                 itemLabel={copy.item}
                 digitalNote={copy.note}
+                timeZoneNote={quebecReferenceLabel}
                 actionLabel={selectedSlots.length ? (totalAmountLabel ? `${copy.reviewCart} • ${totalAmountLabel}` : copy.reviewCart) : undefined}
                 actionDisabled={!selectedSlots.length}
                 onAction={continueToCart}
