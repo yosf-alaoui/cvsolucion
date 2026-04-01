@@ -14,6 +14,7 @@ export type BookingRecord = {
   serviceType: BookingServiceType;
   priority: BookingPriority;
   packageKey: string | null;
+  currency: string;
   date: string;
   hour: number;
   name: string;
@@ -66,6 +67,7 @@ function loadDb(): BookingDb {
       ...booking,
       userId: booking.userId ?? "",
       packageKey: typeof booking.packageKey === "string" && booking.packageKey.trim() ? booking.packageKey.trim() : null,
+      currency: typeof booking.currency === "string" && booking.currency.trim() ? booking.currency.trim().toLowerCase() : "cad",
       country: booking.country ?? null,
       status: booking.status ?? "confirmed",
       updatedAt: booking.updatedAt ?? booking.createdAt ?? nowIso(),
@@ -97,6 +99,10 @@ function randomId(size = 16) {
 function parseAmount(value: string | undefined) {
   const amount = Number(value || "");
   return Number.isInteger(amount) && amount > 0 ? amount : 0;
+}
+
+function getCurrentBookingCurrency() {
+  return (process.env.STRIPE_CURRENCY?.trim() || "usd").toLowerCase();
 }
 
 function resolveBookingUnitAmount(booking: Partial<BookingRecord>) {
@@ -456,6 +462,7 @@ export function createBooking(input: {
     serviceType: input.serviceType,
     priority: input.priority,
     packageKey: input.packageKey?.trim() || null,
+    currency: getCurrentBookingCurrency(),
     date: input.date,
     hour: input.hour,
     name: input.name.trim(),

@@ -35,7 +35,7 @@ export function createStripePaymentsModule(options: CreateStripePaymentsModuleOp
     options.secretKey && options.secretKey.trim()
       ? new Stripe(options.secretKey.trim())
       : null;
-  const currency = (options.currency || "cad").toLowerCase();
+  const currency = (options.currency || "usd").toLowerCase();
 
   return {
     isConfigured() {

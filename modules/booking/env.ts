@@ -8,7 +8,7 @@ export const bookingModuleEnv: ModuleEnvRequirement[] = [
     description: "Stripe publishable key exposed to the client checkout flow.",
   },
   { key: "STRIPE_WEBHOOK_SECRET", required: true, description: "Stripe webhook signing secret." },
-  { key: "STRIPE_CURRENCY", required: false, description: "Checkout currency.", example: "cad" },
+  { key: "STRIPE_CURRENCY", required: false, description: "Checkout currency.", example: "usd" },
   {
     key: "STRIPE_PRICE_STANDARD_CONSULTATION",
     required: true,
@@ -53,4 +53,3 @@ export const bookingModuleManifest: ReusableModuleManifest = {
     data: ["data/bookings-db.json", "data/customer-profiles-db.json"],
   },
 };
-

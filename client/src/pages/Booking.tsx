@@ -227,7 +227,7 @@ export default function Booking() {
     totalAmount > 0
       ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
           style: "currency",
-          currency: (stripeConfig?.currency || "cad").toUpperCase(),
+          currency: (stripeConfig?.currency || "usd").toUpperCase(),
         }).format(totalAmount / 100)
       : null;
   const serviceLabel = serviceType === "support" ? copy.support : copy.consultation;
@@ -398,7 +398,7 @@ export default function Booking() {
                   createdAt: Date.now(),
                 }}
                 locale={locale}
-                currency={stripeConfig?.currency || "cad"}
+                currency={stripeConfig?.currency || "usd"}
                 unitAmount={unitAmount}
                 serviceLabel={serviceLabel}
                 priorityLabel={priorityLabel}

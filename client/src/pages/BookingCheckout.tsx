@@ -237,7 +237,7 @@ export default function BookingCheckout() {
   useEffect(() => {
     getStripeBookingConfig()
       .then((response) => setStripeConfig(response))
-      .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "cad", prices: {} }));
+      .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", prices: {} }));
   }, []);
 
   useEffect(() => {
@@ -268,7 +268,7 @@ export default function BookingCheckout() {
 
   const unitAmount = draft ? stripeConfig?.prices?.[`${draft.priority}:${draft.serviceType}`] ?? 0 : 0;
   const totalAmount = unitAmount * (draft?.slots.length || 0);
-  const currency = stripeConfig?.currency || "cad";
+  const currency = stripeConfig?.currency || "usd";
   const totalLabel = moneyLabel(totalAmount, locale, currency);
   const stripeEnabled = Boolean(stripeConfig?.enabled && stripeConfig.publishableKey && totalAmount > 0);
   const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";

@@ -16,10 +16,10 @@ function formatDateTime(date: string, hour: number, locale: string) {
   }).format(dt);
 }
 
-function moneyLabel(amount: number, locale: string) {
+function moneyLabel(amount: number, locale: string, currency: string) {
   return new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
     style: "currency",
-    currency: "CAD",
+    currency: currency.toUpperCase(),
   }).format(amount / 100);
 }
 
@@ -248,7 +248,7 @@ export default function BookingsManager({
                             {paymentLabel(booking, copy)}
                           </Badge>
                         </TableCell>
-                        <TableCell>{moneyLabel(booking.unitAmount, locale)}</TableCell>
+                        <TableCell>{moneyLabel(booking.unitAmount, locale, booking.currency || "cad")}</TableCell>
                       </TableRow>
                     ))
                   ) : (
@@ -303,7 +303,7 @@ export default function BookingsManager({
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                     <div className="text-xs uppercase tracking-wide text-slate-500">{copy.amount}</div>
-                    <div className="mt-1 font-semibold text-slate-900">{moneyLabel(selectedBooking.unitAmount, locale)}</div>
+                    <div className="mt-1 font-semibold text-slate-900">{moneyLabel(selectedBooking.unitAmount, locale, selectedBooking.currency || "cad")}</div>
                   </div>
                 </div>
 

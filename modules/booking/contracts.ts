@@ -43,6 +43,8 @@ export type BookingRecord = {
   userId: string;
   serviceType: BookingServiceType;
   priority: BookingPriority;
+  packageKey: string | null;
+  currency: string;
   date: string;
   hour: number;
   name: string;
@@ -70,6 +72,7 @@ export type BookingRecord = {
 export type CreateBookingPayload = {
   serviceType: BookingServiceType;
   priority: BookingPriority;
+  packageKey?: string | null;
   slots: BookingSlot[];
   name: string;
   email: string;
@@ -80,4 +83,3 @@ export type CreateBookingPayload = {
   paymentIntentId?: string;
   locale: string;
 };
-

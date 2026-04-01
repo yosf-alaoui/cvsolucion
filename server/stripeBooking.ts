@@ -16,7 +16,7 @@ export function getStripePublishableKey() {
 }
 
 export function getStripeCurrency() {
-  return (process.env.STRIPE_CURRENCY?.trim() || "cad").toLowerCase();
+  return (process.env.STRIPE_CURRENCY?.trim() || "usd").toLowerCase();
 }
 
 export function isStripeConfigured() {

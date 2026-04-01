@@ -139,7 +139,7 @@ export default function BookingCart() {
   useEffect(() => {
     getStripeBookingConfig()
       .then((response) => setStripeConfig(response))
-      .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "cad", prices: {} }));
+      .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", prices: {} }));
   }, []);
 
   const unitAmount = draft ? stripeConfig?.prices?.[`${draft.priority}:${draft.serviceType}`] ?? 0 : 0;
@@ -172,7 +172,7 @@ export default function BookingCart() {
               <div className="space-y-6">
                 <BookingOrderSummary
                   locale={locale}
-                  currency={stripeConfig?.currency || "cad"}
+                  currency={stripeConfig?.currency || "usd"}
                   draft={draft}
                   unitAmount={unitAmount}
                   serviceLabel={serviceLabel}

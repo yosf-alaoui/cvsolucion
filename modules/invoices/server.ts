@@ -1,6 +1,7 @@
 export type IssueInvoiceInput = {
   bookingId: string;
   userId: string;
+  currency: string;
   unitAmount: number;
   serviceType: "consultation" | "support";
   priority: "standard" | "express";

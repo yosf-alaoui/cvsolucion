@@ -20,7 +20,7 @@ export const paymentsModuleEnv: ModuleEnvRequirement[] = [
     key: "STRIPE_CURRENCY",
     required: false,
     description: "Default currency code for digital service payments.",
-    example: "cad",
+    example: "usd",
   },
 ];
 

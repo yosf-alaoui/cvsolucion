@@ -57,7 +57,10 @@ function loadDb(): InvoiceDb {
   const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<InvoiceDb>;
   return {
     lastSequence: Number.isInteger(parsed.lastSequence) ? Number(parsed.lastSequence) : 0,
-    invoices: parsed.invoices ?? [],
+    invoices: (parsed.invoices ?? []).map((invoice) => ({
+      ...invoice,
+      currency: typeof invoice.currency === "string" && invoice.currency.trim() ? invoice.currency.trim().toLowerCase() : "cad",
+    })),
   };
 }
 
@@ -99,7 +102,7 @@ function createInvoiceRecord(db: InvoiceDb, booking: BookingRecord) {
     status: "issued",
     issuedAt: timestamp,
     updatedAt: timestamp,
-    currency: (process.env.STRIPE_CURRENCY || "cad").toLowerCase(),
+    currency: booking.currency || "cad",
     subtotalAmount: booking.unitAmount,
     taxAmount: 0,
     totalAmount: booking.unitAmount,
@@ -172,4 +175,3 @@ export function listInvoicesForUser(userId: string, email?: string | null) {
     .filter((invoice) => invoice.userId === userId || (!!normalizedEmail && invoice.email === normalizedEmail))
     .sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
 }
-

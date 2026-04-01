@@ -208,7 +208,7 @@ function formatMoney(amount: number, currency: string | null | undefined, locale
   const normalizedLocale = locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA";
   return new Intl.NumberFormat(normalizedLocale, {
     style: "currency",
-    currency: (currency || "cad").toUpperCase(),
+    currency: (currency || "usd").toUpperCase(),
   }).format(amount / 100);
 }
 

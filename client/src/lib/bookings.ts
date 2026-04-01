@@ -39,6 +39,7 @@ export type BookingRecord = {
   serviceType: BookingServiceType;
   priority: BookingPriority;
   packageKey: string | null;
+  currency: string;
   date: string;
   hour: number;
   name: string;
