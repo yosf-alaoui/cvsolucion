@@ -5,6 +5,11 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const SESSION_STORAGE_KEY = "cvs_visitor_session";
 
+type AnalyticsWindow = Window & {
+  dataLayer?: unknown[];
+  gtag?: (...args: any[]) => void;
+};
+
 function getSessionState() {
   if (typeof window === "undefined") return null;
   const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
@@ -54,6 +59,42 @@ function sendVisitorEvent(payload: Record<string, unknown>, preferBeacon = false
   }).catch(() => {});
 }
 
+function getAnalyticsWindow() {
+  if (typeof window === "undefined") return null;
+  return window as AnalyticsWindow;
+}
+
+function ensureGtag(ga4Id: string) {
+  const analyticsWindow = getAnalyticsWindow();
+  if (!analyticsWindow) return null;
+
+  analyticsWindow.dataLayer = analyticsWindow.dataLayer || [];
+
+  if (!analyticsWindow.gtag) {
+    analyticsWindow.gtag = (...args: any[]) => {
+      analyticsWindow.dataLayer!.push(args);
+    };
+  }
+
+  if (!document.querySelector(`script[data-ga4-id="${ga4Id}"]`)) {
+    const gaScript = document.createElement("script");
+    gaScript.async = true;
+    gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(ga4Id)}`;
+    gaScript.setAttribute("data-ga4-id", ga4Id);
+    document.head.appendChild(gaScript);
+  }
+
+  return analyticsWindow.gtag;
+}
+
+function trackGa4Event(name: string, params: Record<string, unknown> = {}) {
+  const ga4Id = (import.meta.env.VITE_GA4_ID as string | undefined)?.trim();
+  if (!ga4Id) return;
+  const gtag = ensureGtag(ga4Id);
+  if (!gtag) return;
+  gtag("event", name, params);
+}
+
 /**
  * Optional analytics loader + first-party visitor tracking.
  *
@@ -87,6 +128,16 @@ export default function Analytics() {
       (import.meta.env.VITE_ANALYTICS_WEBSITE_ID as string | undefined)
     )?.trim();
 
+    const directGtag = ga4Id ? ensureGtag(ga4Id) : null;
+    if (directGtag) {
+      directGtag("js", new Date());
+      directGtag("config", ga4Id, {
+        allow_google_signals: false,
+        allow_ad_personalization_signals: false,
+        send_page_view: false,
+      });
+    }
+
     let loaded = false;
     const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart", "scroll"];
 
@@ -113,25 +164,6 @@ export default function Analytics() {
         document.head.appendChild(gtmScript);
       }
 
-      if (!gtmId && ga4Id && !document.querySelector(`script[data-ga4-id="${ga4Id}"]`)) {
-        const gaScript = document.createElement("script");
-        gaScript.async = true;
-        gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(ga4Id)}`;
-        gaScript.setAttribute("data-ga4-id", ga4Id);
-        document.head.appendChild(gaScript);
-
-        (window as any).dataLayer = (window as any).dataLayer || [];
-        const gtag = (...args: any[]) => {
-          (window as any).dataLayer.push(args);
-        };
-        (window as any).gtag = gtag;
-        gtag("js", new Date());
-        gtag("config", ga4Id, {
-          allow_google_signals: false,
-          allow_ad_personalization_signals: false,
-        });
-      }
-
       if (umamiUrl && umamiWebsiteId && !document.querySelector(`script[data-website-id="${umamiWebsiteId}"]`)) {
         const base = umamiUrl.replace(/\/+$/, "");
         const src = base.endsWith(".js") ? base : `${base}/script.js`;
@@ -155,6 +187,7 @@ export default function Analytics() {
     const dnt =
       typeof navigator !== "undefined" &&
       (navigator.doNotTrack === "1" || (window as any).doNotTrack === "1");
+    const ga4Id = (import.meta.env.VITE_GA4_ID as string | undefined)?.trim();
 
     const search = window.location.search || "";
     const params = new URLSearchParams(search.replace(/^\?/, ""));
@@ -169,6 +202,19 @@ export default function Analytics() {
     };
 
     if (!dnt) {
+      if (ga4Id) {
+        const gtag = ensureGtag(ga4Id);
+        gtag?.("event", "page_view", {
+          page_title: document.title,
+          page_path: window.location.pathname,
+          page_location: window.location.href,
+          page_search: search,
+          locale,
+          user_status: user ? "registered" : "anonymous",
+          ...campaign,
+        });
+      }
+
       (window as any).dataLayer = (window as any).dataLayer || [];
       (window as any).dataLayer.push({
         event: "virtual_pageview",
@@ -229,6 +275,12 @@ export default function Analytics() {
       const label = (link.textContent || "").trim().slice(0, 140) || null;
 
       if (/wa\.me|whatsapp/i.test(href)) {
+        trackGa4Event("whatsapp_click", {
+          link_url: href,
+          link_text: label,
+          page_path: window.location.pathname,
+          locale,
+        });
         sendVisitorEvent({
           type: "whatsapp_click",
           path: window.location.pathname,
@@ -237,6 +289,12 @@ export default function Analytics() {
           sessionId: session.id,
         }, true);
       } else if (href.startsWith("mailto:")) {
+        trackGa4Event("email_click", {
+          link_url: href,
+          link_text: label,
+          page_path: window.location.pathname,
+          locale,
+        });
         sendVisitorEvent({
           type: "email_click",
           path: window.location.pathname,
@@ -245,6 +303,12 @@ export default function Analytics() {
           sessionId: session.id,
         }, true);
       } else if (link.dataset.cta === "true" || link.getAttribute("data-track") === "cta") {
+        trackGa4Event("cta_click", {
+          link_url: href,
+          link_text: label,
+          page_path: window.location.pathname,
+          locale,
+        });
         sendVisitorEvent({
           type: "cta_click",
           path: window.location.pathname,
