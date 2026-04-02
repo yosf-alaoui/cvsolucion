@@ -34,7 +34,7 @@ function DeferredChatWidget() {
 
   useEffect(() => {
     const enable = () => setEnabled(true);
-    const timeoutId = window.setTimeout(enable, 3500);
+    const timeoutId = window.setTimeout(enable, 7000);
     const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart", "scroll"];
     const handler = () => {
       setEnabled(true);
@@ -54,6 +54,51 @@ function DeferredChatWidget() {
   return (
     <Suspense fallback={null}>
       <ChatWidget />
+    </Suspense>
+  );
+}
+
+function DeferredAnalytics() {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    let fallbackTimer = 0;
+    let idleHandle = 0;
+
+    const enable = () => setEnabled(true);
+    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart", "scroll"];
+    const handler = () => {
+      setEnabled(true);
+      events.forEach((eventName) => window.removeEventListener(eventName, handler));
+    };
+
+    const requestIdle = window.requestIdleCallback?.bind(window);
+    const cancelIdle = window.cancelIdleCallback?.bind(window);
+
+    if (requestIdle) {
+      idleHandle = requestIdle(() => setEnabled(true), { timeout: 6000 });
+    } else {
+      fallbackTimer = window.setTimeout(enable, 6000);
+    }
+
+    events.forEach((eventName) => window.addEventListener(eventName, handler, { passive: true, once: true }));
+
+    return () => {
+      if (fallbackTimer) {
+        window.clearTimeout(fallbackTimer);
+      }
+      if (idleHandle && cancelIdle) {
+        cancelIdle(idleHandle);
+      }
+      events.forEach((eventName) => window.removeEventListener(eventName, handler));
+    };
+  }, []);
+
+  if (!enabled) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <Analytics />
     </Suspense>
   );
 }
@@ -125,9 +170,7 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <DotWaveBackground />
-            <Suspense fallback={null}>
-              <Analytics />
-            </Suspense>
+            <DeferredAnalytics />
             <DeferredChatWidget />
             <Suspense fallback={<RouteFallback />}>
               <Router />

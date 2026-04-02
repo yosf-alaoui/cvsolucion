@@ -39,22 +39,35 @@ export default function HeroFiberGlow({ className = "", style }: HeroFiberGlowPr
     let height = 0;
     let fibers: Fiber[] = [];
     const mouse = { x: -9999, y: -9999 };
-
-    const FIBER_COUNT = 260;
-    const REPEL = 150;
-    const FORCE = 0.82;
-    const SPRING = 0.0075;
-    const DAMP = 0.95;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const deviceMemory = Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 0);
+    const cpuCores = Number(navigator.hardwareConcurrency || 0);
+    const isLowPower = reduceMotion || deviceMemory > 0 && deviceMemory <= 8 || cpuCores > 0 && cpuCores <= 6;
+    let isVisible = true;
+    let isTabVisible = document.visibilityState === "visible";
+    let pointerActive = false;
+    let fiberCount = 0;
+    let lastFrameTime = 0;
+    const FRAME_INTERVAL = 1000 / 30;
+    const REPEL = isLowPower ? 96 : 120;
+    const FORCE = isLowPower ? 0.34 : 0.46;
+    const SPRING = isLowPower ? 0.012 : 0.01;
+    const DAMP = isLowPower ? 0.9 : 0.92;
     let tick = 0;
 
     function buildFibers() {
       fibers = [];
       const cx = width * 0.5;
       const cy = height * 0.95;
+      fiberCount = width >= 1400 && !isLowPower ? 120 : width >= 1024 && !isLowPower ? 90 : 0;
 
-      for (let index = 0; index < FIBER_COUNT; index += 1) {
+      if (!fiberCount) {
+        return;
+      }
+
+      for (let index = 0; index < fiberCount; index += 1) {
         const angle = Math.PI + Math.random() * Math.PI;
-        const len = 180 + Math.random() * 380;
+        const len = 170 + Math.random() * (isLowPower ? 250 : 320);
         fibers.push({
           cx,
           cy,
@@ -90,7 +103,7 @@ export default function HeroFiberGlow({ className = "", style }: HeroFiberGlowPr
 
       width = parent.clientWidth;
       height = parent.clientHeight;
-      const ratio = window.devicePixelRatio || 1;
+      const ratio = Math.min(window.devicePixelRatio || 1, isLowPower ? 1 : 1.35);
 
       canvasEl.width = Math.max(1, Math.floor(width * ratio));
       canvasEl.height = Math.max(1, Math.floor(height * ratio));
@@ -109,9 +122,10 @@ export default function HeroFiberGlow({ className = "", style }: HeroFiberGlowPr
     function clearPointer() {
       mouse.x = -9999;
       mouse.y = -9999;
+      pointerActive = false;
     }
 
-    function draw() {
+    function drawFrame() {
       tick += 1;
       ctx.clearRect(0, 0, width, height);
 
@@ -126,7 +140,7 @@ export default function HeroFiberGlow({ className = "", style }: HeroFiberGlowPr
         const nextY = fiber.cy + Math.sin(nextAngle) * fiber.len;
         const dx = nextX - mouse.x;
         const dy = nextY - mouse.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = pointerActive ? Math.sqrt(dx * dx + dy * dy) : REPEL + 1;
 
         let targetX = nextX;
         let targetY = nextY;
@@ -152,18 +166,18 @@ export default function HeroFiberGlow({ className = "", style }: HeroFiberGlowPr
 
         const gradient = ctx.createLinearGradient(fiber.cx, fiber.cy, fiber.tipX, fiber.tipY);
         gradient.addColorStop(0, "rgba(255,255,255,0)");
-        gradient.addColorStop(0.35, `rgba(190,205,255,${fiber.opacity * 0.28})`);
+        gradient.addColorStop(0.35, `rgba(190,205,255,${fiber.opacity * (isLowPower ? 0.18 : 0.24)})`);
         gradient.addColorStop(1, `rgba(255,255,255,${fiber.opacity})`);
 
         ctx.beginPath();
         ctx.moveTo(fiber.cx, fiber.cy);
         ctx.quadraticCurveTo(midX, midY, fiber.tipX, fiber.tipY);
         ctx.strokeStyle = gradient;
-        ctx.lineWidth = 1.35;
+        ctx.lineWidth = isLowPower ? 1.05 : 1.15;
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.arc(fiber.tipX, fiber.tipY, 3.2, 0, Math.PI * 2);
+        ctx.arc(fiber.tipX, fiber.tipY, isLowPower ? 2.4 : 2.8, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(255,255,255,${fiber.opacity})`;
         ctx.fill();
       });
@@ -171,12 +185,12 @@ export default function HeroFiberGlow({ className = "", style }: HeroFiberGlowPr
       const originX = width * 0.5;
       const originY = height * 0.9;
 
-      const glowBig = ctx.createRadialGradient(originX, originY, 0, originX, originY, 360);
-      glowBig.addColorStop(0, "rgba(200,210,255,0.18)");
-      glowBig.addColorStop(0.4, "rgba(180,190,255,0.08)");
+      const glowBig = ctx.createRadialGradient(originX, originY, 0, originX, originY, isLowPower ? 250 : 300);
+      glowBig.addColorStop(0, "rgba(200,210,255,0.14)");
+      glowBig.addColorStop(0.4, "rgba(180,190,255,0.05)");
       glowBig.addColorStop(1, "rgba(255,255,255,0)");
       ctx.beginPath();
-      ctx.arc(originX, originY, 360, 0, Math.PI * 2);
+      ctx.arc(originX, originY, isLowPower ? 250 : 300, 0, Math.PI * 2);
       ctx.fillStyle = glowBig;
       ctx.fill();
 
@@ -188,24 +202,65 @@ export default function HeroFiberGlow({ className = "", style }: HeroFiberGlowPr
       ctx.fillStyle = glowCore;
       ctx.fill();
 
+    }
+
+    function shouldAnimate() {
+      return fiberCount > 0 && isVisible && isTabVisible;
+    }
+
+    function draw(now: number) {
+      if (shouldAnimate() && now - lastFrameTime >= FRAME_INTERVAL) {
+        lastFrameTime = now;
+        drawFrame();
+      }
+
       animationFrame = window.requestAnimationFrame(draw);
     }
 
     function handleMouseMove(event: MouseEvent) {
+      pointerActive = true;
       updatePointer(event.clientX, event.clientY);
     }
 
     function handleTouchMove(event: TouchEvent) {
       if (!event.touches[0]) return;
+      pointerActive = true;
       updatePointer(event.touches[0].clientX, event.touches[0].clientY);
     }
 
+    function handleVisibilityChange() {
+      isTabVisible = document.visibilityState === "visible";
+      if (!isTabVisible) {
+        clearPointer();
+      }
+    }
+
     resize();
-    draw();
+
+    if (!fiberCount) {
+      ctx.clearRect(0, 0, width, height);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isVisible = entry?.isIntersecting ?? true;
+        if (!isVisible) {
+          clearPointer();
+        }
+      },
+      { threshold: 0.08 },
+    );
+
+    if (sectionRef.current) {
+      observer.observe(sectionRef.current);
+    }
+
+    animationFrame = window.requestAnimationFrame(draw);
 
     window.addEventListener("resize", resize);
-    window.addEventListener("mousemove", handleMouseMove);
-    canvasEl.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    canvasEl.addEventListener("pointermove", handleMouseMove, { passive: true });
     canvasEl.addEventListener("mouseleave", clearPointer);
     canvasEl.addEventListener("touchmove", handleTouchMove, { passive: true });
     canvasEl.addEventListener("touchend", clearPointer);
@@ -213,9 +268,10 @@ export default function HeroFiberGlow({ className = "", style }: HeroFiberGlowPr
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
+      observer.disconnect();
       window.removeEventListener("resize", resize);
-      window.removeEventListener("mousemove", handleMouseMove);
-      canvasEl.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      canvasEl.removeEventListener("pointermove", handleMouseMove);
       canvasEl.removeEventListener("mouseleave", clearPointer);
       canvasEl.removeEventListener("touchmove", handleTouchMove);
       canvasEl.removeEventListener("touchend", clearPointer);

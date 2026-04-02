@@ -129,23 +129,39 @@ export default function Analytics() {
       (import.meta.env.VITE_ANALYTICS_WEBSITE_ID as string | undefined)
     )?.trim();
 
-    const directGtag = ga4Id ? ensureGtag(ga4Id) : null;
-    if (directGtag) {
-      directGtag("js", new Date());
-      directGtag("config", ga4Id, {
-        allow_google_signals: false,
-        allow_ad_personalization_signals: false,
-        send_page_view: false,
-      });
-    }
-
     let loaded = false;
-    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart", "scroll"];
-
-    const loadExternalAnalytics = () => {
-      if (loaded) return;
+    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart", "click"];
+    const markLoaded = () => {
+      if (loaded) return false;
       loaded = true;
       events.forEach((eventName) => window.removeEventListener(eventName, loadExternalAnalytics));
+      return true;
+    };
+
+    const loadExternalAnalytics = () => {
+      if (!markLoaded()) return;
+
+      if (ga4Id) {
+        // Delay third-party analytics execution until the user interacts.
+        window.setTimeout(() => {
+          const directGtag = ensureGtag(ga4Id);
+          if (!directGtag) return;
+          directGtag("js", new Date());
+          directGtag("config", ga4Id, {
+            allow_google_signals: false,
+            allow_ad_personalization_signals: false,
+            send_page_view: false,
+          });
+          directGtag("event", "page_view", {
+            page_title: document.title,
+            page_path: window.location.pathname,
+            page_location: window.location.href,
+            page_search: window.location.search || "",
+            locale,
+            user_status: user ? "registered" : "anonymous",
+          });
+        }, 900);
+      }
 
       const gtmAlreadyLoaded =
         !!document.querySelector(`script[data-gtm-id="${gtmId}"]`) ||
@@ -204,8 +220,8 @@ export default function Analytics() {
 
     if (!dnt) {
       if (ga4Id) {
-        const gtag = ensureGtag(ga4Id);
-        gtag?.("event", "page_view", {
+        const analyticsWindow = getAnalyticsWindow();
+        analyticsWindow?.gtag?.("event", "page_view", {
           page_title: document.title,
           page_path: window.location.pathname,
           page_location: window.location.href,
