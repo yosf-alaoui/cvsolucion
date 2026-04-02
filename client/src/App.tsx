@@ -33,9 +33,7 @@ function DeferredChatWidget() {
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
-    const enable = () => setEnabled(true);
-    const timeoutId = window.setTimeout(enable, 7000);
-    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart", "scroll"];
+    const events: Array<keyof WindowEventMap> = ["click", "keydown"];
     const handler = () => {
       setEnabled(true);
       events.forEach((eventName) => window.removeEventListener(eventName, handler));
@@ -44,7 +42,6 @@ function DeferredChatWidget() {
     events.forEach((eventName) => window.addEventListener(eventName, handler, { passive: true, once: true }));
 
     return () => {
-      window.clearTimeout(timeoutId);
       events.forEach((eventName) => window.removeEventListener(eventName, handler));
     };
   }, []);
@@ -62,34 +59,15 @@ function DeferredAnalytics() {
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
-    let fallbackTimer = 0;
-    let idleHandle = 0;
-
-    const enable = () => setEnabled(true);
-    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart", "scroll"];
+    const events: Array<keyof WindowEventMap> = ["click", "keydown"];
     const handler = () => {
       setEnabled(true);
       events.forEach((eventName) => window.removeEventListener(eventName, handler));
     };
 
-    const requestIdle = window.requestIdleCallback?.bind(window);
-    const cancelIdle = window.cancelIdleCallback?.bind(window);
-
-    if (requestIdle) {
-      idleHandle = requestIdle(() => setEnabled(true), { timeout: 6000 });
-    } else {
-      fallbackTimer = window.setTimeout(enable, 6000);
-    }
-
     events.forEach((eventName) => window.addEventListener(eventName, handler, { passive: true, once: true }));
 
     return () => {
-      if (fallbackTimer) {
-        window.clearTimeout(fallbackTimer);
-      }
-      if (idleHandle && cancelIdle) {
-        cancelIdle(idleHandle);
-      }
       events.forEach((eventName) => window.removeEventListener(eventName, handler));
     };
   }, []);

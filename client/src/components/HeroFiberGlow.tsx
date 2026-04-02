@@ -40,26 +40,33 @@ export default function HeroFiberGlow({ className = "", style }: HeroFiberGlowPr
     let fibers: Fiber[] = [];
     const mouse = { x: -9999, y: -9999 };
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+    const narrowViewport = window.innerWidth < 1280;
     const deviceMemory = Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 0);
     const cpuCores = Number(navigator.hardwareConcurrency || 0);
-    const isLowPower = reduceMotion || deviceMemory > 0 && deviceMemory <= 8 || cpuCores > 0 && cpuCores <= 6;
+    const isLowPower =
+      reduceMotion ||
+      coarsePointer ||
+      narrowViewport ||
+      (deviceMemory > 0 && deviceMemory <= 8) ||
+      (cpuCores > 0 && cpuCores <= 6);
     let isVisible = true;
     let isTabVisible = document.visibilityState === "visible";
     let pointerActive = false;
     let fiberCount = 0;
     let lastFrameTime = 0;
-    const FRAME_INTERVAL = 1000 / 30;
-    const REPEL = isLowPower ? 96 : 120;
-    const FORCE = isLowPower ? 0.34 : 0.46;
-    const SPRING = isLowPower ? 0.012 : 0.01;
-    const DAMP = isLowPower ? 0.9 : 0.92;
+    const FRAME_INTERVAL = 1000 / 24;
+    const REPEL = 90;
+    const FORCE = 0.28;
+    const SPRING = 0.011;
+    const DAMP = 0.9;
     let tick = 0;
 
     function buildFibers() {
       fibers = [];
       const cx = width * 0.5;
       const cy = height * 0.95;
-      fiberCount = width >= 1400 && !isLowPower ? 120 : width >= 1024 && !isLowPower ? 90 : 0;
+      fiberCount = width >= 1700 && !isLowPower ? 72 : width >= 1400 && !isLowPower ? 56 : 0;
 
       if (!fiberCount) {
         return;
@@ -67,7 +74,7 @@ export default function HeroFiberGlow({ className = "", style }: HeroFiberGlowPr
 
       for (let index = 0; index < fiberCount; index += 1) {
         const angle = Math.PI + Math.random() * Math.PI;
-        const len = 170 + Math.random() * (isLowPower ? 250 : 320);
+        const len = 160 + Math.random() * 220;
         fibers.push({
           cx,
           cy,
@@ -103,7 +110,7 @@ export default function HeroFiberGlow({ className = "", style }: HeroFiberGlowPr
 
       width = parent.clientWidth;
       height = parent.clientHeight;
-      const ratio = Math.min(window.devicePixelRatio || 1, isLowPower ? 1 : 1.35);
+      const ratio = Math.min(window.devicePixelRatio || 1, isLowPower ? 1 : 1.2);
 
       canvasEl.width = Math.max(1, Math.floor(width * ratio));
       canvasEl.height = Math.max(1, Math.floor(height * ratio));

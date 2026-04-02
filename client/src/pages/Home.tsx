@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
 import Footer from "@/components/Footer";
@@ -18,6 +18,7 @@ function HomeSectionsFallback() {
  */
 export default function Home() {
   const { locale, t } = useI18n();
+  const [showSections, setShowSections] = useState(false);
 
   useEffect(() => {
     const scrollToHash = () => {
@@ -34,6 +35,41 @@ export default function Home() {
     return () => {
       window.clearTimeout(timeout);
       window.removeEventListener("hashchange", scrollToHash);
+    };
+  }, []);
+
+  useEffect(() => {
+    let idleHandle = 0;
+    let fallbackTimer = 0;
+
+    const show = () => setShowSections(true);
+    const events: Array<keyof WindowEventMap> = ["scroll", "pointerdown", "keydown", "touchstart"];
+    const onInteraction = () => {
+      setShowSections(true);
+      events.forEach((eventName) => window.removeEventListener(eventName, onInteraction));
+    };
+
+    const requestIdle = window.requestIdleCallback?.bind(window);
+    const cancelIdle = window.cancelIdleCallback?.bind(window);
+
+    if (requestIdle) {
+      idleHandle = requestIdle(() => setShowSections(true), { timeout: 2500 });
+    } else {
+      fallbackTimer = window.setTimeout(show, 2500);
+    }
+
+    events.forEach((eventName) =>
+      window.addEventListener(eventName, onInteraction, { passive: true, once: true }),
+    );
+
+    return () => {
+      if (fallbackTimer) {
+        window.clearTimeout(fallbackTimer);
+      }
+      if (idleHandle && cancelIdle) {
+        cancelIdle(idleHandle);
+      }
+      events.forEach((eventName) => window.removeEventListener(eventName, onInteraction));
     };
   }, []);
 
@@ -75,9 +111,13 @@ export default function Home() {
         {/* Hero Section */}
         <HeroSection />
 
-        <Suspense fallback={<HomeSectionsFallback />}>
-          <HomeContentSections />
-        </Suspense>
+        {showSections ? (
+          <Suspense fallback={<HomeSectionsFallback />}>
+            <HomeContentSections />
+          </Suspense>
+        ) : (
+          <HomeSectionsFallback />
+        )}
       </main>
 
       {/* Footer */}

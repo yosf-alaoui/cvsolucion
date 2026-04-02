@@ -130,7 +130,7 @@ export default function Analytics() {
     )?.trim();
 
     let loaded = false;
-    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart", "click"];
+    const events: Array<keyof WindowEventMap> = ["click", "keydown"];
     const markLoaded = () => {
       if (loaded) return false;
       loaded = true;
