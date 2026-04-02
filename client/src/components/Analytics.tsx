@@ -117,7 +117,8 @@ export default function Analytics() {
       (navigator.doNotTrack === "1" || (window as any).doNotTrack === "1");
     if (dnt) return;
 
-    const gtmId = (import.meta.env.VITE_GTM_ID as string | undefined)?.trim();
+    const gtmEnabled = ((import.meta.env.VITE_ENABLE_GTM as string | undefined)?.trim() || "").toLowerCase() === "true";
+    const gtmId = gtmEnabled ? (import.meta.env.VITE_GTM_ID as string | undefined)?.trim() : "";
     const ga4Id = (import.meta.env.VITE_GA4_ID as string | undefined)?.trim();
     const umamiUrl = (
       (import.meta.env.VITE_UMAMI_URL as string | undefined) ||

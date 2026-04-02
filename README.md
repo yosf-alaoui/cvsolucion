@@ -92,6 +92,8 @@ CONTACT_EMAIL=contact@cvsolucion.com
 Optional analytics variables:
 
 ```env
+VITE_ENABLE_GTM=false
+VITE_GTM_ID=
 VITE_GA4_ID=
 VITE_UMAMI_URL=
 VITE_UMAMI_WEBSITE_ID=
