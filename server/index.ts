@@ -579,11 +579,34 @@ async function startServer() {
   app.use(express.json({ limit: "15mb" }));
 
   app.use((_req, res, next) => {
+    const host = String(_req.get("host") || "").trim();
+    const forwardedProto = String(_req.get("x-forwarded-proto") || _req.protocol || "https")
+      .split(",")[0]
+      .trim();
+    const origin = host ? `${forwardedProto}://${host}` : "";
+    const scriptAssetsSource = origin ? `${origin}/assets/` : "'self'";
+    const contentSecurityPolicy = [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "object-src 'none'",
+      "frame-ancestors 'self'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data: https:",
+      "style-src 'self' 'unsafe-inline'",
+      `script-src 'unsafe-inline' ${scriptAssetsSource} https://js.stripe.com`,
+      "connect-src 'self' https: wss:",
+      "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
+    ].join("; ");
+
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-XSS-Protection", "1; mode=block");
     res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(self)");
+    res.setHeader("Cache-Control", "no-transform");
+    res.setHeader("Content-Security-Policy", contentSecurityPolicy);
     next();
   });
 
