@@ -33,6 +33,15 @@ function DeferredChatWidget() {
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
+    let idleHandle = 0;
+    const fallbackTimer = window.setTimeout(() => setEnabled(true), 7000);
+    const requestIdle = window.requestIdleCallback?.bind(window);
+    const cancelIdle = window.cancelIdleCallback?.bind(window);
+
+    if (requestIdle) {
+      idleHandle = requestIdle(() => setEnabled(true), { timeout: 7000 });
+    }
+
     const events: Array<keyof WindowEventMap> = ["click", "keydown"];
     const handler = () => {
       setEnabled(true);
@@ -42,6 +51,10 @@ function DeferredChatWidget() {
     events.forEach((eventName) => window.addEventListener(eventName, handler, { passive: true, once: true }));
 
     return () => {
+      window.clearTimeout(fallbackTimer);
+      if (idleHandle && cancelIdle) {
+        cancelIdle(idleHandle);
+      }
       events.forEach((eventName) => window.removeEventListener(eventName, handler));
     };
   }, []);
