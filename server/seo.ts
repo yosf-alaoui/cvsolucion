@@ -575,34 +575,107 @@ export function renderSeoHtml(template: string, pathname: string, origin: string
   return html;
 }
 
+const SITEMAP_LOCALES: ArticleLocale[] = ["en", "fr", "ar"];
+const STATIC_SITEMAP_LASTMOD = new Date().toISOString().slice(0, 10);
+
+type SitemapChangeFreq = "daily" | "weekly" | "monthly";
+
+function normalizeDateOnly(value?: string | null, fallback = STATIC_SITEMAP_LASTMOD) {
+  if (!value) return fallback;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  return parsed.toISOString().slice(0, 10);
+}
+
+function sitemapAlternatesXml(origin: string, canonicalPath: string) {
+  const alternates = [
+    { hreflang: "en", href: `${origin}${localizePath(canonicalPath, "en")}` },
+    { hreflang: "fr", href: `${origin}${localizePath(canonicalPath, "fr")}` },
+    { hreflang: "ar", href: `${origin}${localizePath(canonicalPath, "ar")}` },
+    { hreflang: "x-default", href: `${origin}${localizePath(canonicalPath, "en")}` },
+  ];
+
+  return alternates
+    .map((item) => `<xhtml:link rel="alternate" hreflang="${item.hreflang}" href="${escapeHtml(item.href)}" />`)
+    .join("");
+}
+
+function sitemapUrlEntriesXml(args: {
+  origin: string;
+  canonicalPath: string;
+  lastmod?: string | null;
+  changefreq: SitemapChangeFreq;
+  priority: string;
+}) {
+  const alternates = sitemapAlternatesXml(args.origin, args.canonicalPath);
+  const lastmod = normalizeDateOnly(args.lastmod);
+
+  return SITEMAP_LOCALES.map((locale) => {
+    const url = `${args.origin}${localizePath(args.canonicalPath, locale)}`;
+    return `<url><loc>${escapeHtml(url)}</loc>${alternates}<lastmod>${lastmod}</lastmod><changefreq>${args.changefreq}</changefreq><priority>${args.priority}</priority></url>`;
+  }).join("");
+}
+
 export function buildSitemapXml(origin: string) {
-  const staticPaths = ["/", "/training", "/design-pricing", "/articles", "/about", "/book", "/privacy", "/terms"];
-  const urls = new Set<string>();
+  const staticPages: Array<{ canonicalPath: string; changefreq: SitemapChangeFreq; priority: string }> = [
+    { canonicalPath: "/", changefreq: "weekly", priority: "1.0" },
+    { canonicalPath: "/book", changefreq: "weekly", priority: "0.9" },
+    { canonicalPath: "/articles", changefreq: "weekly", priority: "0.9" },
+    { canonicalPath: "/training", changefreq: "monthly", priority: "0.8" },
+    { canonicalPath: "/design-pricing", changefreq: "monthly", priority: "0.8" },
+    { canonicalPath: "/about", changefreq: "monthly", priority: "0.7" },
+    { canonicalPath: "/privacy", changefreq: "monthly", priority: "0.5" },
+    { canonicalPath: "/terms", changefreq: "monthly", priority: "0.5" },
+  ];
 
-  for (const locale of ["en", "fr", "ar"] as ArticleLocale[]) {
-    for (const path of staticPaths) {
-      urls.add(`${origin}${localizePath(path, locale)}`);
-    }
-  }
-
-  for (const locale of ["en", "fr", "ar"] as ArticleLocale[]) {
-    for (const article of listPublishedArticles(locale)) {
-      urls.add(`${origin}${localizePath(`/articles/${article.slug}`, locale)}`);
-    }
-  }
-
-  const lastmod = new Date().toISOString().slice(0, 10);
-  const entries = Array.from(urls)
-    .sort()
-    .map((url) => {
-      const priority = url.endsWith("/articles") || url.includes("/articles/") ? "0.8" : url === `${origin}/` ? "1.0" : "0.7";
-      return `<url><loc>${escapeHtml(url)}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq><priority>${priority}</priority></url>`;
+  const articleEntries = listPublishedArticles("en")
+    .map((article) => {
+      const articleLastmod = normalizeDateOnly(article.updatedAt || article.publishedAt, STATIC_SITEMAP_LASTMOD);
+      return sitemapUrlEntriesXml({
+        origin,
+        canonicalPath: `/articles/${article.slug}`,
+        lastmod: articleLastmod,
+        changefreq: "monthly",
+        priority: "0.8",
+      });
     })
     .join("");
 
-  return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${entries}</urlset>`;
+  const staticEntries = staticPages
+    .map((page) =>
+      sitemapUrlEntriesXml({
+        origin,
+        canonicalPath: page.canonicalPath,
+        lastmod: STATIC_SITEMAP_LASTMOD,
+        changefreq: page.changefreq,
+        priority: page.priority,
+      })
+    )
+    .join("");
+
+  const entries = `${staticEntries}${articleEntries}`;
+  return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${entries}</urlset>`;
 }
 
 export function buildRobotsTxt(origin: string) {
-  return `User-agent: *\nAllow: /\nDisallow: /dashboard\nDisallow: /admin\n\nSitemap: ${origin}/sitemap.xml\n`;
+  return [
+    "User-agent: *",
+    "Allow: /",
+    "Disallow: /admin",
+    "Disallow: /dashboard",
+    "Disallow: /login",
+    "Disallow: /book/cart",
+    "Disallow: /book/checkout",
+    "Disallow: /fr/dashboard",
+    "Disallow: /fr/login",
+    "Disallow: /fr/book/cart",
+    "Disallow: /fr/book/checkout",
+    "Disallow: /ar/dashboard",
+    "Disallow: /ar/login",
+    "Disallow: /ar/book/cart",
+    "Disallow: /ar/book/checkout",
+    "",
+    `Sitemap: ${origin}/sitemap.xml`,
+    "",
+  ].join("\n");
 }
