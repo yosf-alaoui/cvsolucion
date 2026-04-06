@@ -117,7 +117,7 @@ function getPackageLabel(packageKey: string | null | undefined, locale: string) 
 export default function BookingCart() {
   const { locale } = useI18n();
   const { user } = useAuth();
-  const [draft, setDraft] = useState<BookingCheckoutDraft | null>(() => getBookingCheckoutDraft());
+  const [draft, setDraft] = useState<BookingCheckoutDraft | null>(() => getBookingCheckoutDraft(user?.id ?? null));
   const [stripeConfig, setStripeConfig] = useState<StripeConfigResponse | null>(null);
 
   const copy = useMemo(() => getCopy(locale), [locale]);
@@ -126,7 +126,7 @@ export default function BookingCart() {
   const loginHref = `${locale === "en" ? "/login" : `/${locale}/login`}?next=${encodeURIComponent(checkoutHref)}`;
 
   useEffect(() => {
-    const sync = () => setDraft(getBookingCheckoutDraft());
+    const sync = () => setDraft(getBookingCheckoutDraft(user?.id ?? null));
     sync();
     const eventName = getBookingCheckoutEventName();
     window.addEventListener(eventName, sync);
@@ -135,7 +135,7 @@ export default function BookingCart() {
       window.removeEventListener(eventName, sync);
       window.removeEventListener("storage", sync);
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     getStripeBookingConfig()
@@ -211,7 +211,7 @@ export default function BookingCart() {
                     timeZoneNote,
                   }}
                   onRemoveSlot={(slotId) => {
-                    const nextDraft = removeBookingCheckoutSlot(slotId);
+                    const nextDraft = removeBookingCheckoutSlot(slotId, user?.id ?? null);
                     setDraft(nextDraft);
                   }}
                 />

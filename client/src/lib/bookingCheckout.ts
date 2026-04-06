@@ -11,6 +11,7 @@ export type BookingCheckoutDraft = {
   priority: BookingPriority;
   serviceType: BookingServiceType;
   packageKey?: string | null;
+  ownerUserId?: string | null;
   countryCode?: string | null;
   regionCode?: string | null;
   timeZone?: string | null;
@@ -34,6 +35,7 @@ function normalizeDraft(draft: BookingCheckoutDraft): BookingCheckoutDraft {
     priority: draft.priority,
     serviceType: draft.serviceType,
     packageKey: typeof draft.packageKey === "string" && draft.packageKey.trim() ? draft.packageKey.trim() : null,
+    ownerUserId: typeof draft.ownerUserId === "string" && draft.ownerUserId.trim() ? draft.ownerUserId.trim() : null,
     countryCode: typeof draft.countryCode === "string" && draft.countryCode.trim() ? draft.countryCode.trim() : null,
     regionCode: typeof draft.regionCode === "string" && draft.regionCode.trim() ? draft.regionCode.trim() : null,
     timeZone: typeof draft.timeZone === "string" && draft.timeZone.trim() ? draft.timeZone.trim() : null,
@@ -42,13 +44,30 @@ function normalizeDraft(draft: BookingCheckoutDraft): BookingCheckoutDraft {
   };
 }
 
-export function saveBookingCheckoutDraft(draft: BookingCheckoutDraft) {
+function matchesDraftOwner(draft: BookingCheckoutDraft, currentUserId?: string | null) {
+  const owner = draft.ownerUserId || null;
+  const current = currentUserId || null;
+  if (!owner || !current) {
+    return false;
+  }
+  return owner === current;
+}
+
+export function saveBookingCheckoutDraft(draft: BookingCheckoutDraft, currentUserId?: string | null) {
   if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeDraft(draft)));
+  window.sessionStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify(
+      normalizeDraft({
+        ...draft,
+        ownerUserId: currentUserId || null,
+      })
+    )
+  );
   window.dispatchEvent(new CustomEvent(EVENT_NAME));
 }
 
-export function getBookingCheckoutDraft(): BookingCheckoutDraft | null {
+export function getBookingCheckoutDraft(currentUserId?: string | null): BookingCheckoutDraft | null {
   if (typeof window === "undefined") return null;
   const raw = window.sessionStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
@@ -58,31 +77,39 @@ export function getBookingCheckoutDraft(): BookingCheckoutDraft | null {
     if (!parsed || !Array.isArray(parsed.slots) || !parsed.priority || !parsed.serviceType) {
       return null;
     }
-    return normalizeDraft(parsed);
+    const draft = normalizeDraft(parsed);
+    if (!matchesDraftOwner(draft, currentUserId)) {
+      clearBookingCheckoutDraft();
+      return null;
+    }
+    return draft;
   } catch {
     return null;
   }
 }
 
-export function updateBookingCheckoutDraft(updater: (draft: BookingCheckoutDraft | null) => BookingCheckoutDraft | null) {
+export function updateBookingCheckoutDraft(
+  updater: (draft: BookingCheckoutDraft | null) => BookingCheckoutDraft | null,
+  currentUserId?: string | null
+) {
   if (typeof window === "undefined") return null;
-  const nextDraft = updater(getBookingCheckoutDraft());
+  const nextDraft = updater(getBookingCheckoutDraft(currentUserId));
   if (!nextDraft || !nextDraft.slots.length) {
     clearBookingCheckoutDraft();
     return null;
   }
-  saveBookingCheckoutDraft(nextDraft);
+  saveBookingCheckoutDraft(nextDraft, currentUserId);
   return nextDraft;
 }
 
-export function removeBookingCheckoutSlot(slotId: string) {
+export function removeBookingCheckoutSlot(slotId: string, currentUserId?: string | null) {
   return updateBookingCheckoutDraft((draft) => {
     if (!draft) return null;
     return {
       ...draft,
       slots: draft.slots.filter((slot) => slot.id !== slotId),
     };
-  });
+  }, currentUserId);
 }
 
 export function clearBookingCheckoutDraft() {
@@ -91,8 +118,8 @@ export function clearBookingCheckoutDraft() {
   window.dispatchEvent(new CustomEvent(EVENT_NAME));
 }
 
-export function getBookingCheckoutCount() {
-  return getBookingCheckoutDraft()?.slots.length || 0;
+export function getBookingCheckoutCount(currentUserId?: string | null) {
+  return getBookingCheckoutDraft(currentUserId)?.slots.length || 0;
 }
 
 export function getBookingCheckoutEventName() {

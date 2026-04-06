@@ -394,12 +394,13 @@ export default function Booking() {
       priority,
       serviceType,
       packageKey,
+      ownerUserId: user?.id ?? null,
       countryCode: selectedCountryCode,
       regionCode: selectedRegionCode,
       timeZone: displayTimeZone,
       slots: selectedSlots.map((slot) => ({ id: slot.id, date: slot.date, hour: slot.hour, utcStart: slot.utcStart })),
       createdAt: Date.now(),
-    });
+    }, user?.id ?? null);
     window.location.href = cartHref;
   }
 

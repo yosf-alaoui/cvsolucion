@@ -200,7 +200,7 @@ function moneyLabel(amount: number, locale: string, currency: string) {
 export default function BookingCheckout() {
   const { locale } = useI18n();
   const { user, loading: authLoading } = useAuth();
-  const [draft, setDraft] = useState<BookingCheckoutDraft | null>(() => getBookingCheckoutDraft());
+  const [draft, setDraft] = useState<BookingCheckoutDraft | null>(() => getBookingCheckoutDraft(user?.id ?? null));
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [stripeConfig, setStripeConfig] = useState<StripeConfigResponse | null>(null);
@@ -224,7 +224,7 @@ export default function BookingCheckout() {
   const loginHref = `${loginPath}?next=${encodeURIComponent(checkoutHref)}`;
 
   useEffect(() => {
-    const sync = () => setDraft(getBookingCheckoutDraft());
+    const sync = () => setDraft(getBookingCheckoutDraft(user?.id ?? null));
     sync();
     const eventName = getBookingCheckoutEventName();
     window.addEventListener(eventName, sync);
@@ -233,7 +233,7 @@ export default function BookingCheckout() {
       window.removeEventListener(eventName, sync);
       window.removeEventListener("storage", sync);
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     getStripeBookingConfig()
@@ -415,7 +415,7 @@ export default function BookingCheckout() {
                     remove: copy.remove,
                   }}
                   onRemoveSlot={(slotId) => {
-                    const nextDraft = removeBookingCheckoutSlot(slotId);
+                    const nextDraft = removeBookingCheckoutSlot(slotId, user?.id ?? null);
                     setDraft(nextDraft);
                   }}
                 />

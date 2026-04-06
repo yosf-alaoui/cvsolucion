@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { clearBookingCheckoutDraft } from "@/lib/bookingCheckout";
 import {
   AuthUser,
   CurrentUserResponse,
@@ -57,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       logout: async () => {
         await logoutRequest();
+        clearBookingCheckoutDraft();
         setUser(null);
         setIsAdmin(false);
       },
