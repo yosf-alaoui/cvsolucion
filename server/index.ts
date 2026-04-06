@@ -2293,6 +2293,27 @@ async function startServer() {
     return res.status(200).send(body);
   });
 
+  app.get("/BingSiteAuth.xml", (_req, res) => {
+    const customXml = String(process.env.BING_SITE_AUTH_XML || "").trim();
+    const token = String(process.env.BING_SITE_AUTH_TOKEN || process.env.BING_SITE_VERIFICATION || "").trim();
+
+    if (customXml) {
+      const body = customXml.startsWith("<?xml") ? customXml : `<?xml version="1.0"?>\n${customXml}`;
+      res.setHeader("Content-Type", "application/xml; charset=UTF-8");
+      res.setHeader("Cache-Control", "public, max-age=300");
+      return res.status(200).send(body);
+    }
+
+    if (token) {
+      const body = `<?xml version="1.0"?>\n<users>\n  <user>${escapeHtml(token)}</user>\n</users>\n`;
+      res.setHeader("Content-Type", "application/xml; charset=UTF-8");
+      res.setHeader("Cache-Control", "public, max-age=300");
+      return res.status(200).send(body);
+    }
+
+    return res.status(404).send("Bing verification is not configured.");
+  });
+
   app.get("/sitemap.xml", (req, res) => {
     const body = buildSitemapXml(canonicalOrigin(req));
     res.setHeader("Content-Type", "application/xml; charset=UTF-8");

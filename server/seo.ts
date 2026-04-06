@@ -551,6 +551,7 @@ export function renderSeoHtml(template: string, pathname: string, origin: string
   const structured = doc.structuredData
     ? `<script type="application/ld+json">${JSON.stringify(doc.structuredData)}</script>`
     : "";
+  const bingVerification = String(process.env.BING_SITE_VERIFICATION || "").trim();
 
   let html = template;
   html = html.replace(/<html[^>]*lang="[^"]*"[^>]*>/i, `<html lang="${doc.lang}"${doc.dir === "rtl" ? ' dir="rtl"' : ""}>`);
@@ -558,6 +559,9 @@ export function renderSeoHtml(template: string, pathname: string, origin: string
   html = replaceMeta(html, { name: "title" }, doc.title);
   html = replaceMeta(html, { name: "description" }, doc.description);
   html = replaceMeta(html, { name: "robots" }, doc.robots);
+  if (bingVerification) {
+    html = replaceMeta(html, { name: "msvalidate.01" }, bingVerification);
+  }
   html = replaceMeta(html, { property: "og:type" }, doc.ogType);
   html = replaceMeta(html, { property: "og:url" }, canonicalUrl);
   html = replaceMeta(html, { property: "og:site_name" }, SITE_NAME);
