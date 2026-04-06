@@ -15,6 +15,7 @@ import {
   type BookingCheckoutDraft,
 } from "@/lib/bookingCheckout";
 import { getBookingCountryLabel, getBookingRegionLabel } from "@/lib/bookingTime";
+import { getBookingAvailability, type BookingAvailabilityResponse } from "@/lib/bookings";
 import { getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
 
 function getCopy(locale: string) {
@@ -90,6 +91,8 @@ function getCopy(locale: string) {
     selectedCount: "Selected sessions",
     digitalNote: "Every selected appointment is billed as a separate session and can be removed before payment.",
     remove: "Remove",
+    unavailable: "No longer available",
+    replace: "Replace slot",
     consultation: "Consultation",
     support: "Support",
     standard: "Standard",
@@ -120,6 +123,7 @@ export default function BookingCart() {
   const currentDraftOwner = authLoading ? undefined : user?.id ?? null;
   const [draft, setDraft] = useState<BookingCheckoutDraft | null>(() => getBookingCheckoutDraft(currentDraftOwner));
   const [stripeConfig, setStripeConfig] = useState<StripeConfigResponse | null>(null);
+  const [availability, setAvailability] = useState<BookingAvailabilityResponse | null>(null);
 
   const copy = useMemo(() => getCopy(locale), [locale]);
   const bookingHref = locale === "en" ? "/book" : `/${locale}/book`;
@@ -144,10 +148,35 @@ export default function BookingCart() {
       .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", prices: {} }));
   }, []);
 
+  useEffect(() => {
+    if (!user || !draft?.slots.length) {
+      setAvailability(null);
+      return;
+    }
+
+    getBookingAvailability(draft.priority)
+      .then((response) => setAvailability(response))
+      .catch(() => setAvailability(null));
+  }, [draft?.priority, draft?.slots.length, user]);
+
   const unitAmount = draft ? stripeConfig?.prices?.[`${draft.priority}:${draft.serviceType}`] ?? 0 : 0;
   const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";
   const priorityLabel = draft ? (draft.priority === "express" ? copy.express : copy.standard) : "";
   const packageLabel = draft ? getPackageLabel(draft.packageKey, locale) : null;
+  const unavailableLabel =
+    "unavailable" in copy ? copy.unavailable : locale === "ar" ? "غير متاح الآن" : locale === "fr" ? "Plus disponible" : "No longer available";
+  const replaceLabel =
+    "replace" in copy ? copy.replace : locale === "ar" ? "استبدال الموعد" : locale === "fr" ? "Remplacer l'horaire" : "Replace slot";
+  const availableSlotIds = useMemo(() => {
+    if (!availability) return new Set<string>();
+    return new Set(
+      availability.days.flatMap((day) => day.slots).filter((slot) => slot.status === "available").map((slot) => slot.id)
+    );
+  }, [availability]);
+  const unavailableSlotIds = useMemo(
+    () => draft?.slots.filter((slot) => !availableSlotIds.has(slot.id)).map((slot) => slot.id) ?? [],
+    [availableSlotIds, draft?.slots]
+  );
   const localizedArea = draft?.countryCode
     ? [
         getBookingCountryLabel(draft.countryCode, locale),
@@ -164,6 +193,9 @@ export default function BookingCart() {
         ? `Les horaires sont affiches en heure de ${localizedArea} tout en gardant le planning interne sur l'heure du Quebec.`
         : `Times are shown in ${localizedArea} local time while internal scheduling stays on Quebec time.`
     : undefined;
+  const replaceHref = draft
+    ? `${bookingHref}?priority=${encodeURIComponent(draft.priority)}&service=${encodeURIComponent(draft.serviceType)}${draft.packageKey ? `&package=${encodeURIComponent(draft.packageKey)}` : ""}`
+    : bookingHref;
 
   return (
     <div className="site-page min-h-screen bg-transparent">
@@ -209,19 +241,23 @@ export default function BookingCart() {
                     selectedCount: copy.selectedCount,
                     digitalNote: copy.digitalNote,
                     remove: copy.remove,
+                    unavailable: unavailableLabel,
+                    replace: replaceLabel,
                     timeZoneNote,
                   }}
                   onRemoveSlot={(slotId) => {
                     const nextDraft = removeBookingCheckoutSlot(slotId, user?.id ?? null);
                     setDraft(nextDraft);
                   }}
+                  unavailableSlotIds={unavailableSlotIds}
+                  replaceSlotHref={replaceHref}
                 />
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                   <Button asChild variant="outline" className="rounded-full border-slate-200 bg-white/80">
                     <a href={bookingHref}>{copy.back}</a>
                   </Button>
-                  <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90">
+                  <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90" disabled={unavailableSlotIds.length > 0}>
                     <a href={user ? checkoutHref : loginHref}>{user ? copy.checkout : copy.signIn}</a>
                   </Button>
                 </div>

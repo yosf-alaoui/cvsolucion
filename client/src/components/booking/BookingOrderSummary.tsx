@@ -32,9 +32,13 @@ type BookingOrderSummaryProps = {
     selectedCount: string;
     digitalNote: string;
     remove: string;
+    unavailable?: string;
+    replace?: string;
     timeZoneNote?: string;
   };
   onRemoveSlot?: (slotId: string) => void;
+  unavailableSlotIds?: string[];
+  replaceSlotHref?: string;
 };
 
 function SlotRow({
@@ -46,6 +50,10 @@ function SlotRow({
   timeZone,
   removeText,
   onRemoveSlot,
+  isUnavailable,
+  unavailableText,
+  replaceText,
+  replaceSlotHref,
 }: {
   slot: BookingCheckoutSlot;
   locale: string;
@@ -55,9 +63,13 @@ function SlotRow({
   timeZone: string;
   removeText: string;
   onRemoveSlot?: (slotId: string) => void;
+  isUnavailable?: boolean;
+  unavailableText?: string;
+  replaceText?: string;
+  replaceSlotHref?: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-slate-200 bg-white/85 p-5 shadow-[0_16px_35px_rgba(15,23,42,0.05)]">
+    <div className={`rounded-[24px] border p-5 shadow-[0_16px_35px_rgba(15,23,42,0.05)] ${isUnavailable ? "border-slate-300 bg-slate-100/90 opacity-80" : "border-slate-200 bg-white/85"}`}>
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
           <div className="flex items-center gap-3 text-slate-900">
@@ -71,20 +83,32 @@ function SlotRow({
             <span>{formatBookingTime(slot.utcStart || `${slot.date}T${String(slot.hour).padStart(2, "0")}:00:00.000Z`, locale, timeZone)}</span>
           </div>
           <div className="text-sm text-slate-500">{serviceLabel}</div>
+          {isUnavailable && unavailableText ? (
+            <div className="inline-flex rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+              {unavailableText}
+            </div>
+          ) : null}
         </div>
         <div className="text-right">
           <div className="text-lg font-bold text-slate-950">{moneyLabel(amount, locale, currency)}</div>
-          {onRemoveSlot ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="mt-3 rounded-full px-3 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-              onClick={() => onRemoveSlot(slot.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-              {removeText}
-            </Button>
-          ) : null}
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
+            {isUnavailable && replaceSlotHref && replaceText ? (
+              <Button asChild type="button" variant="outline" className="rounded-full border-slate-300 bg-white/80">
+                <a href={replaceSlotHref}>{replaceText}</a>
+              </Button>
+            ) : null}
+            {onRemoveSlot ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-full px-3 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                onClick={() => onRemoveSlot(slot.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+                {removeText}
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
@@ -101,6 +125,8 @@ export default function BookingOrderSummary({
   packageLabel,
   labels,
   onRemoveSlot,
+  unavailableSlotIds = [],
+  replaceSlotHref,
 }: BookingOrderSummaryProps) {
   const timeZone = draft.timeZone || "America/Toronto";
   const subtotal = unitAmount * draft.slots.length;
@@ -138,6 +164,10 @@ export default function BookingOrderSummary({
               timeZone={timeZone}
               removeText={labels.remove}
               onRemoveSlot={onRemoveSlot}
+              isUnavailable={unavailableSlotIds.includes(slot.id)}
+              unavailableText={labels.unavailable}
+              replaceText={labels.replace}
+              replaceSlotHref={replaceSlotHref}
             />
           ))}
         </div>

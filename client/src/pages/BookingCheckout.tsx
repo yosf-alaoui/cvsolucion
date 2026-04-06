@@ -18,7 +18,7 @@ import {
   removeBookingCheckoutSlot,
   type BookingCheckoutDraft,
 } from "@/lib/bookingCheckout";
-import { createBooking } from "@/lib/bookings";
+import { createBooking, getBookingAvailability, type BookingAvailabilityResponse } from "@/lib/bookings";
 import { getCustomerDashboard } from "@/lib/customer";
 import { getBookingCountryLabel, getBookingRegionLabel } from "@/lib/bookingTime";
 import { createBookingPaymentIntent, getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
@@ -143,6 +143,8 @@ function getCopy(locale: string) {
     selectedCount: "Selected sessions",
     digitalNote: "This is a digital service with no shipping. Every selected appointment is billed as a separate session.",
     remove: "Remove",
+    unavailable: "No longer available",
+    replace: "Replace slot",
     details: "Customer details",
     signInRequired: "You must sign in before completing this order.",
     signIn: "Sign in",
@@ -205,6 +207,7 @@ export default function BookingCheckout() {
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [stripeConfig, setStripeConfig] = useState<StripeConfigResponse | null>(null);
+  const [availability, setAvailability] = useState<BookingAvailabilityResponse | null>(null);
   const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [form, setForm] = useState({
@@ -241,6 +244,17 @@ export default function BookingCheckout() {
       .then((response) => setStripeConfig(response))
       .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", prices: {} }));
   }, []);
+
+  useEffect(() => {
+    if (!user || !draft?.slots.length) {
+      setAvailability(null);
+      return;
+    }
+
+    getBookingAvailability(draft.priority)
+      .then((response) => setAvailability(response))
+      .catch(() => setAvailability(null));
+  }, [draft?.priority, draft?.slots.length, user]);
 
   useEffect(() => {
     if (!user?.email) return;
@@ -289,10 +303,27 @@ export default function BookingCheckout() {
   const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";
   const priorityLabel = draft ? (draft.priority === "express" ? copy.express : copy.standard) : "";
   const packageLabel = draft ? getPackageLabel(draft.packageKey, locale) : null;
+  const unavailableLabel =
+    "unavailable" in copy ? copy.unavailable : locale === "ar" ? "غير متاح الآن" : locale === "fr" ? "Plus disponible" : "No longer available";
+  const replaceLabel =
+    "replace" in copy ? copy.replace : locale === "ar" ? "استبدال الموعد" : locale === "fr" ? "Remplacer l'horaire" : "Replace slot";
+  const availableSlotIds = useMemo(() => {
+    if (!availability) return new Set<string>();
+    return new Set(
+      availability.days.flatMap((day) => day.slots).filter((slot) => slot.status === "available").map((slot) => slot.id)
+    );
+  }, [availability]);
+  const unavailableSlotIds = useMemo(
+    () => draft?.slots.filter((slot) => !availableSlotIds.has(slot.id)).map((slot) => slot.id) ?? [],
+    [availableSlotIds, draft?.slots]
+  );
   const billingReady = Boolean(form.name.trim() && form.email.trim() && form.phone.trim() && form.country.trim() && form.problem.trim());
+  const replaceHref = draft
+    ? `${bookingHref}?priority=${encodeURIComponent(draft.priority)}&service=${encodeURIComponent(draft.serviceType)}${draft.packageKey ? `&package=${encodeURIComponent(draft.packageKey)}` : ""}`
+    : bookingHref;
 
   useEffect(() => {
-    if (!user || !draft || !draft.slots.length || !stripeEnabled) {
+    if (!user || !draft || !draft.slots.length || !stripeEnabled || unavailableSlotIds.length > 0) {
       setPaymentClientSecret(null);
       return;
     }
@@ -326,7 +357,7 @@ export default function BookingCheckout() {
     return () => {
       cancelled = true;
     };
-  }, [draft, locale, stripeEnabled, user]);
+  }, [draft, locale, stripeEnabled, unavailableSlotIds.length, user]);
 
   async function finalizeBooking(paymentIntentId: string) {
     if (!draft || !draft.slots.length) return;
@@ -414,11 +445,15 @@ export default function BookingCheckout() {
                     selectedCount: copy.selectedCount,
                     digitalNote: copy.digitalNote,
                     remove: copy.remove,
+                    unavailable: unavailableLabel,
+                    replace: replaceLabel,
                   }}
                   onRemoveSlot={(slotId) => {
                     const nextDraft = removeBookingCheckoutSlot(slotId, user?.id ?? null);
                     setDraft(nextDraft);
                   }}
+                  unavailableSlotIds={unavailableSlotIds}
+                  replaceSlotHref={replaceHref}
                 />
               </div>
 
@@ -476,7 +511,17 @@ export default function BookingCheckout() {
                   )}
                 </GlassCard>
 
-                {!user ? null : stripeEnabled ? (
+                {!user ? null : unavailableSlotIds.length > 0 ? (
+                  <GlassCard className="card-static rounded-[32px] p-7">
+                    <div className="text-sm text-slate-500">
+                      {locale === "ar"
+                        ? `${unavailableLabel}. احذفه أو قم باستبداله قبل الدفع.`
+                        : locale === "fr"
+                          ? `${unavailableLabel}. Retirez-le ou utilisez "${String(replaceLabel).toLowerCase()}" avant le paiement.`
+                          : `${unavailableLabel}. Remove it or use ${String(replaceLabel).toLowerCase()} before payment.`}
+                    </div>
+                  </GlassCard>
+                ) : stripeEnabled ? (
                   paymentLoading ? (
                     <GlassCard className="card-static rounded-[32px] p-7">
                       <div className="text-sm text-slate-500">{copy.preparing}</div>

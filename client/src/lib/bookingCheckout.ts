@@ -82,7 +82,6 @@ export function getBookingCheckoutDraft(currentUserId?: string | null): BookingC
       return draft;
     }
     if (!matchesDraftOwner(draft, currentUserId)) {
-      clearBookingCheckoutDraft();
       return null;
     }
     return draft;
