@@ -1,6 +1,38 @@
 import nodemailer from "nodemailer";
 import type { EmailMessagePayload, EmailModuleConfig } from "./contracts";
 
+function stripWrappingQuotes(value: string) {
+  return value.replace(/^["']+|["']+$/g, "").trim();
+}
+
+function getSenderDisplayName(rawFrom: string | undefined) {
+  const raw = rawFrom?.trim();
+  if (!raw) {
+    return "CVsolucion";
+  }
+
+  const bracketMatch = raw.match(/^(.*)<[^>]+>\s*$/);
+  if (bracketMatch?.[1]) {
+    const name = stripWrappingQuotes(bracketMatch[1]);
+    if (name) {
+      return name;
+    }
+  }
+
+  if (!raw.includes("@")) {
+    const name = stripWrappingQuotes(raw);
+    if (name) {
+      return name;
+    }
+  }
+
+  return "CVsolucion";
+}
+
+function getVerifiedFromAddress(config: EmailModuleConfig) {
+  return `${getSenderDisplayName(config.from)} <${config.user}>`;
+}
+
 export function createEmailModule(config: EmailModuleConfig | null) {
   const transporter =
     config &&
@@ -29,7 +61,8 @@ export function createEmailModule(config: EmailModuleConfig | null) {
       }
 
       const info = await transporter.sendMail({
-        from: message.from || config.from || config.user,
+        from: message.from || getVerifiedFromAddress(config),
+        replyTo: message.replyTo || config.replyTo,
         to: message.to,
         subject: message.subject,
         html: message.html,
@@ -46,4 +79,3 @@ export function createEmailModule(config: EmailModuleConfig | null) {
     },
   };
 }
-

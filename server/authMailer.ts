@@ -7,10 +7,18 @@ type MailOptions = {
   text: string;
 };
 
+function stripWrappingQuotes(value: string) {
+  return value.replace(/^["']+|["']+$/g, "").trim();
+}
+
+function getSmtpUserEmail() {
+  return process.env.SMTP_USER?.trim() || "";
+}
+
 function getTransporter() {
   const host = process.env.SMTP_HOST;
   const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined;
-  const user = process.env.SMTP_USER;
+  const user = getSmtpUserEmail();
   const pass = process.env.SMTP_PASS;
 
   if (!host || !port || !user || !pass) {
@@ -29,6 +37,39 @@ function getPublicContactEmail() {
   return process.env.CONTACT_EMAIL?.trim() || "contact@cvsolucion.com";
 }
 
+function getSenderDisplayName() {
+  const raw = process.env.SMTP_FROM?.trim();
+  if (!raw) {
+    return "CVsolucion";
+  }
+
+  const bracketMatch = raw.match(/^(.*)<[^>]+>\s*$/);
+  if (bracketMatch?.[1]) {
+    const name = stripWrappingQuotes(bracketMatch[1]);
+    if (name) {
+      return name;
+    }
+  }
+
+  if (!raw.includes("@")) {
+    const name = stripWrappingQuotes(raw);
+    if (name) {
+      return name;
+    }
+  }
+
+  return "CVsolucion";
+}
+
+function getVerifiedFromAddress() {
+  const smtpUser = getSmtpUserEmail();
+  if (!smtpUser) {
+    return `CVsolucion <${getPublicContactEmail()}>`;
+  }
+
+  return `${getSenderDisplayName()} <${smtpUser}>`;
+}
+
 export async function sendAuthEmail(options: MailOptions) {
   const transporter = getTransporter();
   if (!transporter) {
@@ -40,7 +81,7 @@ export async function sendAuthEmail(options: MailOptions) {
     return;
   }
 
-  const from = process.env.SMTP_FROM?.trim() || `CVsolucion <${getPublicContactEmail()}>`;
+  const from = getVerifiedFromAddress();
   const replyTo = getPublicContactEmail();
   try {
     const info = await transporter.sendMail({

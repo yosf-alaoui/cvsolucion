@@ -20,7 +20,8 @@ const email = createEmailModule({
   port: Number(process.env.SMTP_PORT || 465),
   user: process.env.SMTP_USER!,
   pass: process.env.SMTP_PASS!,
-  from: process.env.SMTP_FROM,
+  from: process.env.SMTP_FROM, // optional display name or verified sender
+  replyTo: process.env.CONTACT_EMAIL,
 });
 
 await email.send({
@@ -34,4 +35,4 @@ await email.send({
 ## Notes
 - In development, the module can fall back to console logging instead of failing hard.
 - Keep template rendering outside the transport layer.
-
+- The SMTP-authenticated mailbox stays the real sender. Use `replyTo` for public inboxes like `contact@...`.

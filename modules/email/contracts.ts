@@ -4,6 +4,7 @@ export type EmailMessagePayload = {
   html: string;
   text: string;
   from?: string;
+  replyTo?: string;
 };
 
 export type EmailModuleConfig = {
@@ -12,5 +13,5 @@ export type EmailModuleConfig = {
   user: string;
   pass: string;
   from?: string;
+  replyTo?: string;
 };
-

@@ -5,7 +5,7 @@ export const emailModuleEnv: ModuleEnvRequirement[] = [
   { key: "SMTP_PORT", required: true, description: "SMTP server port.", example: "465" },
   { key: "SMTP_USER", required: true, description: "SMTP username." },
   { key: "SMTP_PASS", required: true, description: "SMTP password or app password." },
-  { key: "SMTP_FROM", required: false, description: "Default sender address." },
+  { key: "SMTP_FROM", required: false, description: "Optional sender display name or verified sender address." },
 ];
 
 export const emailModuleManifest: ReusableModuleManifest = {
@@ -19,4 +19,3 @@ export const emailModuleManifest: ReusableModuleManifest = {
     server: ["server/authMailer.ts", "server/index.ts"],
   },
 };
-

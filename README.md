@@ -85,9 +85,15 @@ SMTP_HOST=
 SMTP_PORT=
 SMTP_USER=
 SMTP_PASS=
-SMTP_FROM=
+SMTP_FROM=CVsolucion
 CONTACT_EMAIL=contact@cvsolucion.com
 ```
+
+Notes:
+
+- `SMTP_USER` is the real authenticated mailbox used as the sender.
+- `SMTP_FROM` should be a display name or a verified sender tied to that mailbox.
+- `CONTACT_EMAIL` is the public inbox that should receive replies.
 
 Optional analytics variables:
 
