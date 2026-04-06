@@ -78,6 +78,9 @@ export function getBookingCheckoutDraft(currentUserId?: string | null): BookingC
       return null;
     }
     const draft = normalizeDraft(parsed);
+    if (typeof currentUserId === "undefined") {
+      return draft;
+    }
     if (!matchesDraftOwner(draft, currentUserId)) {
       clearBookingCheckoutDraft();
       return null;

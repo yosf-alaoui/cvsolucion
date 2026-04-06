@@ -116,8 +116,9 @@ function getPackageLabel(packageKey: string | null | undefined, locale: string) 
 
 export default function BookingCart() {
   const { locale } = useI18n();
-  const { user } = useAuth();
-  const [draft, setDraft] = useState<BookingCheckoutDraft | null>(() => getBookingCheckoutDraft(user?.id ?? null));
+  const { user, loading: authLoading } = useAuth();
+  const currentDraftOwner = authLoading ? undefined : user?.id ?? null;
+  const [draft, setDraft] = useState<BookingCheckoutDraft | null>(() => getBookingCheckoutDraft(currentDraftOwner));
   const [stripeConfig, setStripeConfig] = useState<StripeConfigResponse | null>(null);
 
   const copy = useMemo(() => getCopy(locale), [locale]);
@@ -126,7 +127,7 @@ export default function BookingCart() {
   const loginHref = `${locale === "en" ? "/login" : `/${locale}/login`}?next=${encodeURIComponent(checkoutHref)}`;
 
   useEffect(() => {
-    const sync = () => setDraft(getBookingCheckoutDraft(user?.id ?? null));
+    const sync = () => setDraft(getBookingCheckoutDraft(currentDraftOwner));
     sync();
     const eventName = getBookingCheckoutEventName();
     window.addEventListener(eventName, sync);
@@ -135,7 +136,7 @@ export default function BookingCart() {
       window.removeEventListener(eventName, sync);
       window.removeEventListener("storage", sync);
     };
-  }, [user?.id]);
+  }, [currentDraftOwner]);
 
   useEffect(() => {
     getStripeBookingConfig()
