@@ -4,6 +4,7 @@ import Footer from "@/components/Footer";
 import Seo from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n/i18n";
@@ -19,6 +20,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [recoveryMode, setRecoveryMode] = useState(false);
@@ -31,8 +33,9 @@ export default function Login() {
   const disabled = useMemo(() => {
     if (recoveryMode) return !resetToken || !newPassword || newPassword !== confirmPassword;
     if (resetMode) return !email;
+    if (mode === "signup") return !email || !password || !acceptTerms;
     return !email || !password;
-  }, [email, password, resetMode, recoveryMode, newPassword, confirmPassword, resetToken]);
+  }, [email, password, resetMode, recoveryMode, newPassword, confirmPassword, resetToken, mode, acceptTerms]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -63,6 +66,7 @@ export default function Login() {
 
   const homeHref = locale === "en" ? "/" : `/${locale}`;
   const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
+  const termsHref = locale === "en" ? "/terms" : `/${locale}/terms`;
   const nextHref = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const rawNext = params.get("next")?.trim();
@@ -109,9 +113,15 @@ export default function Login() {
         await login(email, password);
         window.location.href = nextHref;
       } else {
-        await signup(email, password, locale);
+        if (!acceptTerms) {
+          setStatus(locale === "ar" ? "يجب الموافقة على الشروط والأحكام أولاً." : locale === "fr" ? "Vous devez accepter les conditions d'utilisation avant de créer un compte." : "You must accept the Terms and Conditions before creating an account.");
+          setStatusTone("error");
+          return;
+        }
+        await signup(email, password, locale, acceptTerms);
         setStatus(t("auth.checkEmail"));
         setStatusTone("success");
+        setAcceptTerms(false);
       }
     } catch (err: any) {
       const message = err?.message === "Please confirm your email before signing in."
@@ -131,6 +141,10 @@ export default function Login() {
     emailRef.current?.focus();
     emailRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
+
+  const termsLabel = locale === "ar" ? "أوافق على الشروط والأحكام" : locale === "fr" ? "J'accepte les conditions d'utilisation" : "I agree to the Terms and Conditions";
+  const termsHint = locale === "ar" ? "مطلوب لإنشاء الحساب." : locale === "fr" ? "Obligatoire pour créer le compte." : "Required to create the account.";
+  const termsLinkLabel = locale === "ar" ? "قراءة الشروط" : locale === "fr" ? "Lire les conditions" : "Read terms";
 
   return (
     <div className="site-page min-h-screen flex flex-col bg-transparent">
@@ -152,15 +166,16 @@ export default function Login() {
               <p className="text-sm text-muted-foreground mt-2">{t("auth.subtitle")}</p>
 
               <div className="mt-6 flex gap-2">
-                <Button
-                  type="button"
-                  variant={mode === "login" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => {
-                    setMode("login");
-                    setResetMode(false);
-                    setRecoveryMode(false);
-                    setResetToken("");
+                  <Button
+                    type="button"
+                    variant={mode === "login" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => {
+                      setMode("login");
+                      setAcceptTerms(false);
+                      setResetMode(false);
+                      setRecoveryMode(false);
+                      setResetToken("");
                     setStatus(null);
                     setStatusTone(null);
                   }}
@@ -168,18 +183,18 @@ export default function Login() {
                 >
                   {t("auth.login")}
                 </Button>
-                <Button
-                  type="button"
-                  variant={mode === "signup" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => {
-                    setMode("signup");
-                    setResetMode(false);
-                    setRecoveryMode(false);
-                    setResetToken("");
-                    setStatus(null);
-                    setStatusTone(null);
-                  }}
+                  <Button
+                    type="button"
+                    variant={mode === "signup" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => {
+                      setMode("signup");
+                      setResetMode(false);
+                      setRecoveryMode(false);
+                      setResetToken("");
+                      setStatus(null);
+                      setStatusTone(null);
+                    }}
                   disabled={recoveryMode}
                 >
                   {t("auth.signup")}
@@ -262,6 +277,33 @@ export default function Login() {
                         >
                           {t("auth.forgotPassword")}
                         </button>
+                      </div>
+                    ) : null}
+
+                    {!resetMode && mode === "signup" ? (
+                      <div className="rounded-xl border border-slate-200 bg-white/70 p-4">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            id="accept-terms"
+                            checked={acceptTerms}
+                            onCheckedChange={(checked) => setAcceptTerms(checked === true)}
+                            className="mt-1"
+                          />
+                          <div className="space-y-1 text-sm">
+                            <Label htmlFor="accept-terms" className="cursor-pointer leading-6 text-slate-700">
+                              {termsLabel}
+                            </Label>
+                            <div className="text-xs text-muted-foreground">{termsHint}</div>
+                            <a
+                              href={termsHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex text-xs font-semibold text-primary hover:text-primary/80"
+                            >
+                              {termsLinkLabel}
+                            </a>
+                          </div>
+                        </div>
                       </div>
                     ) : null}
 

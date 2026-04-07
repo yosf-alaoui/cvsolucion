@@ -9,6 +9,8 @@ export type AuthUser = {
   passwordSalt: string;
   passwordHash: string;
   emailVerifiedAt: string | null;
+  termsAcceptedAt?: string | null;
+  termsVersion?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -148,7 +150,7 @@ export function getUserById(id: string) {
   return db.users.find((item) => item.id === id) ?? null;
 }
 
-export function createUser(email: string, password: string) {
+export function createUser(email: string, password: string, termsVersion: string | null = null) {
   const db = loadDb();
   const normalizedEmail = email.trim().toLowerCase();
   const existing = db.users.find((item) => item.email === normalizedEmail);
@@ -164,6 +166,8 @@ export function createUser(email: string, password: string) {
     passwordSalt,
     passwordHash,
     emailVerifiedAt: null,
+    termsAcceptedAt: termsVersion ? timestamp : null,
+    termsVersion,
     createdAt: timestamp,
     updatedAt: timestamp,
   };

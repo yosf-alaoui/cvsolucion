@@ -16,7 +16,7 @@ type AuthContextValue = {
   loading: boolean;
   refresh: () => Promise<AuthUser | null>;
   login: (email: string, password: string) => Promise<AuthUser>;
-  signup: (email: string, password: string, locale: string) => Promise<void>;
+  signup: (email: string, password: string, locale: string, termsAccepted: boolean) => Promise<void>;
   logout: () => Promise<void>;
   sendReset: (email: string, locale: string) => Promise<void>;
   resetPassword: (token: string, password: string) => Promise<void>;
@@ -52,8 +52,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsAdmin(Boolean(response.isAdmin));
         return response.user;
       },
-      signup: async (email, password, locale) => {
-        await signUp(email, password, locale);
+      signup: async (email, password, locale, termsAccepted) => {
+        await signUp(email, password, locale, termsAccepted);
       },
       logout: async () => {
         await logoutRequest();

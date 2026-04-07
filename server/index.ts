@@ -1521,12 +1521,17 @@ async function startServer() {
       const email = String(req.body?.email || "").trim();
       const password = String(req.body?.password || "");
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+      const termsAccepted = Boolean(req.body?.termsAccepted);
+      const termsVersion = "04/2026";
 
       if (!EMAIL_REGEX.test(email) || !password || password.length < 8) {
         return res.status(400).json({ error: "Email and a password of at least 8 characters are required." });
       }
+      if (!termsAccepted) {
+        return res.status(400).json({ error: "You must accept the Terms and Conditions before creating an account." });
+      }
 
-      const user = createUser(email, password);
+      const user = createUser(email, password, termsVersion);
       const { rawToken } = createToken(user.id, "verify_email", VERIFY_LINK_MS);
       const verifyUrl = `${appOrigin(req)}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}`;
 
