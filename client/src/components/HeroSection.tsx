@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { CalendarDays, MessageCircle, Send } from "lucide-react";
 import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
 import { getBookingHref } from "@/lib/site";
+import { navigateToHomeSection } from "@/lib/sectionNavigation";
 import HeroFiberGlow from "@/components/HeroFiberGlow";
 
 /**
@@ -13,7 +14,6 @@ export default function HeroSection() {
   const { locale, t } = useI18n();
   const whatsappHref = buildWhatsAppLink("+1 438 807 8747", t("whatsapp.needHelp"));
   const bookingHref = getBookingHref(locale);
-  const contactHref = `${locale === "en" ? "/" : `/${locale}`}#contact`;
   const bookLabel = locale === "ar" ? "احجز استشارة" : locale === "fr" ? "Reserver une consultation" : "Book consultation";
   const contactLabel = locale === "ar" ? "أرسل طلباً" : locale === "fr" ? "Envoyer une demande" : "Send a request";
 
@@ -102,16 +102,16 @@ export default function HeroSection() {
                 {bookLabel}
               </Button>
             </a>
-            <a href={contactHref}>
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-white/35 bg-white/10 text-white backdrop-blur-md hover:bg-white/15 font-semibold gap-2 w-full sm:w-auto"
-              >
-                <Send className="w-5 h-5" />
-                {contactLabel}
-              </Button>
-            </a>
+            <Button
+              type="button"
+              size="lg"
+              variant="outline"
+              className="border-white/35 bg-white/10 text-white backdrop-blur-md hover:bg-white/15 font-semibold gap-2 w-full sm:w-auto"
+              onClick={() => navigateToHomeSection(locale, "contact")}
+            >
+              <Send className="w-5 h-5" />
+              {contactLabel}
+            </Button>
           </div>
           </div>
           </div>

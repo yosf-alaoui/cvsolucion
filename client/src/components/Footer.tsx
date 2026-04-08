@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Facebook, Instagram, Linkedin, Mail, MessageCircle } from "lucide-react";
 import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
 import { CONTACT_EMAIL } from "@/lib/site";
+import { navigateToHomeSection } from "@/lib/sectionNavigation";
 
 /**
  * Footer Component - CV Solution
@@ -14,10 +15,8 @@ export default function Footer() {
   const prefix = locale === "en" ? "" : `/${locale}`;
   const trainingHref = locale === "en" ? "/training" : `/${locale}/training`;
   const designPricingHref = locale === "en" ? "/design-pricing" : `/${locale}/design-pricing`;
-  const servicesHref = `${prefix}/#services`;
   const aboutHref = `${prefix}/about`;
   const articlesHref = `${prefix}/articles`;
-  const contactHref = `${prefix || "/"}#contact`;
   const aboutLabel = locale === "ar" ? "من نحن" : locale === "fr" ? "A propos" : "About";
   const articlesLabel = locale === "ar" ? "المقالات" : locale === "fr" ? "Articles" : "Articles";
   const contactLabel = locale === "ar" ? "تواصل" : locale === "fr" ? "Contact" : "Contact";
@@ -47,8 +46,12 @@ export default function Footer() {
               {content.footer.servicesLinks.map((label: string, index: number) => (
                 <li key={label}>
                   <a
-                    href={index === 1 ? trainingHref : servicesHref}
+                    href={index === 1 ? trainingHref : prefix || "/"}
                     className="hover:text-white transition-colors"
+                    onClick={index === 1 ? undefined : (event) => {
+                      event.preventDefault();
+                      navigateToHomeSection(locale, "services");
+                    }}
                   >
                     {label}
                   </a>
@@ -63,7 +66,16 @@ export default function Footer() {
             <ul className="space-y-2 text-sm text-white/80">
               {content.footer.solutionsLinks.map((label: string) => (
                 <li key={label}>
-                  <a href={servicesHref} className="hover:text-white transition-colors">{label}</a>
+                  <a
+                    href={prefix || "/"}
+                    className="hover:text-white transition-colors"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      navigateToHomeSection(locale, "services");
+                    }}
+                  >
+                    {label}
+                  </a>
                 </li>
               ))}
             </ul>
@@ -167,9 +179,13 @@ export default function Footer() {
               <a href={articlesHref} className="hover:text-white transition-colors">
                 {articlesLabel}
               </a>
-              <a href={contactHref} className="hover:text-white transition-colors">
+              <button
+                type="button"
+                className="hover:text-white transition-colors"
+                onClick={() => navigateToHomeSection(locale, "contact")}
+              >
                 {contactLabel}
-              </a>
+              </button>
               <a href={designPricingHref} className="hover:text-white transition-colors">
                 {t("footer.designPricing")}
               </a>

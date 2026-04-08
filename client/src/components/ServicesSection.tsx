@@ -10,6 +10,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
+import { HOME_SERVICE_SEO_TARGETS } from "@shared/seoServicePages";
 
 /**
  * Services Section - CV Solution (Upgraded)
@@ -18,13 +19,21 @@ import { useI18n } from "@/i18n/i18n";
  * - No "Learn more" clear and scannable
  */
 export default function ServicesSection() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const services = t("services.cards") as {
     title: string;
     description: string;
     included: string[];
   }[];
   const icons = [Shield, Headset, HardDriveDownload, Zap, Code2, Cpu, Settings];
+  const exploreLabel =
+    locale === "ar" ? "تفاصيل الخدمة" : locale === "fr" ? "Voir la page" : "View service page";
+
+  const localizePath = (path: string) => {
+    if (locale === "fr") return `/fr${path}`;
+    if (locale === "ar") return `/ar${path}`;
+    return path;
+  };
 
   return (
     <section id="services" className="scroll-mt-28 bg-transparent py-20">
@@ -39,6 +48,9 @@ export default function ServicesSection() {
         <div className="card-stage grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
           {services.map((service, index) => {
             const Icon = icons[index];
+            const serviceHref = HOME_SERVICE_SEO_TARGETS[index]
+              ? localizePath(HOME_SERVICE_SEO_TARGETS[index])
+              : undefined;
             return (
               <GlassCard key={service.title} className="p-7">
                 <div className="flex items-start gap-4">
@@ -46,7 +58,15 @@ export default function ServicesSection() {
                     <Icon className="h-7 w-7 text-primary" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-xl font-bold text-primary">{service.title}</h3>
+                    <h3 className="text-xl font-bold text-primary">
+                      {serviceHref ? (
+                        <a href={serviceHref} className="transition-colors hover:text-primary/80">
+                          {service.title}
+                        </a>
+                      ) : (
+                        service.title
+                      )}
+                    </h3>
                     <p className="mt-2 leading-relaxed text-foreground/80">
                       {service.description}
                     </p>
@@ -67,6 +87,14 @@ export default function ServicesSection() {
                       </li>
                     ))}
                   </ul>
+                  {serviceHref ? (
+                    <a
+                      href={serviceHref}
+                      className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+                    >
+                      {exploreLabel}
+                    </a>
+                  ) : null}
                 </div>
               </GlassCard>
             );

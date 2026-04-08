@@ -1,4 +1,11 @@
 import { getArticleBySlug, listPublishedArticles, type ArticleLocale } from "./articleStore";
+import {
+  SEO_SERVICE_PAGE_ORDER,
+  SEO_SERVICE_PAGES,
+  getSeoServicePageByCanonicalPath,
+  type SeoServicePage,
+} from "../shared/seoServicePages";
+import { getSeoServicePageContent } from "../shared/seoServicePageLocales";
 
 type SeoDocument = {
   lang: string;
@@ -244,6 +251,36 @@ function homeImplementationHeading(locale: ArticleLocale) {
   return map[locale];
 }
 
+function servicePagesHeading(locale: ArticleLocale) {
+  const map = {
+    en: "Cabinet Vision service pages",
+    fr: "Pages de service Cabinet Vision",
+    ar: "صفحات خدمات Cabinet Vision",
+  } as const;
+
+  return map[locale];
+}
+
+function faqHeading(locale: ArticleLocale) {
+  const map = {
+    en: "Frequently asked questions",
+    fr: "Questions frequentes",
+    ar: "الاسئلة الشائعة",
+  } as const;
+
+  return map[locale];
+}
+
+function relatedPagesHeading(locale: ArticleLocale) {
+  const map = {
+    en: "Related pages",
+    fr: "Pages liees",
+    ar: "صفحات مرتبطة",
+  } as const;
+
+  return map[locale];
+}
+
 function homeImplementationParagraph(locale: ArticleLocale) {
   const map = {
     en: "Many cabinet shops search for help only after quoting logic breaks, reports stop matching production, or CNC output becomes unreliable. CVsolucion works on the operational layer between design, engineering, pricing, reports, and machine-ready output. That is why the service is relevant for shops evaluating implementation support, emergency troubleshooting, structured training, or a cleaner long-term Cabinet Vision setup.",
@@ -320,6 +357,15 @@ function homeFallback(locale: ArticleLocale) {
   const links = ["/training", "/design-pricing", "/articles", "/about", "/book", "/privacy", "/terms"]
     .map((path) => `<a href="${escapeHtml(localizePath(path, locale))}">${escapeHtml(linkLabel(locale, path) || path)}</a>`)
     .join("");
+  const serviceLinks = SEO_SERVICE_PAGE_ORDER
+    .map((key) => SEO_SERVICE_PAGES[key])
+    .map(
+      (page) => {
+        const content = getSeoServicePageContent(page, locale);
+        return `<li><a href="${escapeHtml(localizePath(page.canonicalPath, locale))}">${escapeHtml(content.shortTitle)}</a><p>${escapeHtml(content.metaDescription)}</p></li>`;
+      }
+    )
+    .join("");
   const highlights = homeHighlights(locale)
     .map(
       (item) => `
@@ -342,6 +388,8 @@ function homeFallback(locale: ArticleLocale) {
         <div class="seo-links">${links}</div>
         <h2>${escapeHtml(copy.h2c)}</h2>
         <p>${escapeHtml(copy.p4)}</p>
+        <h2>${escapeHtml(servicePagesHeading(locale))}</h2>
+        <ul>${serviceLinks}</ul>
         <h2>${escapeHtml(copy.h2b)}</h2>
         <ul>
           <li><a href="${escapeHtml(localizePath("/training", locale))}">${escapeHtml(linkLabel(locale, "/training") || "")}</a></li>
@@ -356,6 +404,89 @@ function homeFallback(locale: ArticleLocale) {
         <p>${escapeHtml(homeImplementationParagraph(locale))}</p>
         <ul>${highlights}</ul>
       </section>
+    </main>
+  `;
+}
+
+function blockFallbackHtml(block: SeoServicePage["blocks"][number]) {
+  if (block.type === "cards") {
+    const intro = block.intro ? `<p>${escapeHtml(block.intro)}</p>` : "";
+    const items = block.items.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+    return `<section><h2>${escapeHtml(block.title)}</h2>${intro}<ul>${items}</ul></section>`;
+  }
+
+  if (block.type === "steps") {
+    const items = block.items
+      .map((item) => `<li><strong>${escapeHtml(item.label)}.</strong> ${escapeHtml(item.text)}</li>`)
+      .join("");
+    return `<section><h2>${escapeHtml(block.title)}</h2><ol>${items}</ol></section>`;
+  }
+
+  if (block.type === "facts") {
+    const items = block.items
+      .map((item) => `<li><strong>${escapeHtml(item.label)}:</strong> ${escapeHtml(item.text)}</li>`)
+      .join("");
+    return `<section><h2>${escapeHtml(block.title)}</h2><ul>${items}</ul></section>`;
+  }
+
+  const paragraphs = block.paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
+  return `<section><h2>${escapeHtml(block.title)}</h2>${paragraphs}</section>`;
+}
+
+function routeLabelForLocale(locale: ArticleLocale, path: string) {
+  const servicePage = getSeoServicePageByCanonicalPath(path);
+  if (servicePage) return getSeoServicePageContent(servicePage, locale).shortTitle;
+  return linkLabel(locale, path) || routeTitle(locale, path).replace(" | CVsolucion", "");
+}
+
+function routeDescriptionForLocale(locale: ArticleLocale, path: string) {
+  const servicePage = getSeoServicePageByCanonicalPath(path);
+  if (servicePage) return getSeoServicePageContent(servicePage, locale).metaDescription;
+  return routeDescription(locale, path);
+}
+
+function servicePageFallback(locale: ArticleLocale, page: SeoServicePage) {
+  const content = getSeoServicePageContent(page, locale);
+  const blocks = content.blocks.map((block) => blockFallbackHtml(block)).join("");
+  const faq = content.faq
+    .map(
+      (item) =>
+        `<li><strong>${escapeHtml(item.question)}</strong><p>${escapeHtml(item.answer)}</p></li>`
+    )
+    .join("");
+  const related = page.relatedPaths
+    .map(
+      (path) => `
+        <li>
+          <a href="${escapeHtml(localizePath(path, locale))}">${escapeHtml(routeLabelForLocale(locale, path))}</a>
+          <p>${escapeHtml(routeDescriptionForLocale(locale, path))}</p>
+        </li>
+      `
+    )
+    .join("");
+
+  return `
+    <main id="seo-fallback">
+      <article>
+        <section>
+          <h1>${escapeHtml(content.h1)}</h1>
+          <p>${escapeHtml(content.heroLead)}</p>
+          <p>${escapeHtml(content.heroBody)}</p>
+          <nav class="seo-links">
+            <a href="${escapeHtml(localizePath("/book", locale))}">${escapeHtml(routeLabelForLocale(locale, "/book"))}</a>
+            <a href="${escapeHtml(localizePath("/", locale))}">${escapeHtml(SITE_NAME)}</a>
+          </nav>
+        </section>
+        ${blocks}
+        <section>
+          <h2>${escapeHtml(faqHeading(locale))}</h2>
+          <ul>${faq}</ul>
+        </section>
+        <section>
+          <h2>${escapeHtml(relatedPagesHeading(locale))}</h2>
+          <ul>${related}</ul>
+        </section>
+      </article>
     </main>
   `;
 }
@@ -448,6 +579,7 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
   const cleanPath = stripLocale(pathname.replace(/\/+$/, "") || "/");
   const lang = locale;
   const dir = locale === "ar" ? "rtl" : "ltr";
+  const servicePage = getSeoServicePageByCanonicalPath(cleanPath);
 
   if (cleanPath === "/") {
     return {
@@ -518,6 +650,49 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
             },
           }
         : null,
+    };
+  }
+
+  if (servicePage) {
+    const content = getSeoServicePageContent(servicePage, locale);
+    return {
+      lang,
+      dir,
+      title: content.seoTitle,
+      description: content.metaDescription,
+      canonicalPath: cleanPath,
+      ogType: "website",
+      robots: "index, follow",
+      image: DEFAULT_IMAGE,
+      fallbackHtml: servicePageFallback(locale, servicePage),
+      structuredData: [
+        {
+          "@context": "https://schema.org",
+          "@type": "Service",
+          name: content.shortTitle,
+          serviceType: content.shortTitle,
+          description: content.metaDescription,
+          provider: {
+            "@type": "Organization",
+            name: SITE_NAME,
+            url: `${origin}${localizePath("/", locale)}`,
+          },
+          areaServed: ["Canada", "United States"],
+          url: `${origin}${localizePath(cleanPath, locale)}`,
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: content.faq.map((item) => ({
+            "@type": "Question",
+            name: item.question,
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: item.answer,
+            },
+          })),
+        },
+      ],
     };
   }
 
@@ -630,6 +805,11 @@ export function buildSitemapXml(origin: string) {
     { canonicalPath: "/about", changefreq: "monthly", priority: "0.7" },
     { canonicalPath: "/privacy", changefreq: "monthly", priority: "0.5" },
     { canonicalPath: "/terms", changefreq: "monthly", priority: "0.5" },
+    ...SEO_SERVICE_PAGE_ORDER.map((key) => ({
+      canonicalPath: SEO_SERVICE_PAGES[key].canonicalPath,
+      changefreq: "monthly" as SitemapChangeFreq,
+      priority: "0.8",
+    })),
   ];
 
   const articleEntries = listPublishedArticles("en")

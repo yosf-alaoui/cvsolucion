@@ -4,6 +4,7 @@ import HeroSection from "@/components/HeroSection";
 import Footer from "@/components/Footer";
 import Seo from "@/components/Seo";
 import { useI18n } from "@/i18n/i18n";
+import { clearPendingHomeSection, readPendingHomeSection } from "@/lib/sectionNavigation";
 
 const HomeContentSections = lazy(() => import("@/components/HomeContentSections"));
 
@@ -21,22 +22,28 @@ export default function Home() {
   const [showSections, setShowSections] = useState(false);
 
   useEffect(() => {
-    const scrollToHash = () => {
-      const hash = window.location.hash;
-      if (!hash) return;
-      const target = document.getElementById(hash.slice(1));
+    const scrollToPendingTarget = () => {
+      const targetId = readPendingHomeSection() || window.location.hash.slice(1);
+      if (!targetId) return;
+      const target = document.getElementById(targetId);
       if (target) {
         target.scrollIntoView({ behavior: "smooth", block: "start" });
+        clearPendingHomeSection();
+        if (window.location.hash) {
+          window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
+        }
       }
     };
 
-    const timeout = window.setTimeout(scrollToHash, 0);
-    window.addEventListener("hashchange", scrollToHash);
+    const timeout = window.setTimeout(scrollToPendingTarget, 0);
+    window.addEventListener("hashchange", scrollToPendingTarget);
+    window.addEventListener("cvsolucion:scroll-home-section", scrollToPendingTarget as EventListener);
     return () => {
       window.clearTimeout(timeout);
-      window.removeEventListener("hashchange", scrollToHash);
+      window.removeEventListener("hashchange", scrollToPendingTarget);
+      window.removeEventListener("cvsolucion:scroll-home-section", scrollToPendingTarget as EventListener);
     };
-  }, []);
+  }, [showSections]);
 
   useEffect(() => {
     let idleHandle = 0;

@@ -5,6 +5,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
 import { getBookingHref } from "@/lib/site";
 import { getBookingCheckoutCount, getBookingCheckoutEventName } from "@/lib/bookingCheckout";
+import { navigateToHomeSection } from "@/lib/sectionNavigation";
+import { SEO_SERVICE_PAGE_ORDER, SEO_SERVICE_PAGES } from "@shared/seoServicePages";
+import { getSeoServicePageContent } from "@shared/seoServicePageLocales";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -92,6 +95,8 @@ export default function Header() {
   const frHref = getLocaleHref("fr");
   const arHref = getLocaleHref("ar");
   const prefix = locale === "en" ? "" : `/${locale}`;
+  const localizeSitePath = (path: string) =>
+    locale === "en" ? path : path === "/" ? `/${locale}` : `/${locale}${path}`;
   const homeHref = prefix || "/";
   const trainingHref = `${prefix}/training`;
   const designPricingHref = `${prefix}/design-pricing`;
@@ -99,7 +104,6 @@ export default function Header() {
   const aboutHref = `${prefix}/about`;
   const dashboardHref = `${prefix}/dashboard`;
   const loginHref = `${prefix}/login`;
-  const contactHref = `${homeHref}#contact`;
   const bookingHref = getBookingHref(locale);
   const cartHref = locale === "en" ? "/book/cart" : `/${locale}/book/cart`;
   const isAuthed = Boolean(user?.id);
@@ -109,16 +113,21 @@ export default function Header() {
   const contactLabel = locale === "ar" ? "تواصل" : locale === "fr" ? "Contact" : "Contact";
   const bookLabel = locale === "ar" ? "احجز استشارة" : locale === "fr" ? "Reserver" : "Book";
   const cartLabel = locale === "ar" ? "السلة" : locale === "fr" ? "Panier" : "Cart";
+  const servicesOverviewLabel =
+    locale === "ar" ? "كل الخدمات" : locale === "fr" ? "Vue d'ensemble des services" : "Services overview";
   const visibleCartCount = isAuthed ? cartCount : 0;
   const cartButtonLabel = visibleCartCount > 0 ? `${cartLabel} (${visibleCartCount})` : cartLabel;
+  const serviceMenuLinks = SEO_SERVICE_PAGE_ORDER.map((key) => {
+    const page = SEO_SERVICE_PAGES[key];
+    const content = getSeoServicePageContent(page, locale);
+    return {
+      href: localizeSitePath(page.canonicalPath),
+      label: content.shortTitle,
+    };
+  });
 
   const scrollToSection = (sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth" });
-    } else if (typeof window !== "undefined") {
-      window.location.href = `${homeHref}#${sectionId}`;
-    }
+    navigateToHomeSection(locale, sectionId);
     setIsMenuOpen(false);
   };
 
@@ -159,12 +168,33 @@ export default function Header() {
               <a href={aboutHref} className="font-semibold text-foreground transition-colors hover:text-primary">
                 {aboutLabel}
               </a>
-              <button
-                onClick={() => scrollToSection("services")}
-                className="font-semibold text-foreground transition-colors hover:text-primary"
-              >
-                {t("nav.services")}
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 font-semibold text-foreground transition-colors hover:text-primary"
+                  >
+                    {t("nav.services")}
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" className="w-80 rounded-2xl border-slate-200 bg-white/95 p-2 backdrop-blur-xl">
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-xl px-3 py-2 font-semibold"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      scrollToSection("services");
+                    }}
+                  >
+                    {servicesOverviewLabel}
+                  </DropdownMenuItem>
+                  {serviceMenuLinks.map((link) => (
+                    <DropdownMenuItem key={link.href} asChild className="cursor-pointer rounded-xl px-3 py-2">
+                      <a href={link.href}>{link.label}</a>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <button
                 onClick={() => scrollToSection("packages")}
                 className="font-semibold text-foreground transition-colors hover:text-primary"
@@ -180,11 +210,15 @@ export default function Header() {
             </nav>
 
             <div className="hidden items-center justify-end gap-3 xl:flex">
-              <Button asChild variant="outline" size="sm" className="rounded-full border-slate-200 bg-white/75 backdrop-blur">
-                <a href={contactHref}>
-                  <Mail className="h-4 w-4" />
-                  {contactLabel}
-                </a>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full border-slate-200 bg-white/75 backdrop-blur"
+                onClick={() => scrollToSection("contact")}
+              >
+                <Mail className="h-4 w-4" />
+                {contactLabel}
               </Button>
 
               <Button asChild size="sm" className="rounded-full bg-primary text-white shadow-sm hover:bg-primary/90">
@@ -402,12 +436,25 @@ export default function Header() {
                   Profile
                 </a>
               ) : null}
-              <button
-                onClick={() => scrollToSection("services")}
-                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
-              >
-                {t("nav.services")}
-              </button>
+              <div className="rounded-xl bg-white/35 p-2">
+                <button
+                  type="button"
+                  className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
+                  onClick={() => scrollToSection("services")}
+                >
+                  {servicesOverviewLabel}
+                </button>
+                {serviceMenuLinks.map((link) => (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    className="block rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-white/30 hover:text-primary"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </div>
               <button
                 onClick={() => scrollToSection("packages")}
                 className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
@@ -454,11 +501,14 @@ export default function Header() {
                     ) : null}
                   </a>
                 </Button>
-                <Button asChild variant="outline" className="w-full rounded-full bg-white/80">
-                  <a href={contactHref} onClick={() => setIsMenuOpen(false)}>
-                    <Mail className="h-4 w-4" />
-                    {contactLabel}
-                  </a>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full rounded-full bg-white/80"
+                  onClick={() => scrollToSection("contact")}
+                >
+                  <Mail className="h-4 w-4" />
+                  {contactLabel}
                 </Button>
                 <Button asChild className="w-full rounded-full bg-primary text-white hover:bg-primary/90">
                   <a
