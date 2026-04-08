@@ -7,6 +7,48 @@ type MailOptions = {
   text: string;
 };
 
+export class RecipientEmailRejectedError extends Error {
+  constructor() {
+    super("EMAIL_RECIPIENT_REJECTED");
+    this.name = "RecipientEmailRejectedError";
+  }
+}
+
+function isRecipientMailboxRejected(error: unknown) {
+  const errorLike = error as {
+    message?: string;
+    response?: string;
+    responseCode?: number;
+    code?: string;
+    rejected?: unknown[];
+    rejectedErrors?: Array<{ message?: string; response?: string; code?: string }>;
+  } | null;
+
+  const haystack = [
+    errorLike?.message,
+    errorLike?.response,
+    errorLike?.code,
+    ...(errorLike?.rejectedErrors?.flatMap((item) => [item?.message, item?.response, item?.code]) || []),
+  ]
+    .filter(Boolean)
+    .join(" | ")
+    .toLowerCase();
+
+  return [
+    "all recipients were rejected",
+    "recipient address rejected",
+    "mailbox does not exist",
+    "mailbox unavailable",
+    "user unknown",
+    "no such user",
+    "invalid recipient",
+    "recipient rejected",
+    "unknown user",
+    "550 5.1.1",
+    "550 5.4.6",
+  ].some((pattern) => haystack.includes(pattern));
+}
+
 function stripWrappingQuotes(value: string) {
   return value.replace(/^["']+|["']+$/g, "").trim();
 }
@@ -107,6 +149,9 @@ export async function sendAuthEmail(options: MailOptions) {
       subject: options.subject,
       error: error instanceof Error ? error.stack || error.message : String(error),
     });
+    if (isRecipientMailboxRejected(error)) {
+      throw new RecipientEmailRejectedError();
+    }
     throw error;
   }
 }

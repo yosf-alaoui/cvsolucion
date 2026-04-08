@@ -77,6 +77,30 @@ export default function Login() {
     return homeHref;
   }, [homeHref]);
 
+  const mapAuthError = (message: string) => {
+    const normalized = message.toLowerCase();
+    if (
+      normalized.includes("email_recipient_rejected") ||
+      normalized.includes("all recipients were rejected") ||
+      normalized.includes("recipient address rejected") ||
+      normalized.includes("mailbox does not exist") ||
+      normalized.includes("mailbox unavailable") ||
+      normalized.includes("user unknown") ||
+      normalized.includes("no such user") ||
+      normalized.includes("invalid recipient")
+    ) {
+      return t("auth.invalidInbox");
+    }
+    if (
+      normalized.includes("couldn't send the email right now") ||
+      normalized.includes("unable to send the verification email right now") ||
+      normalized.includes("delivery_failed")
+    ) {
+      return t("auth.emailDeliveryIssue");
+    }
+    return message;
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -124,9 +148,12 @@ export default function Login() {
         setAcceptTerms(false);
       }
     } catch (err: any) {
-      const message = err?.message === "Please confirm your email before signing in."
+      const rawMessage = String(err?.message || "");
+      const message = rawMessage === "Please confirm your email before signing in."
         ? t("auth.unverifiedLogin")
-        : err?.message || t("auth.genericError");
+        : rawMessage
+          ? mapAuthError(rawMessage)
+          : t("auth.genericError");
       setStatus(message);
       setStatusTone("error");
     } finally {

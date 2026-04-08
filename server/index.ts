@@ -25,7 +25,7 @@ import {
   updateUserPassword,
   verifyPassword,
 } from "./authStore";
-import { sendAuthEmail } from "./authMailer";
+import { RecipientEmailRejectedError, sendAuthEmail } from "./authMailer";
 import { normalizeAuthLocale, renderAuthEmailTemplate } from "./authEmailTemplates";
 import { createVisitorId, getVisitorsSnapshot, trackVisitor, trackVisitorInteraction } from "./visitorStore";
 import { getGa4DashboardSnapshot } from "./ga4Reporting";
@@ -468,6 +468,27 @@ async function sendLinkEmail(args: {
     text: emailTemplate.text,
     html: emailTemplate.html,
   });
+}
+
+function authEmailDeliveryMessage(
+  locale: string,
+  kind: "recipient_rejected" | "delivery_failed"
+) {
+  if (locale === "ar") {
+    return kind === "recipient_rejected"
+      ? "هذا البريد الإلكتروني لا يمكنه استقبال الرسائل. تحقق من كتابته أو استخدم بريدًا آخر."
+      : "تعذر إرسال الرسالة الآن. حاول مرة أخرى بعد قليل.";
+  }
+
+  if (locale === "fr") {
+    return kind === "recipient_rejected"
+      ? "Cette adresse email ne peut pas recevoir de messages. Verifiez l'adresse ou utilisez une autre boite."
+      : "Impossible d'envoyer l'email pour le moment. Reessayez dans un instant.";
+  }
+
+  return kind === "recipient_rejected"
+    ? "This email address cannot receive messages. Check the spelling or use a different inbox."
+    : "We couldn't send the email right now. Please try again in a moment.";
 }
 
 async function startServer() {
@@ -1543,7 +1564,15 @@ async function startServer() {
         ip: getRequestIp(req),
         userAgent: req.get("user-agent") || null,
       });
-      await sendLinkEmail({ email: user.email, locale, type: "verify", url: verifyUrl });
+      try {
+        await sendLinkEmail({ email: user.email, locale, type: "verify", url: verifyUrl });
+      } catch (error) {
+        if (error instanceof RecipientEmailRejectedError) {
+          deleteUserById(user.id);
+          return res.status(400).json({ error: authEmailDeliveryMessage(locale, "recipient_rejected") });
+        }
+        return res.status(502).json({ error: authEmailDeliveryMessage(locale, "delivery_failed") });
+      }
 
       return res.status(201).json({ ok: true });
     } catch (error) {
@@ -1628,7 +1657,14 @@ async function startServer() {
         ip: getRequestIp(req),
         userAgent: req.get("user-agent") || null,
       });
-      await sendLinkEmail({ email: user.email, locale, type: "reset", url: resetUrl });
+      try {
+        await sendLinkEmail({ email: user.email, locale, type: "reset", url: resetUrl });
+      } catch (error) {
+        if (error instanceof RecipientEmailRejectedError) {
+          return res.status(400).json({ error: authEmailDeliveryMessage(locale, "recipient_rejected") });
+        }
+        return res.status(502).json({ error: authEmailDeliveryMessage(locale, "delivery_failed") });
+      }
       return res.json({ ok: true });
     } catch (error) {
       return next(error);
@@ -1875,7 +1911,14 @@ async function startServer() {
 
       const { rawToken } = createToken(user.id, "verify_email", VERIFY_LINK_MS);
       const verifyUrl = `${appOrigin(req)}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}`;
-      await sendLinkEmail({ email: user.email, locale, type: "verify", url: verifyUrl });
+      try {
+        await sendLinkEmail({ email: user.email, locale, type: "verify", url: verifyUrl });
+      } catch (error) {
+        if (error instanceof RecipientEmailRejectedError) {
+          return res.status(400).json({ error: "This email address cannot receive messages. Update the address and try again." });
+        }
+        return res.status(502).json({ error: "Unable to send the verification email right now." });
+      }
 
       recordEvent({
         type: "admin_verification_sent",
