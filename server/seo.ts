@@ -6,6 +6,7 @@ import {
   type SeoServicePage,
 } from "../shared/seoServicePages";
 import { getSeoServicePageContent } from "../shared/seoServicePageLocales";
+import { getSeoServicePageImageSet } from "../shared/seoServicePageImages";
 
 type SeoDocument = {
   lang: string;
@@ -83,6 +84,10 @@ function localizePath(pathname: string, locale: ArticleLocale) {
   if (locale === "fr") return clean === "/" ? "/fr" : `/fr${clean}`;
   if (locale === "ar") return clean === "/" ? "/ar" : `/ar${clean}`;
   return clean;
+}
+
+function absoluteAssetUrl(origin: string, path: string) {
+  return `${origin}${path}`;
 }
 
 function escapeHtml(value: string) {
@@ -445,8 +450,9 @@ function routeDescriptionForLocale(locale: ArticleLocale, path: string) {
   return routeDescription(locale, path);
 }
 
-function servicePageFallback(locale: ArticleLocale, page: SeoServicePage) {
+function servicePageFallback(locale: ArticleLocale, page: SeoServicePage, origin: string) {
   const content = getSeoServicePageContent(page, locale);
+  const pageImages = getSeoServicePageImageSet(page.key);
   const blocks = content.blocks.map((block) => blockFallbackHtml(block)).join("");
   const faq = content.faq
     .map(
@@ -464,6 +470,15 @@ function servicePageFallback(locale: ArticleLocale, page: SeoServicePage) {
       `
     )
     .join("");
+  const images = [pageImages.hero, pageImages.mid, pageImages.preCta]
+    .map(
+      (path, index) => `
+        <figure>
+          <img src="${escapeHtml(absoluteAssetUrl(origin, path))}" alt="${escapeHtml(`${content.shortTitle} image ${index + 1}`)}" loading="lazy" />
+        </figure>
+      `
+    )
+    .join("");
 
   return `
     <main id="seo-fallback">
@@ -477,6 +492,7 @@ function servicePageFallback(locale: ArticleLocale, page: SeoServicePage) {
             <a href="${escapeHtml(localizePath("/", locale))}">${escapeHtml(SITE_NAME)}</a>
           </nav>
         </section>
+        <section>${images}</section>
         ${blocks}
         <section>
           <h2>${escapeHtml(faqHeading(locale))}</h2>
@@ -655,6 +671,8 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
 
   if (servicePage) {
     const content = getSeoServicePageContent(servicePage, locale);
+    const pageImages = getSeoServicePageImageSet(servicePage.key);
+    const heroImage = absoluteAssetUrl(origin, pageImages.hero);
     return {
       lang,
       dir,
@@ -663,8 +681,8 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
       canonicalPath: cleanPath,
       ogType: "website",
       robots: "index, follow",
-      image: DEFAULT_IMAGE,
-      fallbackHtml: servicePageFallback(locale, servicePage),
+      image: heroImage,
+      fallbackHtml: servicePageFallback(locale, servicePage, origin),
       structuredData: [
         {
           "@context": "https://schema.org",
@@ -672,6 +690,7 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
           name: content.shortTitle,
           serviceType: content.shortTitle,
           description: content.metaDescription,
+          image: [heroImage],
           provider: {
             "@type": "Organization",
             name: SITE_NAME,

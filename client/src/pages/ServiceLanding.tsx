@@ -27,6 +27,7 @@ import {
   type SeoServicePageKey,
 } from "@shared/seoServicePages";
 import { getSeoServicePageContent } from "@shared/seoServicePageLocales";
+import { getSeoServicePageImageSet } from "@shared/seoServicePageImages";
 
 const serviceIcons: Record<SeoServicePageKey, typeof ShieldCheck> = {
   support: ShieldCheck,
@@ -287,6 +288,37 @@ function currentPageUrl(locale: "en" | "fr" | "ar", canonicalPath: string) {
   return `https://cvsolucion.com${localizePath(locale, canonicalPath)}`;
 }
 
+function absoluteImageUrl(imagePath: string) {
+  if (typeof window !== "undefined") {
+    return new URL(imagePath, window.location.origin).toString();
+  }
+  return `https://cvsolucion.com${imagePath}`;
+}
+
+function ServiceImage({
+  src,
+  alt,
+  eager = false,
+}: {
+  src: string;
+  alt: string;
+  eager?: boolean;
+}) {
+  return (
+    <div className="overflow-hidden rounded-[28px] border border-primary/10 bg-white/60 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <img
+        src={src}
+        alt={alt}
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : "low"}
+        decoding="async"
+        className="aspect-[4/3] w-full object-cover"
+        style={{ objectPosition: "44% center" }}
+      />
+    </div>
+  );
+}
+
 export default function ServiceLanding() {
   const [location] = useLocation();
   const { locale } = useI18n();
@@ -301,6 +333,7 @@ export default function ServiceLanding() {
 
   const Icon = serviceIcons[page.key];
   const pageContent = getSeoServicePageContent(page, locale);
+  const pageImages = getSeoServicePageImageSet(page.key);
   const copy = uiCopy[locale];
   const prefix = locale === "en" ? "" : `/${locale}`;
   const homeHref = prefix || "/";
@@ -315,6 +348,10 @@ export default function ServiceLanding() {
   );
 
   const currentUrl = currentPageUrl(locale, page.canonicalPath);
+  const heroImageUrl = absoluteImageUrl(pageImages.hero);
+  const midInsertIndex = pageContent.blocks.length >= 4 ? 2 : 1;
+  const leadingBlocks = pageContent.blocks.slice(0, midInsertIndex);
+  const trailingBlocks = pageContent.blocks.slice(midInsertIndex);
   const structuredData = useMemo(
     () => [
       {
@@ -323,6 +360,7 @@ export default function ServiceLanding() {
         name: pageContent.shortTitle,
         serviceType: pageContent.shortTitle,
         description: pageContent.metaDescription,
+        image: [heroImageUrl],
         provider: {
           "@type": "Organization",
           name: "CVsolucion",
@@ -362,12 +400,17 @@ export default function ServiceLanding() {
         ],
       },
     ],
-    [currentUrl, homeHref, pageContent],
+    [currentUrl, heroImageUrl, homeHref, pageContent],
   );
 
   return (
     <div className="site-page min-h-screen flex flex-col bg-transparent">
-      <Seo title={pageContent.seoTitle} description={pageContent.metaDescription} structuredData={structuredData} />
+      <Seo
+        title={pageContent.seoTitle}
+        description={pageContent.metaDescription}
+        image={heroImageUrl}
+        structuredData={structuredData}
+      />
       <Header />
 
       <main className="flex-1 pt-28">
@@ -426,12 +469,33 @@ export default function ServiceLanding() {
                     {copy.backToServices}
                   </button>
                 </div>
+
+                <div className="mt-10">
+                  <ServiceImage
+                    src={pageImages.hero}
+                    alt={`${pageContent.shortTitle} - ${pageContent.heroLead}`}
+                    eager
+                  />
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {pageContent.blocks.map((block) => renderBlock(block, Icon))}
+        {leadingBlocks.map((block) => renderBlock(block, Icon))}
+
+        <section className="pb-10">
+          <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
+            <div className="glass-card rounded-[32px] p-3 md:p-4">
+              <ServiceImage
+                src={pageImages.mid}
+                alt={`${pageContent.shortTitle} - ${pageContent.blocks[Math.max(0, midInsertIndex - 1)]?.title || pageContent.h1}`}
+              />
+            </div>
+          </div>
+        </section>
+
+        {trailingBlocks.map((block) => renderBlock(block, Icon))}
 
         <section className="pb-10">
           <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
@@ -494,6 +558,17 @@ export default function ServiceLanding() {
                   </GlassCard>
                 );
               })}
+            </div>
+          </div>
+        </section>
+
+        <section className="pb-10">
+          <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
+            <div className="glass-card rounded-[32px] p-3 md:p-4">
+              <ServiceImage
+                src={pageImages.preCta}
+                alt={`${pageContent.shortTitle} - ${copy.finalTitle}`}
+              />
             </div>
           </div>
         </section>
