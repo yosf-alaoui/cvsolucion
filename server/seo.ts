@@ -8,6 +8,13 @@ import {
 import { getSeoServicePageContent } from "../shared/seoServicePageLocales";
 import { getSeoServicePageImageSet } from "../shared/seoServicePageImages";
 import { TRAINING_SEO_CONTENT } from "../shared/trainingSeoContent";
+import {
+  SEO_KNOWLEDGE_PAGE_ORDER,
+  SEO_KNOWLEDGE_PAGES,
+  getSeoKnowledgePageByCanonicalPath,
+  getSeoKnowledgePageContent,
+  type SeoKnowledgePage,
+} from "../shared/seoKnowledgePages";
 
 type SeoDocument = {
   lang: string;
@@ -271,6 +278,16 @@ function servicePagesHeading(locale: ArticleLocale) {
   return map[locale];
 }
 
+function knowledgePagesHeading(locale: ArticleLocale) {
+  const map = {
+    en: "Cabinet Vision troubleshooting guides",
+    fr: "Guides de diagnostic Cabinet Vision",
+    ar: "أدلة تشخيص Cabinet Vision",
+  } as const;
+
+  return map[locale];
+}
+
 function faqHeading(locale: ArticleLocale) {
   const map = {
     en: "Frequently asked questions",
@@ -376,6 +393,13 @@ function homeFallback(locale: ArticleLocale) {
       }
     )
     .join("");
+  const knowledgeLinks = SEO_KNOWLEDGE_PAGE_ORDER
+    .map((key) => SEO_KNOWLEDGE_PAGES[key])
+    .map((page) => {
+      const content = getSeoKnowledgePageContent(page, locale);
+      return `<li><a href="${escapeHtml(localizePath(page.canonicalPath, locale))}">${escapeHtml(content.shortTitle)}</a><p>${escapeHtml(content.metaDescription)}</p></li>`;
+    })
+    .join("");
   const highlights = homeHighlights(locale)
     .map(
       (item) => `
@@ -400,6 +424,8 @@ function homeFallback(locale: ArticleLocale) {
         <p>${escapeHtml(copy.p4)}</p>
         <h2>${escapeHtml(servicePagesHeading(locale))}</h2>
         <ul>${serviceLinks}</ul>
+        <h2>${escapeHtml(knowledgePagesHeading(locale))}</h2>
+        <ul>${knowledgeLinks}</ul>
         <h2>${escapeHtml(copy.h2b)}</h2>
         <ul>
           <li><a href="${escapeHtml(localizePath("/training", locale))}">${escapeHtml(linkLabel(locale, "/training") || "")}</a></li>
@@ -444,12 +470,16 @@ function blockFallbackHtml(block: SeoServicePage["blocks"][number]) {
 }
 
 function routeLabelForLocale(locale: ArticleLocale, path: string) {
+  const knowledgePage = getSeoKnowledgePageByCanonicalPath(path);
+  if (knowledgePage) return getSeoKnowledgePageContent(knowledgePage, locale).shortTitle;
   const servicePage = getSeoServicePageByCanonicalPath(path);
   if (servicePage) return getSeoServicePageContent(servicePage, locale).shortTitle;
   return linkLabel(locale, path) || routeTitle(locale, path).replace(" | CVsolucion", "");
 }
 
 function routeDescriptionForLocale(locale: ArticleLocale, path: string) {
+  const knowledgePage = getSeoKnowledgePageByCanonicalPath(path);
+  if (knowledgePage) return getSeoKnowledgePageContent(knowledgePage, locale).metaDescription;
   const servicePage = getSeoServicePageByCanonicalPath(path);
   if (servicePage) return getSeoServicePageContent(servicePage, locale).metaDescription;
   return routeDescription(locale, path);
@@ -614,6 +644,89 @@ function servicePageFallback(locale: ArticleLocale, page: SeoServicePage, origin
   `;
 }
 
+function knowledgeBlockFallback(block: SeoKnowledgePage["content"]["en"]["blocks"][number]) {
+  const paragraphs = block.paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
+  const bullets = block.bullets?.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "";
+  return `<section><h2>${escapeHtml(block.title)}</h2>${paragraphs}${bullets ? `<ul>${bullets}</ul>` : ""}</section>`;
+}
+
+function knowledgePageFallback(locale: ArticleLocale, page: SeoKnowledgePage) {
+  const content = getSeoKnowledgePageContent(page, locale);
+  const blocks = content.blocks.map((item) => knowledgeBlockFallback(item)).join("");
+  const faq = content.faq
+    .map((item) => `<li><strong>${escapeHtml(item.question)}</strong><p>${escapeHtml(item.answer)}</p></li>`)
+    .join("");
+  const related = page.relatedPaths
+    .map(
+      (path) => `
+        <li>
+          <a href="${escapeHtml(localizePath(path, locale))}">${escapeHtml(routeLabelForLocale(locale, path))}</a>
+          <p>${escapeHtml(routeDescriptionForLocale(locale, path))}</p>
+        </li>
+      `,
+    )
+    .join("");
+
+  return `
+    <main id="seo-fallback">
+      <article>
+        <section>
+          <p>${escapeHtml(content.heroBadge)}</p>
+          <h1>${escapeHtml(content.h1)}</h1>
+          <p>${escapeHtml(content.heroLead)}</p>
+          <p>${escapeHtml(content.intro)}</p>
+          <nav class="seo-links">
+            <a href="${escapeHtml(localizePath("/book", locale))}">${escapeHtml(routeLabelForLocale(locale, "/book"))}</a>
+            <a href="${escapeHtml(localizePath("/cabinet-vision-troubleshooting", locale))}">${escapeHtml(routeLabelForLocale(locale, "/cabinet-vision-troubleshooting"))}</a>
+          </nav>
+        </section>
+        ${blocks}
+        <section>
+          <h2>${escapeHtml(faqHeading(locale))}</h2>
+          <ul>${faq}</ul>
+        </section>
+        <section>
+          <h2>${escapeHtml(relatedPagesHeading(locale))}</h2>
+          <ul>${related}</ul>
+        </section>
+      </article>
+    </main>
+  `;
+}
+
+function knowledgeStructuredData(locale: ArticleLocale, page: SeoKnowledgePage, origin: string) {
+  const content = getSeoKnowledgePageContent(page, locale);
+  const url = `${origin}${localizePath(page.canonicalPath, locale)}`;
+
+  return [
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      headline: content.h1,
+      description: content.metaDescription,
+      inLanguage: locale,
+      mainEntityOfPage: url,
+      publisher: {
+        "@type": "Organization",
+        name: SITE_NAME,
+        url: `${origin}${localizePath("/", locale)}`,
+      },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: content.faq.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.answer,
+        },
+      })),
+    },
+  ];
+}
+
 function routeFallback(locale: ArticleLocale, path: string) {
   if (path === "/training") return trainingFallback(locale);
 
@@ -705,6 +818,7 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
   const lang = locale;
   const dir = locale === "ar" ? "rtl" : "ltr";
   const servicePage = getSeoServicePageByCanonicalPath(cleanPath);
+  const knowledgePage = getSeoKnowledgePageByCanonicalPath(cleanPath);
 
   if (cleanPath === "/") {
     return {
@@ -840,6 +954,22 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
     };
   }
 
+  if (knowledgePage) {
+    const content = getSeoKnowledgePageContent(knowledgePage, locale);
+    return {
+      lang,
+      dir,
+      title: content.seoTitle,
+      description: content.metaDescription,
+      canonicalPath: cleanPath,
+      ogType: "article",
+      robots: "index, follow",
+      image: DEFAULT_IMAGE,
+      fallbackHtml: knowledgePageFallback(locale, knowledgePage),
+      structuredData: knowledgeStructuredData(locale, knowledgePage, origin),
+    };
+  }
+
   const robots = cleanPath === "/login" || cleanPath === "/dashboard" ? "noindex, nofollow" : "index, follow";
 
   return {
@@ -953,6 +1083,11 @@ export function buildSitemapXml(origin: string) {
       canonicalPath: SEO_SERVICE_PAGES[key].canonicalPath,
       changefreq: "monthly" as SitemapChangeFreq,
       priority: "0.85",
+    })),
+    ...SEO_KNOWLEDGE_PAGE_ORDER.map((key) => ({
+      canonicalPath: SEO_KNOWLEDGE_PAGES[key].canonicalPath,
+      changefreq: "monthly" as SitemapChangeFreq,
+      priority: "0.82",
     })),
   ];
 

@@ -9,6 +9,7 @@ import DotWaveBackground from "./components/DotWaveBackground";
 import { I18nProvider } from "@/i18n/i18n";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SEO_SERVICE_PAGE_ORDER, SEO_SERVICE_PAGES } from "@shared/seoServicePages";
+import { SEO_KNOWLEDGE_PAGE_ORDER, SEO_KNOWLEDGE_PAGES } from "@shared/seoKnowledgePages";
 
 const Training = lazy(() => import("./pages/Training"));
 const Login = lazy(() => import("./pages/Login"));
@@ -23,12 +24,18 @@ const Booking = lazy(() => import("./pages/Booking"));
 const BookingCart = lazy(() => import("./pages/BookingCart"));
 const BookingCheckout = lazy(() => import("./pages/BookingCheckout"));
 const ServiceLanding = lazy(() => import("./pages/ServiceLanding"));
+const SeoKnowledgeLanding = lazy(() => import("./pages/SeoKnowledgeLanding"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Analytics = lazy(() => import("./components/Analytics"));
 const ChatWidget = lazy(() => import("./components/ChatWidget"));
 
 const serviceRoutes = SEO_SERVICE_PAGE_ORDER.flatMap((key) => {
   const path = SEO_SERVICE_PAGES[key].canonicalPath;
+  return [path, `/fr${path}`, `/ar${path}`];
+});
+
+const knowledgeRoutes = SEO_KNOWLEDGE_PAGE_ORDER.flatMap((key) => {
+  const path = SEO_KNOWLEDGE_PAGES[key].canonicalPath;
   return [path, `/fr${path}`, `/ar${path}`];
 });
 
@@ -140,6 +147,9 @@ function Router() {
       <Route path={"/ar/book"} component={Booking} />
       {serviceRoutes.map((path) => (
         <Route key={path} path={path} component={ServiceLanding} />
+      ))}
+      {knowledgeRoutes.map((path) => (
+        <Route key={path} path={path} component={SeoKnowledgeLanding} />
       ))}
       {/* Legal */}
       <Route path={"/privacy"} component={Privacy} />

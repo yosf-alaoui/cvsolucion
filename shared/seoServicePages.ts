@@ -247,6 +247,10 @@ export const SEO_SERVICE_PAGES: Record<SeoServicePageKey, SeoServicePage> = {
       "/cabinet-vision-support",
       "/cabinet-vision-performance-optimization",
       "/cabinet-vision-cnc-integration",
+      "/cabinet-vision-s2m-troubleshooting",
+      "/cabinet-vision-database-errors",
+      "/cabinet-vision-report-errors",
+      "/cabinet-vision-cnc-output-problems",
       "/training",
       "/cabinet-vision-install-backup-restore",
       "/articles",
@@ -399,6 +403,8 @@ export const SEO_SERVICE_PAGES: Record<SeoServicePageKey, SeoServicePage> = {
     ],
     relatedPaths: [
       "/cabinet-vision-troubleshooting",
+      "/cabinet-vision-s2m-troubleshooting",
+      "/cabinet-vision-cnc-output-problems",
       "/cabinet-vision-performance-optimization",
       "/articles",
     ],
@@ -477,6 +483,7 @@ export const SEO_SERVICE_PAGES: Record<SeoServicePageKey, SeoServicePage> = {
     ],
     relatedPaths: [
       "/cabinet-vision-troubleshooting",
+      "/cabinet-vision-slow-performance",
       "/cabinet-vision-support",
       "/cabinet-vision-cnc-integration",
     ],

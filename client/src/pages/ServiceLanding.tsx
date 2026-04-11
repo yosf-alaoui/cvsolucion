@@ -28,6 +28,10 @@ import {
 } from "@shared/seoServicePages";
 import { getSeoServicePageContent } from "@shared/seoServicePageLocales";
 import { getSeoServicePageImageSet } from "@shared/seoServicePageImages";
+import {
+  getSeoKnowledgePageByCanonicalPath,
+  getSeoKnowledgePageContent,
+} from "@shared/seoKnowledgePages";
 
 const serviceIcons: Record<SeoServicePageKey, typeof ShieldCheck> = {
   support: ShieldCheck,
@@ -158,6 +162,15 @@ function localizePath(locale: "en" | "fr" | "ar", path: string) {
 }
 
 function relatedLinkMeta(locale: "en" | "fr" | "ar", path: string) {
+  const knowledgePage = getSeoKnowledgePageByCanonicalPath(path);
+  if (knowledgePage) {
+    const content = getSeoKnowledgePageContent(knowledgePage, locale);
+    return {
+      title: content.shortTitle,
+      description: content.metaDescription,
+    };
+  }
+
   const servicePage = getSeoServicePageByCanonicalPath(path);
   if (servicePage) {
     const content = getSeoServicePageContent(servicePage, locale);
