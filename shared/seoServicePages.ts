@@ -155,23 +155,34 @@ export const SEO_SERVICE_PAGES: Record<SeoServicePageKey, SeoServicePage> = {
     key: "troubleshooting",
     canonicalPath: "/cabinet-vision-troubleshooting",
     shortTitle: "Cabinet Vision Troubleshooting",
-    seoTitle: "Cabinet Vision Troubleshooting Services | CVsolucion",
+    seoTitle: "Cabinet Vision Troubleshooting, S2M Errors & Workflow Fixes | CVsolucion",
     metaDescription:
-      "Fix Cabinet Vision errors, unstable behavior, report issues, broken logic, and production workflow problems with practical troubleshooting support.",
-    h1: "Cabinet Vision Troubleshooting That Goes Beyond Trial and Error",
+      "Fix Cabinet Vision errors, S2M issues, database problems, slow performance, broken reports, and unstable production workflows with practical troubleshooting.",
+    h1: "Cabinet Vision Troubleshooting for Errors, S2M Issues, and Production Failures",
     heroBadge: "ERROR TROUBLESHOOTING",
     heroLead:
-      "Fix Cabinet Vision errors, unstable behavior, broken reports, and workflow problems before they turn into production delays.",
+      "Fix Cabinet Vision errors, S2M output problems, unstable behavior, broken reports, and workflow failures before they turn into production delays.",
     heroBody:
-      "Most recurring Cabinet Vision issues are not random. They are usually connected to formulas, libraries, material structure, reports, machine output, or changes made without a stable process. CVsolucion helps shops isolate the root cause, correct the structure, and reduce the chance of the same issue returning.",
+      "Most recurring Cabinet Vision issues are not random. They are usually connected to formulas, libraries, material structure, reports, machine output, S2M/xMachining assumptions, or changes made without a stable process. CVsolucion helps shops isolate the root cause, correct the structure, and reduce the chance of the same issue returning.",
     blocks: [
       {
         type: "cards",
         title: "Problems this page targets",
         items: [
           "Repeated errors and warning messages",
-          "Reports or labels that no longer match production",
+          "Reports, labels, or cutlists that no longer match production",
           "Jobs that behave differently from one file to the next",
+        ],
+      },
+      {
+        type: "cards",
+        title: "Specific Cabinet Vision issues covered",
+        intro:
+          "This page is positioned for search intent around real Cabinet Vision problems, not generic software support. It helps shops that are looking for a practical next step when production output is slow, inconsistent, or unsafe to trust.",
+        items: [
+          "S2M and Screen-to-Machine output that needs manual correction",
+          "Database, material, or catalog errors that block reliable job setup",
+          "Slow Cabinet Vision jobs, freezes, report failures, and unstable files",
         ],
       },
       {
@@ -179,6 +190,22 @@ export const SEO_SERVICE_PAGES: Record<SeoServicePageKey, SeoServicePage> = {
         title: "What usually causes the issue",
         paragraphs: [
           "Troubleshooting is often slowed down when teams focus only on the visible symptom. In reality, the source may be a formula issue, a misnamed part, a damaged standard, a broken report condition, or a mismatch between design intent and production logic. The purpose of this service is to identify that hidden layer instead of wasting time on temporary workarounds.",
+        ],
+      },
+      {
+        type: "copy",
+        title: "S2M and Screen-to-Machine troubleshooting",
+        paragraphs: [
+          "When S2M or Screen-to-Machine output becomes unreliable, the visible problem may appear at the CNC, but the root cause often starts earlier. CVsolucion checks the connection between material logic, construction methods, machining assumptions, report output, and operator expectations so the shop can understand whether the issue is really a post problem, a setup problem, or a workflow validation problem.",
+          "This is especially important when old CAM output is still used as a comparison point. If the new Cabinet Vision output is technically correct but not validated by the operator, the team will keep second-guessing every file. Troubleshooting must solve both the technical mismatch and the trust gap.",
+        ],
+      },
+      {
+        type: "copy",
+        title: "Database, reports, and slow performance",
+        paragraphs: [
+          "Cabinet Vision database errors, broken report conditions, slow jobs, and inconsistent labels usually point to structural issues. The fix is rarely a single click. The system needs a controlled review of naming, standards, report groups, materials, assemblies, and the exact sequence that reproduces the failure.",
+          "By documenting the symptom, isolating the cause, and validating the corrected output, the shop gets a clearer path than trial-and-error support calls or repeated manual corrections.",
         ],
       },
       {
@@ -219,6 +246,8 @@ export const SEO_SERVICE_PAGES: Record<SeoServicePageKey, SeoServicePage> = {
     relatedPaths: [
       "/cabinet-vision-support",
       "/cabinet-vision-performance-optimization",
+      "/cabinet-vision-cnc-integration",
+      "/training",
       "/cabinet-vision-install-backup-restore",
       "/articles",
     ],
@@ -299,13 +328,13 @@ export const SEO_SERVICE_PAGES: Record<SeoServicePageKey, SeoServicePage> = {
     key: "cnc-integration",
     canonicalPath: "/cabinet-vision-cnc-integration",
     shortTitle: "Cabinet Vision CNC Integration",
-    seoTitle: "Cabinet Vision CNC Integration & Output Support | CVsolucion",
+    seoTitle: "Cabinet Vision S2M, CNC Integration & Output Support | CVsolucion",
     metaDescription:
-      "Improve Cabinet Vision CNC integration, output consistency, and operator trust with structured review of setup, logic, and production handoff.",
-    h1: "Cabinet Vision CNC Integration for More Reliable Machine-Ready Output",
+      "Improve Cabinet Vision S2M, Screen-to-Machine, CNC integration, output consistency, and operator trust with structured workflow review.",
+    h1: "Cabinet Vision S2M and CNC Integration for Reliable Machine-Ready Output",
     heroBadge: "CNC INTEGRATION",
     heroLead:
-      "Improve the connection between Cabinet Vision and your CNC workflow so output becomes more predictable, more usable, and easier to trust on the shop floor.",
+      "Improve the connection between Cabinet Vision, S2M, xMachining, and your CNC workflow so output becomes more predictable and easier to trust on the shop floor.",
     heroBody:
       "CNC issues are rarely just machine issues. They often begin upstream in design logic, materials, reports, machining assumptions, or post behavior. CVsolucion helps shops review the full path from model to machine-ready output so operators spend less time second-guessing files.",
     blocks: [
@@ -321,6 +350,14 @@ export const SEO_SERVICE_PAGES: Record<SeoServicePageKey, SeoServicePage> = {
         title: "What gets reviewed",
         paragraphs: [
           "CVsolucion reviews how data moves from design into production output. That can include material logic, machining expectations, report consistency, cutlist behavior, and the practical usability of the resulting files. The goal is not theoretical integration. It is dependable output that production teams can use with confidence.",
+        ],
+      },
+      {
+        type: "copy",
+        title: "S2M and Screen-to-Machine validation",
+        paragraphs: [
+          "For Cabinet Vision S2M and Screen-to-Machine workflows, the strongest validation happens before live production pressure. The review looks at how selected materials, construction methods, machining rules, reports, and output files behave together. If the operator cannot trust the output, the integration is not finished.",
+          "This page is designed for shops searching for Cabinet Vision S2M support, CNC output troubleshooting, or a safer way to move from design data to machine-ready files.",
         ],
       },
       {
@@ -344,7 +381,7 @@ export const SEO_SERVICE_PAGES: Record<SeoServicePageKey, SeoServicePage> = {
       {
         question: "Do you work with S2M and machining workflows?",
         answer:
-          "Yes. This page is specifically positioned for shops that need better production output reliability.",
+          "Yes. This page is specifically positioned for Cabinet Vision S2M, xMachining, and machine-ready output reliability.",
       },
       {
         question: "Can this help if the output is not wrong every time?",
@@ -370,10 +407,10 @@ export const SEO_SERVICE_PAGES: Record<SeoServicePageKey, SeoServicePage> = {
     key: "performance-optimization",
     canonicalPath: "/cabinet-vision-performance-optimization",
     shortTitle: "Cabinet Vision Performance Optimization",
-    seoTitle: "Cabinet Vision Performance Optimization | CVsolucion",
+    seoTitle: "Slow Cabinet Vision Performance Optimization | CVsolucion",
     metaDescription:
-      "Speed up Cabinet Vision, reduce crashes, and improve system stability with structured performance review and workflow optimization.",
-    h1: "Cabinet Vision Performance Optimization for Faster, More Stable Work",
+      "Speed up slow Cabinet Vision jobs, reduce crashes, fix freezes, and improve system stability with structured performance and workflow review.",
+    h1: "Slow Cabinet Vision Performance Optimization for Faster, More Stable Work",
     heroBadge: "PERFORMANCE OPTIMIZATION",
     heroLead:
       "Reduce slowdowns, crashes, and unstable behavior so Cabinet Vision becomes faster to use and easier for your team to rely on.",
@@ -394,6 +431,14 @@ export const SEO_SERVICE_PAGES: Record<SeoServicePageKey, SeoServicePage> = {
         title: "Why performance problems spread",
         paragraphs: [
           "Poor performance does more than waste minutes. It changes behavior. Teams start avoiding certain tasks, postponing cleanup, or creating workarounds that make the system harder to maintain. That is why performance optimization should be treated as an operational issue, not just a technical annoyance.",
+        ],
+      },
+      {
+        type: "copy",
+        title: "What to check when Cabinet Vision is slow",
+        paragraphs: [
+          "Slow Cabinet Vision performance can come from heavy jobs, unstable standards, overloaded libraries, report logic, material structure, network behavior, or a workflow that has accumulated too many manual exceptions. The first step is to identify whether the slowdown is file-specific, user-specific, workstation-specific, or system-wide.",
+          "CVsolucion reviews the pattern before recommending changes. This prevents the team from blaming hardware too early when the real bottleneck is in the setup, reports, library structure, or production workflow.",
         ],
       },
       {

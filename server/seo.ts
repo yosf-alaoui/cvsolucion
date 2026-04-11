@@ -7,6 +7,7 @@ import {
 } from "../shared/seoServicePages";
 import { getSeoServicePageContent } from "../shared/seoServicePageLocales";
 import { getSeoServicePageImageSet } from "../shared/seoServicePageImages";
+import { TRAINING_SEO_CONTENT } from "../shared/trainingSeoContent";
 
 type SeoDocument = {
   lang: string;
@@ -133,6 +134,8 @@ function articleParagraphs(value: string, maxParagraphs = 5) {
 }
 
 function routeTitle(locale: ArticleLocale, path: string) {
+  if (path === "/training") return TRAINING_SEO_CONTENT[locale].seoTitle;
+
   const map = {
     en: {
       "/training": "Cabinet Vision Training | CVsolucion",
@@ -173,6 +176,8 @@ function routeTitle(locale: ArticleLocale, path: string) {
 }
 
 function routeDescription(locale: ArticleLocale, path: string) {
+  if (path === "/training") return TRAINING_SEO_CONTENT[locale].metaDescription;
+
   const map = {
     en: {
       "/training": "Remote Cabinet Vision training for designers, engineers, and production teams with practical sessions and implementation guidance.",
@@ -450,6 +455,108 @@ function routeDescriptionForLocale(locale: ArticleLocale, path: string) {
   return routeDescription(locale, path);
 }
 
+function trainingFallback(locale: ArticleLocale) {
+  const copy = TRAINING_SEO_CONTENT[locale];
+  const outcomes = copy.outcomes
+    .map((item) => `<li><strong>${escapeHtml(item.title)}:</strong> ${escapeHtml(item.body)}</li>`)
+    .join("");
+  const modules = copy.modules
+    .map(
+      (module) => `
+        <section>
+          <h3>${escapeHtml(module.title)}</h3>
+          <ul>${module.items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </section>
+      `,
+    )
+    .join("");
+  const process = copy.process
+    .map((step) => `<li><strong>${escapeHtml(step.label)}.</strong> ${escapeHtml(step.text)}</li>`)
+    .join("");
+  const faq = copy.faq
+    .map((item) => `<li><strong>${escapeHtml(item.question)}</strong><p>${escapeHtml(item.answer)}</p></li>`)
+    .join("");
+  const related = copy.related
+    .map(
+      (item) => `
+        <li>
+          <a href="${escapeHtml(localizePath(item.href, locale))}">${escapeHtml(item.title)}</a>
+          <p>${escapeHtml(item.description)}</p>
+        </li>
+      `,
+    )
+    .join("");
+
+  return `
+    <main id="seo-fallback">
+      <article>
+        <section>
+          <h1>${escapeHtml(copy.h1)}</h1>
+          <p>${escapeHtml(copy.intro)}</p>
+          <nav class="seo-links">
+            <a href="${escapeHtml(localizePath("/book", locale))}">${escapeHtml(linkLabel(locale, "/book") || "Book")}</a>
+            <a href="${escapeHtml(localizePath("/cabinet-vision-support", locale))}">${escapeHtml(routeLabelForLocale(locale, "/cabinet-vision-support"))}</a>
+            <a href="${escapeHtml(localizePath("/cabinet-vision-cnc-integration", locale))}">${escapeHtml(routeLabelForLocale(locale, "/cabinet-vision-cnc-integration"))}</a>
+          </nav>
+        </section>
+        <section>
+          <h2>${escapeHtml(copy.outcomesTitle)}</h2>
+          <ul>${outcomes}</ul>
+        </section>
+        <section>
+          <h2>${escapeHtml(copy.modulesTitle)}</h2>
+          ${modules}
+        </section>
+        <section>
+          <h2>${escapeHtml(copy.processTitle)}</h2>
+          <ol>${process}</ol>
+        </section>
+        <section>
+          <h2>${escapeHtml(copy.faqTitle)}</h2>
+          <ul>${faq}</ul>
+        </section>
+        <section>
+          <h2>${escapeHtml(copy.relatedTitle)}</h2>
+          <ul>${related}</ul>
+        </section>
+      </article>
+    </main>
+  `;
+}
+
+function trainingStructuredData(locale: ArticleLocale, origin: string) {
+  const copy = TRAINING_SEO_CONTENT[locale];
+
+  return [
+    {
+      "@context": "https://schema.org",
+      "@type": "Service",
+      name: copy.h1,
+      serviceType: "Cabinet Vision Training",
+      description: copy.metaDescription,
+      provider: {
+        "@type": "Organization",
+        name: SITE_NAME,
+        url: `${origin}${localizePath("/", locale)}`,
+      },
+      areaServed: ["Canada", "United States"],
+      url: `${origin}${localizePath("/training", locale)}`,
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: copy.faq.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.answer,
+        },
+      })),
+    },
+  ];
+}
+
 function servicePageFallback(locale: ArticleLocale, page: SeoServicePage, origin: string) {
   const content = getSeoServicePageContent(page, locale);
   const pageImages = getSeoServicePageImageSet(page.key);
@@ -508,6 +615,8 @@ function servicePageFallback(locale: ArticleLocale, page: SeoServicePage, origin
 }
 
 function routeFallback(locale: ArticleLocale, path: string) {
+  if (path === "/training") return trainingFallback(locale);
+
   const title = routeTitle(locale, path);
   const description = routeDescription(locale, path);
   return `
@@ -617,6 +726,22 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
         areaServed: ["Canada", "United States"],
         serviceType: ["Cabinet Vision Consulting", "Cabinet Vision Training", "Cabinet Vision Support"],
       },
+    };
+  }
+
+  if (cleanPath === "/training") {
+    const copy = TRAINING_SEO_CONTENT[locale];
+    return {
+      lang,
+      dir,
+      title: copy.seoTitle,
+      description: copy.metaDescription,
+      canonicalPath: cleanPath,
+      ogType: "website",
+      robots: "index, follow",
+      image: DEFAULT_IMAGE,
+      fallbackHtml: trainingFallback(locale),
+      structuredData: trainingStructuredData(locale, origin),
     };
   }
 
@@ -819,7 +944,7 @@ export function buildSitemapXml(origin: string) {
     { canonicalPath: "/", changefreq: "weekly", priority: "1.0" },
     { canonicalPath: "/book", changefreq: "weekly", priority: "0.9" },
     { canonicalPath: "/articles", changefreq: "weekly", priority: "0.9" },
-    { canonicalPath: "/training", changefreq: "monthly", priority: "0.8" },
+    { canonicalPath: "/training", changefreq: "weekly", priority: "0.9" },
     { canonicalPath: "/design-pricing", changefreq: "monthly", priority: "0.8" },
     { canonicalPath: "/about", changefreq: "monthly", priority: "0.7" },
     { canonicalPath: "/privacy", changefreq: "monthly", priority: "0.5" },
@@ -827,7 +952,7 @@ export function buildSitemapXml(origin: string) {
     ...SEO_SERVICE_PAGE_ORDER.map((key) => ({
       canonicalPath: SEO_SERVICE_PAGES[key].canonicalPath,
       changefreq: "monthly" as SitemapChangeFreq,
-      priority: "0.8",
+      priority: "0.85",
     })),
   ];
 
