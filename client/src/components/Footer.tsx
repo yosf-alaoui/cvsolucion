@@ -17,8 +17,10 @@ export default function Footer() {
   const designPricingHref = locale === "en" ? "/design-pricing" : `/${locale}/design-pricing`;
   const aboutHref = `${prefix}/about`;
   const articlesHref = `${prefix}/articles`;
+  const guidesHref = `${prefix}/guides`;
   const aboutLabel = locale === "ar" ? "من نحن" : locale === "fr" ? "A propos" : "About";
   const articlesLabel = locale === "ar" ? "المقالات" : locale === "fr" ? "Articles" : "Articles";
+  const guidesLabel = locale === "ar" ? "الأدلة" : "Guides";
   const contactLabel = locale === "ar" ? "تواصل" : locale === "fr" ? "Contact" : "Contact";
 
   const whatsappHref = useMemo(() => buildWhatsAppLink("+1 438 807 8747", t("whatsapp.general")), [t]);
@@ -172,12 +174,15 @@ export default function Footer() {
           {/* Bottom Footer */}
           <div className="flex flex-col md:flex-row justify-between items-center text-sm text-white/70">
             <p>&copy; {currentYear} CV Solution. {t("footer.rights")}</p>
-            <div className="flex gap-6 mt-4 md:mt-0">
+            <div className="mt-4 flex flex-wrap justify-center gap-6 md:mt-0">
               <a href={aboutHref} className="hover:text-white transition-colors">
                 {aboutLabel}
               </a>
               <a href={articlesHref} className="hover:text-white transition-colors">
                 {articlesLabel}
+              </a>
+              <a href={guidesHref} className="hover:text-white transition-colors">
+                {guidesLabel}
               </a>
               <button
                 type="button"

@@ -101,6 +101,7 @@ export default function Header() {
   const trainingHref = `${prefix}/training`;
   const designPricingHref = `${prefix}/design-pricing`;
   const articlesHref = `${prefix}/articles`;
+  const guidesHref = `${prefix}/guides`;
   const aboutHref = `${prefix}/about`;
   const dashboardHref = `${prefix}/dashboard`;
   const loginHref = `${prefix}/login`;
@@ -109,6 +110,7 @@ export default function Header() {
   const isAuthed = Boolean(user?.id);
 
   const articlesLabel = locale === "ar" ? "المقالات" : "Articles";
+  const guidesLabel = locale === "ar" ? "الأدلة" : "Guides";
   const aboutLabel = locale === "ar" ? "من نحن" : locale === "fr" ? "A propos" : "About";
   const contactLabel = locale === "ar" ? "تواصل" : locale === "fr" ? "Contact" : "Contact";
   const bookLabel = locale === "ar" ? "احجز استشارة" : locale === "fr" ? "Reserver" : "Book";
@@ -155,7 +157,7 @@ export default function Header() {
               </picture>
             </a>
 
-            <nav className="hidden flex-1 items-center justify-center gap-8 xl:flex">
+            <nav className="hidden flex-1 items-center justify-center gap-6 2xl:gap-8 xl:flex">
               <a href={trainingHref} className="font-semibold text-foreground transition-colors hover:text-primary">
                 {t("nav.training")}
               </a>
@@ -164,6 +166,9 @@ export default function Header() {
               </a>
               <a href={articlesHref} className="font-semibold text-foreground transition-colors hover:text-primary">
                 {articlesLabel}
+              </a>
+              <a href={guidesHref} className="font-semibold text-foreground transition-colors hover:text-primary">
+                {guidesLabel}
               </a>
               <a href={aboutHref} className="font-semibold text-foreground transition-colors hover:text-primary">
                 {aboutLabel}
@@ -419,6 +424,13 @@ export default function Header() {
                 onClick={() => setIsMenuOpen(false)}
               >
                 {articlesLabel}
+              </a>
+              <a
+                href={guidesHref}
+                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {guidesLabel}
               </a>
               <a
                 href={aboutHref}

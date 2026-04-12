@@ -19,6 +19,7 @@ const DesignPricing = lazy(() => import("./pages/DesignPricing"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Articles = lazy(() => import("./pages/Articles"));
 const ArticleDetailPage = lazy(() => import("./pages/ArticleDetail"));
+const Guides = lazy(() => import("./pages/Guides"));
 const About = lazy(() => import("./pages/About"));
 const Booking = lazy(() => import("./pages/Booking"));
 const BookingCart = lazy(() => import("./pages/BookingCart"));
@@ -130,6 +131,9 @@ function Router() {
       <Route path={"/articles"} component={Articles} />
       <Route path={"/fr/articles"} component={Articles} />
       <Route path={"/ar/articles"} component={Articles} />
+      <Route path={"/guides"} component={Guides} />
+      <Route path={"/fr/guides"} component={Guides} />
+      <Route path={"/ar/guides"} component={Guides} />
       <Route path={"/articles/:slug"} component={ArticleDetailPage} />
       <Route path={"/fr/articles/:slug"} component={ArticleDetailPage} />
       <Route path={"/ar/articles/:slug"} component={ArticleDetailPage} />

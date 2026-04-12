@@ -148,6 +148,7 @@ function routeTitle(locale: ArticleLocale, path: string) {
       "/training": "Cabinet Vision Training | CVsolucion",
       "/design-pricing": "Cabinet Vision Design & Pricing Setup | CVsolucion",
       "/articles": "Cabinet Vision Articles, Guides & Case Studies | CVsolucion",
+      "/guides": "Cabinet Vision Troubleshooting Guides | CVsolucion",
       "/about": "About CVsolucion | Cabinet Vision Consulting",
       "/book": "Book Cabinet Vision Consultation or Support | CVsolucion",
       "/privacy": "Privacy Policy | CVsolucion",
@@ -159,6 +160,7 @@ function routeTitle(locale: ArticleLocale, path: string) {
       "/training": "Formation Cabinet Vision | CVsolucion",
       "/design-pricing": "Configuration design et pricing Cabinet Vision | CVsolucion",
       "/articles": "Articles, guides et cas Cabinet Vision | CVsolucion",
+      "/guides": "Guides de diagnostic Cabinet Vision | CVsolucion",
       "/about": "A propos de CVsolucion | Cabinet Vision",
       "/book": "Reservation consultation ou support | CVsolucion",
       "/privacy": "Politique de confidentialite | CVsolucion",
@@ -170,6 +172,7 @@ function routeTitle(locale: ArticleLocale, path: string) {
       "/training": "تدريب Cabinet Vision | CVsolucion",
       "/design-pricing": "إعداد التصميم والتسعير في Cabinet Vision | CVsolucion",
       "/articles": "مقالات وأدلة Cabinet Vision | CVsolucion",
+      "/guides": "أدلة تشخيص Cabinet Vision | CVsolucion",
       "/about": "من نحن | CVsolucion",
       "/book": "حجز استشارة أو دعم | CVsolucion",
       "/privacy": "سياسة الخصوصية | CVsolucion",
@@ -190,6 +193,7 @@ function routeDescription(locale: ArticleLocale, path: string) {
       "/training": "Remote Cabinet Vision training for designers, engineers, and production teams with practical sessions and implementation guidance.",
       "/design-pricing": "Structured Cabinet Vision design and pricing setup for factories that need clean quoting logic and production-ready outputs.",
       "/articles": "Cabinet Vision articles, implementation lessons, troubleshooting guides, and production case studies from real shop-floor work.",
+      "/guides": "Cabinet Vision troubleshooting guides for S2M output, slow performance, database errors, report errors, and CNC output problems.",
       "/about": "Learn how CVsolucion helps cabinet shops improve Cabinet Vision workflows, libraries, reports, and CNC output.",
       "/book": "Book a Cabinet Vision consultation or support slot in Quebec time, with standard and express availability options.",
       "/privacy": "Read the CVsolucion privacy policy.",
@@ -201,6 +205,7 @@ function routeDescription(locale: ArticleLocale, path: string) {
       "/training": "Formation Cabinet Vision a distance pour designers, ingenieurs et equipes de production avec mise en pratique.",
       "/design-pricing": "Configuration design et pricing Cabinet Vision pour ateliers qui ont besoin d'une logique de devis claire et d'une sortie production fiable.",
       "/articles": "Articles Cabinet Vision, guides de troubleshooting et retours terrain issus de cas reels.",
+      "/guides": "Guides Cabinet Vision pour diagnostiquer S2M, lenteurs, erreurs de base de donnees, rapports et sortie CNC.",
       "/about": "Decouvrez comment CVsolucion aide les ateliers a ameliorer workflows, bibliotheques, rapports et sortie CNC.",
       "/book": "Reservez une consultation ou un support Cabinet Vision en heure du Quebec, avec options standard et express.",
       "/privacy": "Consultez la politique de confidentialite de CVsolucion.",
@@ -212,6 +217,7 @@ function routeDescription(locale: ArticleLocale, path: string) {
       "/training": "تدريب Cabinet Vision عن بعد للمصممين والمهندسين وفرق الإنتاج مع تطبيق عملي فعلي.",
       "/design-pricing": "إعداد التصميم والتسعير في Cabinet Vision للمصانع التي تحتاج إلى منطق عروض أسعار واضح ومخرجات إنتاج مستقرة.",
       "/articles": "مقالات Cabinet Vision وأدلة التشخيص ودروس التنفيذ المستخلصة من حالات واقعية.",
+      "/guides": "أدلة تشخيص Cabinet Vision لمشاكل S2M، بطء الأداء، أخطاء قاعدة البيانات، أخطاء التقارير، ومخرجات CNC.",
       "/about": "تعرّف على كيفية مساعدة CVsolucion للورشات في تحسين سير العمل والمكتبات والتقارير ومخرجات CNC.",
       "/book": "احجز استشارة أو دعماً في Cabinet Vision حسب توقيت كيبيك مع خيارات عادية وسريعة.",
       "/privacy": "اقرأ سياسة الخصوصية الخاصة بـ CVsolucion.",
@@ -230,6 +236,7 @@ function linkLabel(locale: ArticleLocale, path: string) {
       "/training": "Training",
       "/design-pricing": "Design & Pricing",
       "/articles": "Articles",
+      "/guides": "Guides",
       "/about": "About",
       "/book": "Book a session",
       "/privacy": "Privacy Policy",
@@ -239,6 +246,7 @@ function linkLabel(locale: ArticleLocale, path: string) {
       "/training": "Formation",
       "/design-pricing": "Design & Pricing",
       "/articles": "Articles",
+      "/guides": "Guides",
       "/about": "A propos",
       "/book": "Reserver",
       "/privacy": "Confidentialite",
@@ -248,6 +256,7 @@ function linkLabel(locale: ArticleLocale, path: string) {
       "/training": "التدريب",
       "/design-pricing": "التصميم والتسعير",
       "/articles": "المقالات",
+      "/guides": "الأدلة",
       "/about": "من نحن",
       "/book": "احجز الآن",
       "/privacy": "الخصوصية",
@@ -381,7 +390,7 @@ function homeHighlights(locale: ArticleLocale) {
 
 function homeFallback(locale: ArticleLocale) {
   const copy = HOME_COPY[locale];
-  const links = ["/training", "/design-pricing", "/articles", "/about", "/book", "/privacy", "/terms"]
+  const links = ["/training", "/design-pricing", "/articles", "/guides", "/about", "/book", "/privacy", "/terms"]
     .map((path) => `<a href="${escapeHtml(localizePath(path, locale))}">${escapeHtml(linkLabel(locale, path) || path)}</a>`)
     .join("");
   const serviceLinks = SEO_SERVICE_PAGE_ORDER
@@ -431,6 +440,7 @@ function homeFallback(locale: ArticleLocale) {
           <li><a href="${escapeHtml(localizePath("/training", locale))}">${escapeHtml(linkLabel(locale, "/training") || "")}</a></li>
           <li><a href="${escapeHtml(localizePath("/design-pricing", locale))}">${escapeHtml(linkLabel(locale, "/design-pricing") || "")}</a></li>
           <li><a href="${escapeHtml(localizePath("/articles", locale))}">${escapeHtml(linkLabel(locale, "/articles") || "")}</a></li>
+          <li><a href="${escapeHtml(localizePath("/guides", locale))}">${escapeHtml(linkLabel(locale, "/guides") || "")}</a></li>
           <li><a href="${escapeHtml(localizePath("/about", locale))}">${escapeHtml(linkLabel(locale, "/about") || "")}</a></li>
           <li><a href="${escapeHtml(localizePath("/book", locale))}">${escapeHtml(linkLabel(locale, "/book") || "")}</a></li>
           <li><a href="${escapeHtml(localizePath("/privacy", locale))}">${escapeHtml(linkLabel(locale, "/privacy") || "")}</a></li>
@@ -740,6 +750,7 @@ function routeFallback(locale: ArticleLocale, path: string) {
         <nav class="seo-links">
           <a href="${escapeHtml(localizePath("/", locale))}">${escapeHtml(SITE_NAME)}</a>
           <a href="${escapeHtml(localizePath("/articles", locale))}">${escapeHtml(linkLabel(locale, "/articles") || "Articles")}</a>
+          <a href="${escapeHtml(localizePath("/guides", locale))}">${escapeHtml(linkLabel(locale, "/guides") || "Guides")}</a>
           <a href="${escapeHtml(localizePath("/book", locale))}">${escapeHtml(linkLabel(locale, "/book") || "Book")}</a>
         </nav>
       </section>
@@ -772,6 +783,55 @@ function articlesFallback(locale: ArticleLocale) {
       </section>
     </main>
   `;
+}
+
+function guidesFallback(locale: ArticleLocale) {
+  const title = routeTitle(locale, "/guides");
+  const description = routeDescription(locale, "/guides");
+  const items = SEO_KNOWLEDGE_PAGE_ORDER.map((key) => {
+    const page = SEO_KNOWLEDGE_PAGES[key];
+    const content = getSeoKnowledgePageContent(page, locale);
+    return `
+      <li>
+        <a href="${escapeHtml(localizePath(page.canonicalPath, locale))}">${escapeHtml(content.shortTitle)}</a>
+        <p>${escapeHtml(content.metaDescription)}</p>
+      </li>
+    `;
+  }).join("");
+
+  return `
+    <main id="seo-fallback">
+      <section>
+        <h1>${escapeHtml(title.replace(" | CVsolucion", ""))}</h1>
+        <p>${escapeHtml(description)}</p>
+        <ul>${items}</ul>
+        <nav class="seo-links">
+          <a href="${escapeHtml(localizePath("/articles", locale))}">${escapeHtml(linkLabel(locale, "/articles") || "Articles")}</a>
+          <a href="${escapeHtml(localizePath("/book", locale))}">${escapeHtml(linkLabel(locale, "/book") || "Book")}</a>
+        </nav>
+      </section>
+    </main>
+  `;
+}
+
+function guidesStructuredData(locale: ArticleLocale, origin: string) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: routeTitle(locale, "/guides").replace(" | CVsolucion", ""),
+    description: routeDescription(locale, "/guides"),
+    url: `${origin}${localizePath("/guides", locale)}`,
+    hasPart: SEO_KNOWLEDGE_PAGE_ORDER.map((key) => {
+      const page = SEO_KNOWLEDGE_PAGES[key];
+      const content = getSeoKnowledgePageContent(page, locale);
+      return {
+        "@type": "TechArticle",
+        headline: content.shortTitle,
+        description: content.metaDescription,
+        url: `${origin}${localizePath(page.canonicalPath, locale)}`,
+      };
+    }),
+  };
 }
 
 function articleFallback(locale: ArticleLocale, slug: string) {
@@ -871,6 +931,21 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
       image: DEFAULT_IMAGE,
       fallbackHtml: articlesFallback(locale),
       structuredData: null,
+    };
+  }
+
+  if (cleanPath === "/guides") {
+    return {
+      lang,
+      dir,
+      title: routeTitle(locale, cleanPath),
+      description: routeDescription(locale, cleanPath),
+      canonicalPath: cleanPath,
+      ogType: "website",
+      robots: "index, follow",
+      image: DEFAULT_IMAGE,
+      fallbackHtml: guidesFallback(locale),
+      structuredData: guidesStructuredData(locale, origin),
     };
   }
 
@@ -1074,6 +1149,7 @@ export function buildSitemapXml(origin: string) {
     { canonicalPath: "/", changefreq: "weekly", priority: "1.0" },
     { canonicalPath: "/book", changefreq: "weekly", priority: "0.9" },
     { canonicalPath: "/articles", changefreq: "weekly", priority: "0.9" },
+    { canonicalPath: "/guides", changefreq: "weekly", priority: "0.88" },
     { canonicalPath: "/training", changefreq: "weekly", priority: "0.9" },
     { canonicalPath: "/design-pricing", changefreq: "monthly", priority: "0.8" },
     { canonicalPath: "/about", changefreq: "monthly", priority: "0.7" },
