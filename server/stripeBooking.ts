@@ -1,9 +1,10 @@
 import Stripe from "stripe";
 import crypto from "crypto";
 import type { BookingPriority, BookingServiceType } from "./bookingStore";
-import { getCatalogSnapshot } from "./catalogStore";
+import { getCatalogSnapshot, type CatalogTrainingPrices } from "./catalogStore";
 
 type StripeBookingPriceMap = Record<`${BookingPriority}:${BookingServiceType}`, number>;
+export type TrainingPriceKey = keyof CatalogTrainingPrices;
 
 let stripeClient: Stripe | null | undefined;
 
@@ -43,9 +44,17 @@ function getPriceMap(): StripeBookingPriceMap {
   };
 }
 
+function getTrainingPriceMap() {
+  return getCatalogSnapshot().trainingPrices;
+}
+
 export function getBookingPrice(priority: BookingPriority, serviceType: BookingServiceType) {
   const priceMap = getPriceMap();
   return priceMap[`${priority}:${serviceType}`];
+}
+
+export function getTrainingPrice(level: TrainingPriceKey) {
+  return getTrainingPriceMap()[level];
 }
 
 export function buildBookingSlotsDigest(slots: Array<{ date: string; hour: number }>) {
@@ -62,6 +71,15 @@ export function getStripePricingSnapshot() {
     publishableKey: getStripePublishableKey(),
     currency: getStripeCurrency(),
     prices: getPriceMap(),
+  };
+}
+
+export function getTrainingPricingSnapshot() {
+  return {
+    enabled: isStripeConfigured(),
+    publishableKey: getStripePublishableKey(),
+    currency: getStripeCurrency(),
+    prices: getTrainingPriceMap(),
   };
 }
 
@@ -104,6 +122,45 @@ export async function createBookingPaymentIntent(input: {
       priority: input.priority,
       slotCount: String(slotCount),
       slotsDigest,
+      locale: input.locale,
+    },
+  });
+
+  if (!intent.client_secret) {
+    throw new Error("Stripe did not return a client secret.");
+  }
+
+  return intent;
+}
+
+export async function createTrainingPaymentIntent(input: {
+  userId: string;
+  email: string;
+  level: TrainingPriceKey;
+  locale: "en" | "fr" | "ar";
+}) {
+  const stripe = getStripeClient();
+  if (!stripe) {
+    throw new Error("Stripe is not configured.");
+  }
+
+  const amount = getTrainingPrice(input.level);
+  if (!amount) {
+    throw new Error("Stripe pricing is not configured for this training level.");
+  }
+
+  const intent = await stripe.paymentIntents.create({
+    amount,
+    currency: getStripeCurrency(),
+    receipt_email: input.email,
+    automatic_payment_methods: {
+      enabled: true,
+    },
+    metadata: {
+      type: "training",
+      userId: input.userId,
+      email: input.email,
+      trainingLevel: input.level,
       locale: input.locale,
     },
   });
@@ -164,6 +221,49 @@ export async function verifyBookingPayment(input: {
 
   if (intent.metadata?.slotsDigest !== buildBookingSlotsDigest(input.slots)) {
     throw new Error("Payment does not match the selected appointment slots.");
+  }
+
+  return intent;
+}
+
+export async function verifyTrainingPayment(input: {
+  paymentIntentId: string;
+  userId: string;
+  level: TrainingPriceKey;
+}) {
+  const stripe = getStripeClient();
+  if (!stripe) {
+    throw new Error("Stripe is not configured.");
+  }
+
+  const amount = getTrainingPrice(input.level);
+  if (!amount) {
+    throw new Error("Stripe pricing is not configured for this training level.");
+  }
+
+  const intent = await stripe.paymentIntents.retrieve(input.paymentIntentId);
+  if (!intent) {
+    throw new Error("Payment intent not found.");
+  }
+
+  if (intent.status !== "succeeded") {
+    throw new Error("Payment has not been completed.");
+  }
+
+  if (intent.amount !== amount || intent.currency.toLowerCase() !== getStripeCurrency()) {
+    throw new Error("Payment amount does not match this training level.");
+  }
+
+  if (intent.metadata?.type !== "training") {
+    throw new Error("Payment does not match a training purchase.");
+  }
+
+  if (intent.metadata?.userId !== input.userId) {
+    throw new Error("Payment does not belong to this user.");
+  }
+
+  if (intent.metadata?.trainingLevel !== input.level) {
+    throw new Error("Payment does not match this training level.");
   }
 
   return intent;

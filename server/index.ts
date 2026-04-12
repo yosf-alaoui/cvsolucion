@@ -80,11 +80,15 @@ import {
   constructStripeEvent,
   createBookingPaymentIntent,
   createBookingRefund,
+  createTrainingPaymentIntent,
   getStripePricingSnapshot,
+  getTrainingPricingSnapshot,
+  type TrainingPriceKey,
   verifyBookingPayment,
+  verifyTrainingPayment,
 } from "./stripeBooking";
 import { hasProcessedStripeEvent, markStripeEventProcessed } from "./stripeEventStore";
-import { createCatalogPackage, deleteCatalogPackage, getCatalogSnapshot, getPublicCatalog, updateCatalogBookingPrices, updateCatalogPackage } from "./catalogStore";
+import { createCatalogPackage, deleteCatalogPackage, getCatalogSnapshot, getPublicCatalog, updateCatalogBookingPrices, updateCatalogPackage, updateCatalogTrainingPrices } from "./catalogStore";
 import { getAppDataDir } from "./dataDir";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -173,6 +177,13 @@ function parseRequestedBookingSlots(value: unknown) {
     unique.set(`${slot.date}:${slot.hour}`, slot);
   }
   return Array.from(unique.values());
+}
+
+function parseTrainingLevel(value: unknown): TrainingPriceKey | null {
+  const level = String(value || "").trim();
+  return level === "level1" || level === "level2" || level === "level3" || level === "level4" || level === "bundle"
+    ? level
+    : null;
 }
 
 function escapeHtml(value: string) {
@@ -1274,6 +1285,155 @@ async function startServer() {
     return res.json(getStripePricingSnapshot());
   });
 
+  app.get("/api/training/pricing", rateLimit({ key: "training-pricing", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    const auth = getCurrentUser(req);
+    if (!auth) {
+      return res.status(401).json({ error: "Please sign in to view training prices." });
+    }
+    return res.json(getTrainingPricingSnapshot());
+  });
+
+  app.post("/api/stripe/training-payment-intent", rateLimit({ key: "stripe-training-payment-intent", windowMs: 1000 * 60 * 10, limit: 30 }), async (req, res, next) => {
+    try {
+      const auth = getCurrentUser(req);
+      if (!auth) {
+        return res.status(401).json({ error: "Please sign in before starting payment." });
+      }
+
+      const level = parseTrainingLevel(req.body?.level);
+      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+
+      if (!level) {
+        return res.status(400).json({ error: "Please choose a valid training level." });
+      }
+
+      const intent = await createTrainingPaymentIntent({
+        userId: auth.user.id,
+        email: auth.user.email,
+        level,
+        locale,
+      });
+
+      return res.json({
+        ok: true,
+        clientSecret: intent.client_secret,
+        paymentIntentId: intent.id,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post("/api/training/purchases", rateLimit({ key: "training-purchase", windowMs: 1000 * 60 * 10, limit: 30 }), async (req, res, next) => {
+    try {
+      const auth = getCurrentUser(req);
+      if (!auth) {
+        return res.status(401).json({ error: "Please sign in before confirming training." });
+      }
+
+      const level = parseTrainingLevel(req.body?.level);
+      const paymentIntentId = String(req.body?.paymentIntentId || "").trim();
+      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+
+      if (!level) {
+        return res.status(400).json({ error: "Please choose a valid training level." });
+      }
+      if (!paymentIntentId) {
+        return res.status(400).json({ error: "Payment reference is required." });
+      }
+
+      const payment = await verifyTrainingPayment({
+        paymentIntentId,
+        userId: auth.user.id,
+        level,
+      });
+
+      const levelLabelMap: Record<TrainingPriceKey, string> = {
+        level1: "Level 1 - Core Designer",
+        level2: "Level 2 - Catalog Engineer",
+        level3: "Level 3 - Production Specialist",
+        level4: "Level 4 - CV Consultant",
+        bundle: "Complete CV Professional Path",
+      };
+      const levelLabel = levelLabelMap[level];
+      const amountLabel = new Intl.NumberFormat("en-CA", {
+        style: "currency",
+        currency: payment.currency.toUpperCase(),
+      }).format(payment.amount / 100);
+
+      const lead = storeContactLead({
+        name: auth.user.email,
+        email: auth.user.email,
+        interest: `Training purchase - ${levelLabel}`,
+        message: [
+          `Paid training purchase.`,
+          `Training: ${levelLabel}`,
+          `Amount: ${amountLabel}`,
+          `Payment intent: ${payment.id}`,
+          `Locale: ${locale}`,
+        ].join("\n"),
+      });
+
+      const destination = (process.env.CONTACT_EMAIL || "contact@cvsolucion.com").trim();
+      res.status(201).json({ ok: true, lead });
+
+      void Promise.allSettled([
+        sendAuthEmail({
+          to: destination,
+          subject: `New training purchase - ${levelLabel}`,
+          text: [
+            `Training: ${levelLabel}`,
+            `Amount: ${amountLabel}`,
+            `Payment intent: ${payment.id}`,
+            `Customer: ${auth.user.email}`,
+          ].join("\n"),
+          html: `
+            <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+              <h2 style="margin:0 0 16px">New training purchase</h2>
+              <p><strong>Training:</strong> ${escapeHtml(levelLabel)}</p>
+              <p><strong>Amount:</strong> ${escapeHtml(amountLabel)}</p>
+              <p><strong>Payment intent:</strong> ${escapeHtml(payment.id)}</p>
+              <p><strong>Customer:</strong> ${escapeHtml(auth.user.email)}</p>
+            </div>
+          `,
+        }),
+        sendAuthEmail({
+          to: auth.user.email,
+          subject: "Your CVsolucion training payment is confirmed",
+          text: [
+            "Your training payment has been confirmed.",
+            `Training: ${levelLabel}`,
+            `Amount: ${amountLabel}`,
+            "",
+            "We will contact you with the next steps.",
+          ].join("\n"),
+          html: `
+            <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+              <p>Your training payment has been confirmed.</p>
+              <p><strong>Training:</strong> ${escapeHtml(levelLabel)}</p>
+              <p><strong>Amount:</strong> ${escapeHtml(amountLabel)}</p>
+              <p>We will contact you with the next steps.</p>
+            </div>
+          `,
+        }),
+      ]).then((results) => {
+        results.forEach((result, index) => {
+          if (result.status === "rejected") {
+            console.error("[training:email:failed]", {
+              target: index === 0 ? "admin" : "customer",
+              paymentIntentId: payment.id,
+              error: result.reason instanceof Error ? result.reason.stack || result.reason.message : String(result.reason),
+            });
+          }
+        });
+      });
+
+      return;
+    } catch (error) {
+      return next(error);
+    }
+  });
+
   app.post("/api/stripe/booking-payment-intent", rateLimit({ key: "stripe-payment-intent", windowMs: 1000 * 60 * 10, limit: 40 }), async (req, res, next) => {
     try {
       const auth = getCurrentUser(req);
@@ -1770,6 +1930,25 @@ async function startServer() {
       });
 
       return res.json({ ok: true, bookingPrices: pricing });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.put("/api/admin/catalog/training-pricing", rateLimit({ key: "admin-catalog-training-pricing", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const pricing = updateCatalogTrainingPrices({
+        level1: Number(req.body?.level1),
+        level2: Number(req.body?.level2),
+        level3: Number(req.body?.level3),
+        level4: Number(req.body?.level4),
+        bundle: Number(req.body?.bundle),
+      });
+
+      return res.json({ ok: true, trainingPrices: pricing });
     } catch (error) {
       return next(error);
     }

@@ -7,6 +7,14 @@ export type CatalogBookingPrices = {
   expressSupport: number;
 };
 
+export type CatalogTrainingPrices = {
+  level1: number;
+  level2: number;
+  level3: number;
+  level4: number;
+  bundle: number;
+};
+
 export type CatalogPackageTranslation = {
   title: string;
   subtitle: string;
@@ -44,6 +52,7 @@ export type PublicCatalogResponse = {
 
 export type AdminCatalogResponse = {
   bookingPrices: CatalogBookingPrices;
+  trainingPrices: CatalogTrainingPrices;
   servicePackages: CatalogPackageRecord[];
 };
 
@@ -74,6 +83,13 @@ export function getAdminCatalog() {
 
 export function updateAdminCatalogPricing(payload: CatalogBookingPrices) {
   return request<{ ok: true; bookingPrices: CatalogBookingPrices }>("/api/admin/catalog/pricing", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminCatalogTrainingPricing(payload: CatalogTrainingPrices) {
+  return request<{ ok: true; trainingPrices: CatalogTrainingPrices }>("/api/admin/catalog/training-pricing", {
     method: "PUT",
     body: JSON.stringify(payload),
   });

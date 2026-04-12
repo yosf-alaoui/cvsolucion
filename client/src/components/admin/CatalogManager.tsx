@@ -6,11 +6,13 @@ import {
   getAdminCatalog,
   updateAdminCatalogPackage,
   updateAdminCatalogPricing,
+  updateAdminCatalogTrainingPricing,
   type AdminCatalogResponse,
   type CatalogBookingPrices,
   type CatalogLocale,
   type CatalogPackageRecord,
   type CatalogPackageTranslation,
+  type CatalogTrainingPrices,
 } from "@/lib/catalog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +52,7 @@ export default function CatalogManager({ locale }: { locale: string }) {
   const [data, setData] = useState<AdminCatalogResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingPricing, setSavingPricing] = useState(false);
+  const [savingTrainingPricing, setSavingTrainingPricing] = useState(false);
   const [savingPackage, setSavingPackage] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [priceForm, setPriceForm] = useState({
@@ -57,6 +60,13 @@ export default function CatalogManager({ locale }: { locale: string }) {
     standardSupport: "",
     expressConsultation: "",
     expressSupport: "",
+  });
+  const [trainingPriceForm, setTrainingPriceForm] = useState({
+    level1: "",
+    level2: "",
+    level3: "",
+    level4: "",
+    bundle: "",
   });
   const [packageForm, setPackageForm] = useState<{
     active: boolean;
@@ -158,6 +168,43 @@ export default function CatalogManager({ locale }: { locale: string }) {
     };
   }, [locale]);
 
+  const trainingCopy = useMemo(() => {
+    if (locale === "ar") {
+      return {
+        title: "أسعار التدريب",
+        level1: "المستوى 1 - Core Designer",
+        level2: "المستوى 2 - Catalog Engineer",
+        level3: "المستوى 3 - Production Specialist",
+        level4: "المستوى 4 - CV Consultant",
+        bundle: "المسار الكامل",
+        save: "حفظ أسعار التدريب",
+        saved: "تم تحديث أسعار التدريب.",
+      };
+    }
+    if (locale === "fr") {
+      return {
+        title: "Tarifs des formations",
+        level1: "Niveau 1 - Core Designer",
+        level2: "Niveau 2 - Catalog Engineer",
+        level3: "Niveau 3 - Production Specialist",
+        level4: "Niveau 4 - CV Consultant",
+        bundle: "Parcours complet",
+        save: "Enregistrer les tarifs formation",
+        saved: "Tarifs formation mis a jour.",
+      };
+    }
+    return {
+      title: "Training prices",
+      level1: "Level 1 - Core Designer",
+      level2: "Level 2 - Catalog Engineer",
+      level3: "Level 3 - Production Specialist",
+      level4: "Level 4 - CV Consultant",
+      bundle: "Complete path",
+      save: "Save training prices",
+      saved: "Training prices updated.",
+    };
+  }, [locale]);
+
   async function loadCatalog() {
     const response = await getAdminCatalog();
     setData(response);
@@ -166,6 +213,13 @@ export default function CatalogManager({ locale }: { locale: string }) {
       standardSupport: centsToDollars(response.bookingPrices.standardSupport),
       expressConsultation: centsToDollars(response.bookingPrices.expressConsultation),
       expressSupport: centsToDollars(response.bookingPrices.expressSupport),
+    });
+    setTrainingPriceForm({
+      level1: centsToDollars(response.trainingPrices.level1),
+      level2: centsToDollars(response.trainingPrices.level2),
+      level3: centsToDollars(response.trainingPrices.level3),
+      level4: centsToDollars(response.trainingPrices.level4),
+      bundle: centsToDollars(response.trainingPrices.bundle),
     });
 
     const first = response.servicePackages[0] ?? null;
@@ -222,6 +276,26 @@ export default function CatalogManager({ locale }: { locale: string }) {
       toast.error(error?.message || "Failed to save prices.");
     } finally {
       setSavingPricing(false);
+    }
+  }
+
+  async function handleSaveTrainingPrices() {
+    try {
+      setSavingTrainingPricing(true);
+      const payload: CatalogTrainingPrices = {
+        level1: dollarsToCents(trainingPriceForm.level1),
+        level2: dollarsToCents(trainingPriceForm.level2),
+        level3: dollarsToCents(trainingPriceForm.level3),
+        level4: dollarsToCents(trainingPriceForm.level4),
+        bundle: dollarsToCents(trainingPriceForm.bundle),
+      };
+      const response = await updateAdminCatalogTrainingPricing(payload);
+      setData((current) => (current ? { ...current, trainingPrices: response.trainingPrices } : current));
+      toast.success(trainingCopy.saved);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to save training prices.");
+    } finally {
+      setSavingTrainingPricing(false);
     }
   }
 
@@ -333,6 +407,37 @@ export default function CatalogManager({ locale }: { locale: string }) {
             </div>
             <div className="sm:col-span-2">
               <Button type="button" onClick={handleSavePrices} disabled={savingPricing}>{copy.savePrices}</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{trainingCopy.title}</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{trainingCopy.level1}</Label>
+              <Input value={trainingPriceForm.level1} onChange={(event) => setTrainingPriceForm((current) => ({ ...current, level1: event.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>{trainingCopy.level2}</Label>
+              <Input value={trainingPriceForm.level2} onChange={(event) => setTrainingPriceForm((current) => ({ ...current, level2: event.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>{trainingCopy.level3}</Label>
+              <Input value={trainingPriceForm.level3} onChange={(event) => setTrainingPriceForm((current) => ({ ...current, level3: event.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>{trainingCopy.level4}</Label>
+              <Input value={trainingPriceForm.level4} onChange={(event) => setTrainingPriceForm((current) => ({ ...current, level4: event.target.value }))} />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>{trainingCopy.bundle}</Label>
+              <Input value={trainingPriceForm.bundle} onChange={(event) => setTrainingPriceForm((current) => ({ ...current, bundle: event.target.value }))} />
+            </div>
+            <div className="sm:col-span-2">
+              <Button type="button" onClick={handleSaveTrainingPrices} disabled={savingTrainingPricing}>{trainingCopy.save}</Button>
             </div>
           </CardContent>
         </Card>

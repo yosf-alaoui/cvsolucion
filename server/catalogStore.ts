@@ -30,8 +30,17 @@ export type CatalogBookingPrices = {
   expressSupport: number;
 };
 
+export type CatalogTrainingPrices = {
+  level1: number;
+  level2: number;
+  level3: number;
+  level4: number;
+  bundle: number;
+};
+
 type CatalogDb = {
   bookingPrices: CatalogBookingPrices;
+  trainingPrices: CatalogTrainingPrices;
   servicePackages: CatalogPackageRecord[];
 };
 
@@ -57,6 +66,16 @@ function defaultBookingPrices(): CatalogBookingPrices {
     standardSupport: parseAmount(process.env.STRIPE_PRICE_STANDARD_SUPPORT, 14000),
     expressConsultation: parseAmount(process.env.STRIPE_PRICE_EXPRESS_CONSULTATION, 18000),
     expressSupport: parseAmount(process.env.STRIPE_PRICE_EXPRESS_SUPPORT, 18000),
+  };
+}
+
+function defaultTrainingPrices(): CatalogTrainingPrices {
+  return {
+    level1: parseAmount(process.env.STRIPE_PRICE_TRAINING_LEVEL_1, 59700),
+    level2: parseAmount(process.env.STRIPE_PRICE_TRAINING_LEVEL_2, 99700),
+    level3: parseAmount(process.env.STRIPE_PRICE_TRAINING_LEVEL_3, 129700),
+    level4: parseAmount(process.env.STRIPE_PRICE_TRAINING_LEVEL_4, 149700),
+    bundle: parseAmount(process.env.STRIPE_PRICE_TRAINING_BUNDLE, 399700),
   };
 }
 
@@ -220,6 +239,7 @@ function ensureDbFile() {
   if (!fs.existsSync(DB_PATH)) {
     const initial: CatalogDb = {
       bookingPrices: defaultBookingPrices(),
+      trainingPrices: defaultTrainingPrices(),
       servicePackages: createDefaultPackages(),
     };
     fs.writeFileSync(DB_PATH, JSON.stringify(initial, null, 2), "utf8");
@@ -245,6 +265,10 @@ function loadDb(): CatalogDb {
     bookingPrices: {
       ...defaultBookingPrices(),
       ...(parsed.bookingPrices || {}),
+    },
+    trainingPrices: {
+      ...defaultTrainingPrices(),
+      ...(parsed.trainingPrices || {}),
     },
     servicePackages: (parsed.servicePackages || createDefaultPackages()).map((item, index) => ({
       id: item.id || randomId(),
@@ -274,6 +298,7 @@ export function getCatalogSnapshot() {
   const db = loadDb();
   return {
     bookingPrices: db.bookingPrices,
+    trainingPrices: db.trainingPrices,
     servicePackages: sortPackages(db.servicePackages),
   };
 }
@@ -304,6 +329,19 @@ export function updateCatalogBookingPrices(input: Partial<CatalogBookingPrices>)
   };
   saveDb(db);
   return db.bookingPrices;
+}
+
+export function updateCatalogTrainingPrices(input: Partial<CatalogTrainingPrices>) {
+  const db = loadDb();
+  db.trainingPrices = {
+    level1: Number.isInteger(input.level1) && Number(input.level1) >= 0 ? Number(input.level1) : db.trainingPrices.level1,
+    level2: Number.isInteger(input.level2) && Number(input.level2) >= 0 ? Number(input.level2) : db.trainingPrices.level2,
+    level3: Number.isInteger(input.level3) && Number(input.level3) >= 0 ? Number(input.level3) : db.trainingPrices.level3,
+    level4: Number.isInteger(input.level4) && Number(input.level4) >= 0 ? Number(input.level4) : db.trainingPrices.level4,
+    bundle: Number.isInteger(input.bundle) && Number(input.bundle) >= 0 ? Number(input.bundle) : db.trainingPrices.bundle,
+  };
+  saveDb(db);
+  return db.trainingPrices;
 }
 
 export function createCatalogPackage(input: {
