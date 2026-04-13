@@ -30,6 +30,7 @@ import ArticlesManager from "@/components/admin/ArticlesManager";
 import BookingsManager from "@/components/admin/BookingsManager";
 import CatalogManager from "@/components/admin/CatalogManager";
 import RequestsManager from "@/components/admin/RequestsManager";
+import TrainingPricingManager from "@/components/admin/TrainingPricingManager";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -634,6 +635,8 @@ export default function AdminDashboard() {
     }
   }, [data, selectedConversationId]);
 
+  const trainingTabLabel = locale === "ar" ? "التكوين" : locale === "fr" ? "Formations" : "Training";
+
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return (data?.users ?? []).filter((item) => {
@@ -1157,10 +1160,11 @@ export default function AdminDashboard() {
                 </Card>
 
                 <Tabs defaultValue="overview" className="space-y-6">
-                  <TabsList className="grid w-full grid-cols-4">
+                  <TabsList className="grid w-full grid-cols-5">
                     <TabsTrigger value="overview">{copy.overview}</TabsTrigger>
                     <TabsTrigger value="customer-ops">{copy.customerOps}</TabsTrigger>
                     <TabsTrigger value="commercial">{copy.commercial}</TabsTrigger>
+                    <TabsTrigger value="training-prices">{trainingTabLabel}</TabsTrigger>
                     <TabsTrigger value="content">{copy.contentHub}</TabsTrigger>
                   </TabsList>
 
@@ -1386,6 +1390,10 @@ export default function AdminDashboard() {
 
                   <TabsContent value="commercial">
                     <CatalogManager locale={locale} />
+                  </TabsContent>
+
+                  <TabsContent value="training-prices">
+                    <TrainingPricingManager locale={locale} />
                   </TabsContent>
 
                   <TabsContent value="content">
