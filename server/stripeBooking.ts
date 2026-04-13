@@ -1,10 +1,10 @@
 import Stripe from "stripe";
 import crypto from "crypto";
 import type { BookingPriority, BookingServiceType } from "./bookingStore";
-import { getCatalogSnapshot, type CatalogTrainingPrices } from "./catalogStore";
+import { getCatalogSnapshot, getCatalogTrainingProgram } from "./catalogStore";
 
 type StripeBookingPriceMap = Record<`${BookingPriority}:${BookingServiceType}`, number>;
-export type TrainingPriceKey = keyof CatalogTrainingPrices;
+export type TrainingPriceKey = string;
 
 let stripeClient: Stripe | null | undefined;
 
@@ -48,13 +48,17 @@ function getTrainingPriceMap() {
   return getCatalogSnapshot().trainingPrices;
 }
 
+function getTrainingProgram(identifier: string) {
+  return getCatalogTrainingProgram(identifier);
+}
+
 export function getBookingPrice(priority: BookingPriority, serviceType: BookingServiceType) {
   const priceMap = getPriceMap();
   return priceMap[`${priority}:${serviceType}`];
 }
 
 export function getTrainingPrice(level: TrainingPriceKey) {
-  return getTrainingPriceMap()[level];
+  return getTrainingProgram(level)?.priceCents || 0;
 }
 
 export function buildBookingSlotsDigest(slots: Array<{ date: string; hour: number }>) {
@@ -75,11 +79,23 @@ export function getStripePricingSnapshot() {
 }
 
 export function getTrainingPricingSnapshot() {
+  const snapshot = getCatalogSnapshot();
   return {
     enabled: isStripeConfigured(),
     publishableKey: getStripePublishableKey(),
     currency: getStripeCurrency(),
-    prices: getTrainingPriceMap(),
+    prices: snapshot.trainingPrices,
+    programs: snapshot.trainingPrograms
+      .filter((program) => program.active)
+      .map((program) => ({
+        id: program.id,
+        key: program.key,
+        active: program.active,
+        featured: program.featured,
+        order: program.order,
+        priceCents: program.priceCents,
+        translations: program.translations,
+      })),
   };
 }
 
@@ -144,9 +160,13 @@ export async function createTrainingPaymentIntent(input: {
     throw new Error("Stripe is not configured.");
   }
 
-  const amount = getTrainingPrice(input.level);
+  const program = getTrainingProgram(input.level);
+  const amount = program?.priceCents || 0;
   if (!amount) {
-    throw new Error("Stripe pricing is not configured for this training level.");
+    throw new Error("Stripe pricing is not configured for this training program.");
+  }
+  if (!program?.active) {
+    throw new Error("This training program is not available.");
   }
 
   const intent = await stripe.paymentIntents.create({
@@ -160,7 +180,10 @@ export async function createTrainingPaymentIntent(input: {
       type: "training",
       userId: input.userId,
       email: input.email,
-      trainingLevel: input.level,
+      trainingLevel: program.key,
+      trainingProgramId: program.id,
+      trainingProgramKey: program.key,
+      trainingPriceCents: String(program.priceCents),
       locale: input.locale,
     },
   });
@@ -236,9 +259,10 @@ export async function verifyTrainingPayment(input: {
     throw new Error("Stripe is not configured.");
   }
 
-  const amount = getTrainingPrice(input.level);
+  const program = getTrainingProgram(input.level);
+  const amount = program?.priceCents || 0;
   if (!amount) {
-    throw new Error("Stripe pricing is not configured for this training level.");
+    throw new Error("Stripe pricing is not configured for this training program.");
   }
 
   const intent = await stripe.paymentIntents.retrieve(input.paymentIntentId);
@@ -250,8 +274,10 @@ export async function verifyTrainingPayment(input: {
     throw new Error("Payment has not been completed.");
   }
 
-  if (intent.amount !== amount || intent.currency.toLowerCase() !== getStripeCurrency()) {
-    throw new Error("Payment amount does not match this training level.");
+  const metadataAmount = Number(intent.metadata?.trainingPriceCents || "");
+  const expectedAmount = Number.isInteger(metadataAmount) && metadataAmount > 0 ? metadataAmount : amount;
+  if (intent.amount !== expectedAmount || intent.currency.toLowerCase() !== getStripeCurrency()) {
+    throw new Error("Payment amount does not match this training program.");
   }
 
   if (intent.metadata?.type !== "training") {
@@ -262,8 +288,12 @@ export async function verifyTrainingPayment(input: {
     throw new Error("Payment does not belong to this user.");
   }
 
-  if (intent.metadata?.trainingLevel !== input.level) {
-    throw new Error("Payment does not match this training level.");
+  const metadataMatchesProgram =
+    intent.metadata?.trainingProgramId === program?.id ||
+    intent.metadata?.trainingProgramKey === program?.key ||
+    intent.metadata?.trainingLevel === program?.key;
+  if (!metadataMatchesProgram) {
+    throw new Error("Payment does not match this training program.");
   }
 
   return intent;

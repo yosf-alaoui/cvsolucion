@@ -15,6 +15,29 @@ export type CatalogTrainingPrices = {
   bundle: number;
 };
 
+export type CatalogTrainingTranslation = {
+  badge: string;
+  title: string;
+  hours: string;
+  duration: string;
+  prerequisite: string;
+  certification: string;
+  project: string;
+  modules: string[];
+};
+
+export type CatalogTrainingProgramRecord = {
+  id: string;
+  key: string;
+  active: boolean;
+  featured: boolean;
+  order: number;
+  priceCents: number;
+  createdAt: string;
+  updatedAt: string;
+  translations: Record<CatalogLocale, CatalogTrainingTranslation>;
+};
+
 export type CatalogPackageTranslation = {
   title: string;
   subtitle: string;
@@ -53,6 +76,7 @@ export type PublicCatalogResponse = {
 export type AdminCatalogResponse = {
   bookingPrices: CatalogBookingPrices;
   trainingPrices: CatalogTrainingPrices;
+  trainingPrograms: CatalogTrainingProgramRecord[];
   servicePackages: CatalogPackageRecord[];
 };
 
@@ -92,6 +116,43 @@ export function updateAdminCatalogTrainingPricing(payload: CatalogTrainingPrices
   return request<{ ok: true; trainingPrices: CatalogTrainingPrices }>("/api/admin/catalog/training-pricing", {
     method: "PUT",
     body: JSON.stringify(payload),
+  });
+}
+
+export function createAdminCatalogTrainingProgram(payload: {
+  key?: string;
+  active?: boolean;
+  featured?: boolean;
+  order?: number;
+  priceCents?: number;
+  translations: Record<CatalogLocale, CatalogTrainingTranslation>;
+}) {
+  return request<{ ok: true; trainingProgram: CatalogTrainingProgramRecord; trainingPrograms: CatalogTrainingProgramRecord[] }>("/api/admin/catalog/training-programs", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminCatalogTrainingProgram(
+  programId: string,
+  payload: {
+    key?: string;
+    active?: boolean;
+    featured?: boolean;
+    order?: number;
+    priceCents?: number;
+    translations?: Partial<Record<CatalogLocale, Partial<CatalogTrainingTranslation>>>;
+  }
+) {
+  return request<{ ok: true; trainingProgram: CatalogTrainingProgramRecord; trainingPrograms: CatalogTrainingProgramRecord[] }>(`/api/admin/catalog/training-programs/${encodeURIComponent(programId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminCatalogTrainingProgram(programId: string) {
+  return request<{ ok: true; trainingPrograms: CatalogTrainingProgramRecord[] }>(`/api/admin/catalog/training-programs/${encodeURIComponent(programId)}`, {
+    method: "DELETE",
   });
 }
 

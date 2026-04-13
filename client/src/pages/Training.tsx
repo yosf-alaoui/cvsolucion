@@ -10,8 +10,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
 import {
   createTrainingPaymentIntent,
+  getTrainingPrograms,
   getTrainingPricing,
   recordTrainingPurchase,
+  type PublicTrainingProgram,
   type TrainingPriceKey,
   type TrainingPricingResponse,
 } from "@/lib/trainingCheckout";
@@ -27,6 +29,7 @@ type LevelCopy = {
   certification: string;
   project: string;
   modules: string[];
+  featured?: boolean;
 };
 
 const levels: Record<PageLocale, LevelCopy[]> = {
@@ -202,18 +205,88 @@ export default function Training() {
   const pageLocale: PageLocale = locale === "fr" || locale === "ar" ? locale : "en";
   const copy = useMemo(() => getCopy(pageLocale), [pageLocale]);
   const [selectedLevel, setSelectedLevel] = useState<TrainingPriceKey>("level1");
+  const [programRecords, setProgramRecords] = useState<PublicTrainingProgram[] | null>(null);
   const [pricing, setPricing] = useState<TrainingPricingResponse | null>(null);
   const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
-  const selected = copy.levels.find((level) => level.id === selectedLevel) ?? copy.levels[0];
-  const selectedPrice = pricing?.prices[selectedLevel] ?? 0;
+  const programs = useMemo(() => {
+    const fallbackPrograms: LevelCopy[] = [
+      ...copy.levels,
+      {
+        id: "bundle",
+        badge: copy.bundleBadge,
+        title: copy.completePath,
+        hours: "115 hours",
+        duration: "4 levels",
+        prerequisite: "",
+        certification: "",
+        project: copy.bundleText,
+        modules: [],
+        featured: true,
+      },
+    ];
+
+    if (programRecords === null) return fallbackPrograms;
+
+    return [...programRecords]
+      .sort((a, b) => a.order - b.order)
+      .map((program) => {
+        const translated = program.translations[pageLocale]?.title
+          ? program.translations[pageLocale]
+          : program.translations.en;
+        const fallback = fallbackPrograms.find((item) => item.id === program.key);
+        return {
+          id: program.key || program.id,
+          badge: translated.badge || fallback?.badge || program.key,
+          title: translated.title || fallback?.title || program.key,
+          hours: translated.hours || fallback?.hours || "",
+          duration: translated.duration || fallback?.duration || "",
+          prerequisite: translated.prerequisite || fallback?.prerequisite || "",
+          certification: translated.certification || fallback?.certification || "",
+          project: translated.project || fallback?.project || "",
+          modules: translated.modules?.length ? translated.modules : fallback?.modules || [],
+          featured: program.featured,
+        };
+      });
+  }, [copy, pageLocale, programRecords]);
+
+  const displayLevels = programs.filter((program) => !program.featured && program.id !== "bundle");
+  const selected = programs.find((level) => level.id === selectedLevel) ?? programs[0] ?? null;
+  const selectedProgramId = selected?.id ?? "";
+  const selectedPrice = getProgramPrice(selectedProgramId);
   const currency = pricing?.currency || "usd";
   const selectedPriceLabel = selectedPrice ? moneyLabel(selectedPrice, pageLocale, currency) : copy.loginToSeePrice;
-  const paymentReady = Boolean(user && pricing?.enabled && pricing.publishableKey && selectedPrice > 0);
+  const paymentReady = Boolean(selectedProgramId && user && pricing?.enabled && pricing.publishableKey && selectedPrice > 0);
   const loginHref = `${localPath(pageLocale, "/login")}?next=${encodeURIComponent(localPath(pageLocale, "/training"))}`;
   const whatsappHref = buildWhatsAppLink("+1 438 807 8747", copy.contactText);
+
+  function getProgramPrice(programId: TrainingPriceKey) {
+    const programPrice = pricing?.programs?.find((program) => program.key === programId || program.id === programId)?.priceCents;
+    if (typeof programPrice === "number") return programPrice;
+    return pricing?.prices?.[programId as keyof TrainingPricingResponse["prices"]] ?? 0;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    getTrainingPrograms()
+      .then((response) => {
+        if (!cancelled) setProgramRecords(response.programs);
+      })
+      .catch(() => {
+        if (!cancelled) setProgramRecords(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!programs.some((program) => program.id === selectedLevel) && programs[0]) {
+      setSelectedLevel(programs[0].id);
+    }
+  }, [programs, selectedLevel]);
 
   useEffect(() => {
     if (!user) {
@@ -235,7 +308,7 @@ export default function Training() {
     let cancelled = false;
     setPaymentClientSecret(null);
     setPaymentLoading(true);
-    createTrainingPaymentIntent({ level: selectedLevel, locale: pageLocale })
+    createTrainingPaymentIntent({ programId: selectedProgramId, locale: pageLocale })
       .then((response) => {
         if (!cancelled) setPaymentClientSecret(response.clientSecret);
       })
@@ -249,10 +322,10 @@ export default function Training() {
     return () => {
       cancelled = true;
     };
-  }, [pageLocale, paymentReady, selectedLevel]);
+  }, [pageLocale, paymentReady, selectedProgramId]);
 
   async function handlePaymentSuccess(paymentIntentId: string) {
-    await recordTrainingPurchase({ level: selectedLevel, paymentIntentId, locale: pageLocale });
+    await recordTrainingPurchase({ programId: selectedProgramId, paymentIntentId, locale: pageLocale });
     setStatus({ tone: "success", text: copy.success });
     setPaymentClientSecret(null);
   }
@@ -260,7 +333,7 @@ export default function Training() {
   function getPrice(level: TrainingPriceKey) {
     if (authLoading) return "...";
     if (!user) return copy.loginToSeePrice;
-    const amount = pricing?.prices[level] ?? 0;
+    const amount = getProgramPrice(level);
     return amount ? moneyLabel(amount, pageLocale, currency) : "...";
   }
 
@@ -271,30 +344,15 @@ export default function Training() {
       name: copy.h1,
       description: copy.meta,
       provider: { "@type": "Organization", name: "CVsolucion", url: "https://cvsolucion.com" },
-      hasCourseInstance: copy.levels.map((level) => ({
+      hasCourseInstance: programs.map((level) => ({
         "@type": "CourseInstance",
         name: `${level.badge} - ${level.title}`,
         courseMode: "online",
         courseWorkload: level.hours,
       })),
     }),
-    [copy],
+    [copy, programs],
   );
-
-  const payableLevels: LevelCopy[] = [
-    ...copy.levels,
-    {
-      id: "bundle",
-      badge: copy.bundleBadge,
-      title: copy.completePath,
-      hours: "115 hours",
-      duration: "4 levels",
-      prerequisite: "",
-      certification: "",
-      project: copy.bundleText,
-      modules: [],
-    },
-  ];
 
   return (
     <div className="site-page min-h-screen bg-transparent">
@@ -333,7 +391,7 @@ export default function Training() {
             <p className="mt-4 text-lg leading-8 text-slate-600">{copy.programSubtitle}</p>
           </div>
           <div className="mt-10 space-y-8">
-            {copy.levels.map((level, index) => (
+            {displayLevels.map((level, index) => (
               <GlassCard key={level.id} className="card-static overflow-hidden rounded-[34px]">
                 <div className="grid gap-0 lg:grid-cols-[320px_1fr]">
                   <div className="flex flex-col justify-between bg-primary/95 p-8 text-white">
@@ -372,7 +430,7 @@ export default function Training() {
               <h2 className="text-3xl font-extrabold tracking-tight text-slate-950 sm:text-5xl">{copy.pricingTitle}</h2>
               <p className="mt-4 text-lg leading-8 text-slate-600">{copy.pricingSubtitle}</p>
               <div className="mt-8 grid gap-5 md:grid-cols-2">
-                {payableLevels.map((level) => (
+                {programs.map((level) => (
                   <button
                     key={level.id}
                     type="button"
@@ -399,17 +457,21 @@ export default function Training() {
             </div>
 
             <div className="space-y-5 xl:sticky xl:top-28 xl:self-start">
-              <GlassCard className="card-static rounded-[32px] p-7">
-                <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{selectedLevel === "bundle" ? copy.bundleBadge : selected.badge}</div>
-                <h3 className="mt-3 text-3xl font-black text-slate-950">{selectedLevel === "bundle" ? copy.completePath : selected.title}</h3>
-                <div className="mt-4 text-4xl font-black text-primary">{selectedPriceLabel}</div>
-                <p className="mt-4 text-sm leading-7 text-slate-600">{selectedLevel === "bundle" ? copy.bundleText : selected.project}</p>
-                {!authLoading && !user ? (
-                  <Button asChild className="mt-6 w-full rounded-full bg-primary text-white hover:bg-primary/90">
-                    <a href={loginHref}>{copy.signIn}</a>
-                  </Button>
-                ) : null}
-              </GlassCard>
+              {selected ? (
+                <GlassCard className="card-static rounded-[32px] p-7">
+                  <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{selected.badge}</div>
+                  <h3 className="mt-3 text-3xl font-black text-slate-950">{selected.title}</h3>
+                  <div className="mt-4 text-4xl font-black text-primary">{selectedPriceLabel}</div>
+                  <p className="mt-4 text-sm leading-7 text-slate-600">{selected.project}</p>
+                  {!authLoading && !user ? (
+                    <Button asChild className="mt-6 w-full rounded-full bg-primary text-white hover:bg-primary/90">
+                      <a href={loginHref}>{copy.signIn}</a>
+                    </Button>
+                  ) : null}
+                </GlassCard>
+              ) : (
+                <GlassCard className="card-static rounded-[32px] p-7 text-sm text-slate-600">{copy.unavailable}</GlassCard>
+              )}
 
               {!user ? null : !pricing?.enabled ? (
                 <GlassCard className="card-static rounded-[32px] p-7 text-sm text-slate-600">{copy.unavailable}</GlassCard>

@@ -1,12 +1,15 @@
-import type { CatalogTrainingPrices } from "@/lib/catalog";
+import type { CatalogTrainingPrices, CatalogTrainingProgramRecord } from "@/lib/catalog";
 
-export type TrainingPriceKey = keyof CatalogTrainingPrices;
+export type TrainingPriceKey = string;
+
+export type PublicTrainingProgram = Omit<CatalogTrainingProgramRecord, "priceCents" | "createdAt" | "updatedAt">;
 
 export type TrainingPricingResponse = {
   enabled: boolean;
   publishableKey: string | null;
   currency: string;
   prices: CatalogTrainingPrices;
+  programs: Array<PublicTrainingProgram & { priceCents: number }>;
 };
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
@@ -30,8 +33,12 @@ export function getTrainingPricing() {
   return request<TrainingPricingResponse>("/api/training/pricing", { method: "GET" });
 }
 
+export function getTrainingPrograms() {
+  return request<{ programs: PublicTrainingProgram[] }>("/api/training/programs", { method: "GET" });
+}
+
 export function createTrainingPaymentIntent(payload: {
-  level: TrainingPriceKey;
+  programId: TrainingPriceKey;
   locale: string;
 }) {
   return request<{ ok: true; clientSecret: string; paymentIntentId: string }>("/api/stripe/training-payment-intent", {
@@ -41,7 +48,7 @@ export function createTrainingPaymentIntent(payload: {
 }
 
 export function recordTrainingPurchase(payload: {
-  level: TrainingPriceKey;
+  programId: TrainingPriceKey;
   paymentIntentId: string;
   locale: string;
 }) {

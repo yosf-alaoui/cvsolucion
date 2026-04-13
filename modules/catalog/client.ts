@@ -4,6 +4,9 @@ import type {
   CatalogLocale,
   CatalogPackageRecord,
   CatalogSnapshot,
+  CatalogTrainingProgramRecord,
+  CatalogTrainingTranslation,
+  PublicTrainingProgramsResponse,
   PublicCatalogResponse,
 } from "./contracts";
 
@@ -19,11 +22,42 @@ export function createCatalogModuleClient(options: JsonHttpClientOptions = {}) {
     getAdminCatalog() {
       return request<CatalogSnapshot>("/api/admin/catalog", { method: "GET" });
     },
+    getTrainingPrograms() {
+      return request<PublicTrainingProgramsResponse>("/api/training/programs", { method: "GET" });
+    },
     updateBookingPrices(payload: CatalogBookingPrices) {
       return request<{ ok: true; bookingPrices: CatalogBookingPrices }>("/api/admin/catalog/pricing", {
         method: "PUT",
         body: JSON.stringify(payload),
       });
+    },
+    createTrainingProgram(payload: {
+      key?: string;
+      active?: boolean;
+      featured?: boolean;
+      order?: number;
+      priceCents?: number;
+      translations: Record<CatalogLocale, CatalogTrainingTranslation>;
+    }) {
+      return request<{ ok: true; trainingProgram: CatalogTrainingProgramRecord; trainingPrograms: CatalogTrainingProgramRecord[] }>("/api/admin/catalog/training-programs", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    },
+    updateTrainingProgram(programId: string, payload: Partial<CatalogTrainingProgramRecord>) {
+      return request<{ ok: true; trainingProgram: CatalogTrainingProgramRecord; trainingPrograms: CatalogTrainingProgramRecord[] }>(
+        `/api/admin/catalog/training-programs/${encodeURIComponent(programId)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        }
+      );
+    },
+    deleteTrainingProgram(programId: string) {
+      return request<{ ok: true; trainingPrograms: CatalogTrainingProgramRecord[] }>(
+        `/api/admin/catalog/training-programs/${encodeURIComponent(programId)}`,
+        { method: "DELETE" }
+      );
     },
     createPackage(payload: {
       active?: boolean;

@@ -12,5 +12,11 @@ Reusable service-catalog and pricing module for digital service businesses.
 - `server.ts`: generic catalog state manager
 - `env.ts`: optional default booking price environment variables
 
+## Training program support
+- Manage training programs as catalog records, not hard-coded levels.
+- Each program has `key`, `active`, `featured`, `order`, `priceCents`, and EN/FR/AR public text.
+- Editable public text includes badge, title, hours, duration/weeks, prerequisite, certification, project text, and module lines.
+- Public API can expose active programs without prices; authenticated/admin APIs can include prices for checkout.
+
 ## Notes
 - This module is intentionally separate from `dashboard` so pricing and packages can be reused in non-dashboard projects.

@@ -88,7 +88,20 @@ import {
   verifyTrainingPayment,
 } from "./stripeBooking";
 import { hasProcessedStripeEvent, markStripeEventProcessed } from "./stripeEventStore";
-import { createCatalogPackage, deleteCatalogPackage, getCatalogSnapshot, getPublicCatalog, updateCatalogBookingPrices, updateCatalogPackage, updateCatalogTrainingPrices } from "./catalogStore";
+import {
+  createCatalogPackage,
+  createCatalogTrainingProgram,
+  deleteCatalogPackage,
+  deleteCatalogTrainingProgram,
+  getCatalogSnapshot,
+  getCatalogTrainingProgram,
+  getPublicCatalog,
+  getPublicTrainingPrograms,
+  updateCatalogBookingPrices,
+  updateCatalogPackage,
+  updateCatalogTrainingPrices,
+  updateCatalogTrainingProgram,
+} from "./catalogStore";
 import { getAppDataDir } from "./dataDir";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -181,9 +194,7 @@ function parseRequestedBookingSlots(value: unknown) {
 
 function parseTrainingLevel(value: unknown): TrainingPriceKey | null {
   const level = String(value || "").trim();
-  return level === "level1" || level === "level2" || level === "level3" || level === "level4" || level === "bundle"
-    ? level
-    : null;
+  return level ? level : null;
 }
 
 function escapeHtml(value: string) {
@@ -1285,6 +1296,10 @@ async function startServer() {
     return res.json(getStripePricingSnapshot());
   });
 
+  app.get("/api/training/programs", rateLimit({ key: "training-programs", windowMs: 1000 * 60, limit: 180 }), (_req, res) => {
+    return res.json({ programs: getPublicTrainingPrograms() });
+  });
+
   app.get("/api/training/pricing", rateLimit({ key: "training-pricing", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
     const auth = getCurrentUser(req);
     if (!auth) {
@@ -1300,11 +1315,11 @@ async function startServer() {
         return res.status(401).json({ error: "Please sign in before starting payment." });
       }
 
-      const level = parseTrainingLevel(req.body?.level);
+      const level = parseTrainingLevel(req.body?.programId ?? req.body?.level);
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
 
       if (!level) {
-        return res.status(400).json({ error: "Please choose a valid training level." });
+        return res.status(400).json({ error: "Please choose a valid training program." });
       }
 
       const intent = await createTrainingPaymentIntent({
@@ -1331,12 +1346,12 @@ async function startServer() {
         return res.status(401).json({ error: "Please sign in before confirming training." });
       }
 
-      const level = parseTrainingLevel(req.body?.level);
+      const level = parseTrainingLevel(req.body?.programId ?? req.body?.level);
       const paymentIntentId = String(req.body?.paymentIntentId || "").trim();
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
 
       if (!level) {
-        return res.status(400).json({ error: "Please choose a valid training level." });
+        return res.status(400).json({ error: "Please choose a valid training program." });
       }
       if (!paymentIntentId) {
         return res.status(400).json({ error: "Payment reference is required." });
@@ -1348,14 +1363,8 @@ async function startServer() {
         level,
       });
 
-      const levelLabelMap: Record<TrainingPriceKey, string> = {
-        level1: "Level 1 - Core Designer",
-        level2: "Level 2 - Catalog Engineer",
-        level3: "Level 3 - Production Specialist",
-        level4: "Level 4 - CV Consultant",
-        bundle: "Complete CV Professional Path",
-      };
-      const levelLabel = levelLabelMap[level];
+      const program = getCatalogTrainingProgram(level);
+      const levelLabel = program?.translations?.en?.title || program?.key || level;
       const amountLabel = new Intl.NumberFormat("en-CA", {
         style: "currency",
         currency: payment.currency.toUpperCase(),
@@ -1949,6 +1958,69 @@ async function startServer() {
       });
 
       return res.json({ ok: true, trainingPrices: pricing });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post("/api/admin/catalog/training-programs", rateLimit({ key: "admin-catalog-training-program-create", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const record = createCatalogTrainingProgram({
+        key: typeof req.body?.key === "string" ? req.body.key : undefined,
+        active: typeof req.body?.active === "boolean" ? req.body.active : true,
+        featured: Boolean(req.body?.featured),
+        order: Number(req.body?.order),
+        priceCents: Number(req.body?.priceCents),
+        translations: req.body?.translations,
+      });
+
+      return res.status(201).json({ ok: true, trainingProgram: record, trainingPrograms: getCatalogSnapshot().trainingPrograms });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.patch("/api/admin/catalog/training-programs/:programId", rateLimit({ key: "admin-catalog-training-program-update", windowMs: 1000 * 60 * 5, limit: 100 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const programId = String(req.params.programId || "").trim();
+      if (!programId) {
+        return res.status(400).json({ error: "Training program is required." });
+      }
+
+      const record = updateCatalogTrainingProgram({
+        id: programId,
+        key: typeof req.body?.key === "string" ? req.body.key : undefined,
+        active: typeof req.body?.active === "boolean" ? req.body.active : undefined,
+        featured: typeof req.body?.featured === "boolean" ? req.body.featured : undefined,
+        order: typeof req.body?.order !== "undefined" ? Number(req.body.order) : undefined,
+        priceCents: typeof req.body?.priceCents !== "undefined" ? Number(req.body.priceCents) : undefined,
+        translations: req.body?.translations,
+      });
+
+      return res.json({ ok: true, trainingProgram: record, trainingPrograms: getCatalogSnapshot().trainingPrograms });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.delete("/api/admin/catalog/training-programs/:programId", rateLimit({ key: "admin-catalog-training-program-delete", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const programId = String(req.params.programId || "").trim();
+      if (!programId) {
+        return res.status(400).json({ error: "Training program is required." });
+      }
+
+      deleteCatalogTrainingProgram(programId);
+      return res.json({ ok: true, trainingPrograms: getCatalogSnapshot().trainingPrograms });
     } catch (error) {
       return next(error);
     }
