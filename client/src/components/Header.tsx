@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, ChevronDown, LogOut, Mail, Menu, ShoppingCart, UserRound, X } from "lucide-react";
+import { CalendarDays, ChevronDown, Globe2, LogOut, Mail, Menu, ShoppingCart, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
@@ -117,6 +117,12 @@ export default function Header() {
   const cartLabel = locale === "ar" ? "السلة" : locale === "fr" ? "Panier" : "Cart";
   const servicesOverviewLabel =
     locale === "ar" ? "كل الخدمات" : locale === "fr" ? "Vue d'ensemble des services" : "Services overview";
+  const formationsLabel = locale === "ar" ? "التكوين" : locale === "fr" ? "Formations" : "Training";
+  const solutionsLabel = locale === "ar" ? "الحلول" : locale === "fr" ? "Solutions" : "Solutions";
+  const resourcesLabel = locale === "ar" ? "الموارد" : locale === "fr" ? "Ressources" : "Resources";
+  const profileLabel = locale === "ar" ? "الحساب" : locale === "fr" ? "Profil" : "Profile";
+  const accountLabel = locale === "ar" ? "حسابي" : locale === "fr" ? "Mon compte" : "My account";
+  const languageAriaLabel = locale === "ar" ? "تغيير اللغة" : locale === "fr" ? "Changer de langue" : "Change language";
   const visibleCartCount = isAuthed ? cartCount : 0;
   const cartButtonLabel = visibleCartCount > 0 ? `${cartLabel} (${visibleCartCount})` : cartLabel;
   const serviceMenuLinks = SEO_SERVICE_PAGE_ORDER.map((key) => {
@@ -157,29 +163,37 @@ export default function Header() {
               </picture>
             </a>
 
-            <nav className="hidden flex-1 items-center justify-center gap-6 2xl:gap-8 xl:flex">
-              <a href={trainingHref} className="font-semibold text-foreground transition-colors hover:text-primary">
-                {t("nav.training")}
-              </a>
-              <a href={designPricingHref} className="font-semibold text-foreground transition-colors hover:text-primary">
-                {t("nav.designPricing")}
-              </a>
-              <a href={articlesHref} className="font-semibold text-foreground transition-colors hover:text-primary">
-                {articlesLabel}
-              </a>
-              <a href={guidesHref} className="font-semibold text-foreground transition-colors hover:text-primary">
-                {guidesLabel}
-              </a>
-              <a href={aboutHref} className="font-semibold text-foreground transition-colors hover:text-primary">
-                {aboutLabel}
-              </a>
+            <nav className="hidden flex-1 items-center justify-center gap-4 xl:flex 2xl:gap-6">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 font-semibold text-foreground transition-colors hover:text-primary"
+                  <button type="button" className="inline-flex items-center gap-1.5 font-semibold text-foreground transition-colors hover:text-primary">
+                    {formationsLabel}
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" className="w-64 rounded-2xl border-slate-200 bg-white/95 p-2 backdrop-blur-xl">
+                  <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
+                    <a href={trainingHref}>{t("nav.training")}</a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-xl px-3 py-2 font-semibold"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      scrollToSection("packages");
+                    }}
                   >
-                    {t("nav.services")}
+                    {t("nav.packages")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
+                    <a href={designPricingHref}>{t("nav.designPricing")}</a>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" className="inline-flex items-center gap-1.5 font-semibold text-foreground transition-colors hover:text-primary">
+                    {solutionsLabel}
                     <ChevronDown className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
@@ -200,33 +214,51 @@ export default function Header() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <button
-                onClick={() => scrollToSection("packages")}
-                className="font-semibold text-foreground transition-colors hover:text-primary"
-              >
-                {t("nav.packages")}
-              </button>
-              <button
-                onClick={() => scrollToSection("faq")}
-                className="font-semibold text-foreground transition-colors hover:text-primary"
-              >
-                {t("nav.faq")}
-              </button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" className="inline-flex items-center gap-1.5 font-semibold text-foreground transition-colors hover:text-primary">
+                    {resourcesLabel}
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" className="w-56 rounded-2xl border-slate-200 bg-white/95 p-2 backdrop-blur-xl">
+                  <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
+                    <a href={articlesHref}>{articlesLabel}</a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
+                    <a href={guidesHref}>{guidesLabel}</a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-xl px-3 py-2 font-semibold"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      scrollToSection("faq");
+                    }}
+                  >
+                    {t("nav.faq")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <a href={aboutHref} className="font-semibold text-foreground transition-colors hover:text-primary">
+                {aboutLabel}
+              </a>
             </nav>
 
-            <div className="hidden items-center justify-end gap-3 xl:flex">
+            <div className="hidden items-center justify-end gap-2 xl:flex">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="rounded-full border-slate-200 bg-white/75 backdrop-blur"
+                className="rounded-full border-slate-200 bg-white/70 px-4 backdrop-blur"
                 onClick={() => scrollToSection("contact")}
               >
                 <Mail className="h-4 w-4" />
                 {contactLabel}
               </Button>
 
-              <Button asChild size="sm" className="rounded-full bg-primary text-white shadow-sm hover:bg-primary/90">
+              <Button asChild size="sm" className="rounded-full bg-primary px-4 text-white shadow-sm hover:bg-primary/90">
                 <a
                   href={bookingHref}
                   target={bookingHref.startsWith("http") ? "_blank" : undefined}
@@ -240,14 +272,14 @@ export default function Header() {
               <Button
                 asChild
                 variant={visibleCartCount > 0 ? "default" : "outline"}
-                size="sm"
-                className={`relative rounded-full backdrop-blur ${
+                size="icon"
+                aria-label={cartLabel}
+                className={`relative h-9 w-9 rounded-full backdrop-blur ${
                   visibleCartCount > 0 ? "bg-primary text-white shadow-sm hover:bg-primary/90" : "border-slate-200 bg-white/75"
                 }`}
               >
                 <a href={cartHref}>
                   <ShoppingCart className="h-4 w-4" />
-                  {cartButtonLabel}
                   {visibleCartCount > 0 ? (
                     <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-primary">
                       {visibleCartCount}
@@ -257,26 +289,33 @@ export default function Header() {
               </Button>
 
               {!isAuthed ? (
-                <a href={loginHref} className="font-semibold text-foreground transition-colors hover:text-primary">
-                  {t("auth.signInUp")}
-                </a>
+                <Button asChild variant="outline" size="icon" className="h-9 w-9 rounded-full border-slate-200 bg-white/70 backdrop-blur" aria-label={t("auth.signInUp")}>
+                  <a href={loginHref}>
+                    <UserRound className="h-4 w-4" />
+                  </a>
+                </Button>
               ) : (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/75 px-4 py-2 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:bg-white/90"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/70 text-foreground backdrop-blur transition-colors hover:bg-white/90"
+                      aria-label={profileLabel}
                     >
                       <UserRound className="h-4 w-4" />
-                      Profile
-                      <ChevronDown className="h-4 w-4" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48 rounded-2xl border-slate-200 bg-white/95 p-2 backdrop-blur-xl">
+                  <DropdownMenuContent align="end" className="w-52 rounded-2xl border-slate-200 bg-white/95 p-2 backdrop-blur-xl">
                     <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
                       <a href={dashboardHref}>
                         <UserRound className="h-4 w-4" />
-                        My account
+                        {accountLabel}
+                      </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
+                      <a href={cartHref}>
+                        <ShoppingCart className="h-4 w-4" />
+                        {cartButtonLabel}
                       </a>
                     </DropdownMenuItem>
                     <DropdownMenuItem
@@ -297,12 +336,12 @@ export default function Header() {
                 <button
                   type="button"
                   onClick={() => setIsLangOpen((value) => !value)}
-                  className="inline-flex items-center gap-2 rounded-full border border-border bg-white/70 px-4 py-1 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:bg-white/80"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white/70 text-foreground backdrop-blur transition-colors hover:bg-white/80"
                   aria-haspopup="menu"
                   aria-expanded={isLangOpen}
+                  aria-label={languageAriaLabel}
                 >
-                  {t("nav.languageLabel")}
-                  <ChevronDown className="h-4 w-4" />
+                  <Globe2 className="h-4 w-4" />
                 </button>
                 {isLangOpen ? (
                   <div className="absolute right-0 mt-2 w-40 rounded-xl border border-border bg-white/95 p-1 shadow-lg backdrop-blur">
@@ -348,156 +387,23 @@ export default function Header() {
           </div>
 
           {isMenuOpen ? (
-            <div className="space-y-2 border-t border-white/20 px-4 py-4 xl:hidden">
-              <div data-testid="lang-switch-mobile" className="pb-2 pt-1">
-                <div className="relative" ref={mobileLangMenuRef}>
-                  <button
-                    type="button"
-                    onClick={() => setIsLangOpen((value) => !value)}
-                    className="inline-flex w-full items-center justify-between rounded-lg border border-border bg-white/70 px-3 py-2 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:bg-white/80"
-                    aria-haspopup="menu"
-                    aria-expanded={isLangOpen}
-                  >
-                    {t("nav.languageLabel")}
-                    <ChevronDown className="h-4 w-4" />
-                  </button>
-                  {isLangOpen ? (
-                    <div className="mt-2 w-full rounded-xl border border-border bg-white/95 p-1 shadow-lg backdrop-blur">
-                      <a
-                        href={enHref}
-                        className={`block rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                          locale === "en" ? "bg-primary text-white" : "text-foreground hover:bg-white/80"
-                        }`}
-                        onClick={() => {
-                          setIsLangOpen(false);
-                          setIsMenuOpen(false);
-                        }}
-                      >
-                        {t("nav.english")}
-                      </a>
-                      <a
-                        href={frHref}
-                        className={`block rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                          locale === "fr" ? "bg-primary text-white" : "text-foreground hover:bg-white/80"
-                        }`}
-                        onClick={() => {
-                          setIsLangOpen(false);
-                          setIsMenuOpen(false);
-                        }}
-                      >
-                        {t("nav.french")}
-                      </a>
-                      <a
-                        href={arHref}
-                        className={`block rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                          locale === "ar" ? "bg-primary text-white" : "text-foreground hover:bg-white/80"
-                        }`}
-                        onClick={() => {
-                          setIsLangOpen(false);
-                          setIsMenuOpen(false);
-                        }}
-                      >
-                        {t("nav.arabic")}
-                      </a>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              <a
-                href={trainingHref}
-                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {t("nav.training")}
-              </a>
-              <a
-                href={designPricingHref}
-                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {t("nav.designPricing")}
-              </a>
-              <a
-                href={articlesHref}
-                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {articlesLabel}
-              </a>
-              <a
-                href={guidesHref}
-                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {guidesLabel}
-              </a>
-              <a
-                href={aboutHref}
-                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {aboutLabel}
-              </a>
-              {isAuthed ? (
-                <a
-                  href={dashboardHref}
-                  className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Profile
-                </a>
-              ) : null}
-              <div className="rounded-xl bg-white/35 p-2">
-                <button
-                  type="button"
-                  className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
-                  onClick={() => scrollToSection("services")}
-                >
-                  {servicesOverviewLabel}
-                </button>
-                {serviceMenuLinks.map((link) => (
+            <div className="space-y-4 border-t border-white/20 px-4 py-4 xl:hidden">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Button asChild className="w-full rounded-full bg-primary text-white hover:bg-primary/90">
                   <a
-                    key={link.href}
-                    href={link.href}
-                    className="block rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-white/30 hover:text-primary"
+                    href={bookingHref}
+                    target={bookingHref.startsWith("http") ? "_blank" : undefined}
+                    rel={bookingHref.startsWith("http") ? "noopener noreferrer" : undefined}
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    {link.label}
+                    <CalendarDays className="h-4 w-4" />
+                    {bookLabel}
                   </a>
-                ))}
-              </div>
-              <button
-                onClick={() => scrollToSection("packages")}
-                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
-              >
-                {t("nav.packages")}
-              </button>
-              <button
-                onClick={() => scrollToSection("faq")}
-                className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
-              >
-                {t("nav.faq")}
-              </button>
-
-              {!isAuthed ? (
-                <a
-                  href={loginHref}
-                  className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
-                >
-                  {t("auth.signInUp")}
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/30"
-                >
-                  {t("auth.signOut")}
-                </button>
-              )}
-
-              <div className="grid gap-2 pt-2">
+                </Button>
+                <Button type="button" variant="outline" className="w-full rounded-full bg-white/80" onClick={() => scrollToSection("contact")}>
+                  <Mail className="h-4 w-4" />
+                  {contactLabel}
+                </Button>
                 <Button
                   asChild
                   variant={visibleCartCount > 0 ? "default" : "outline"}
@@ -513,27 +419,130 @@ export default function Header() {
                     ) : null}
                   </a>
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full rounded-full bg-white/80"
-                  onClick={() => scrollToSection("contact")}
-                >
-                  <Mail className="h-4 w-4" />
-                  {contactLabel}
-                </Button>
-                <Button asChild className="w-full rounded-full bg-primary text-white hover:bg-primary/90">
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                {!isAuthed ? (
                   <a
-                    href={bookingHref}
-                    target={bookingHref.startsWith("http") ? "_blank" : undefined}
-                    rel={bookingHref.startsWith("http") ? "noopener noreferrer" : undefined}
+                    href={loginHref}
+                    className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm font-semibold text-foreground backdrop-blur"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    <CalendarDays className="h-4 w-4" />
-                    {bookLabel}
+                    <UserRound className="h-4 w-4" />
+                    {t("auth.signInUp")}
                   </a>
-                </Button>
+                ) : (
+                  <a
+                    href={dashboardHref}
+                    className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm font-semibold text-foreground backdrop-blur"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <UserRound className="h-4 w-4" />
+                    {accountLabel}
+                  </a>
+                )}
+
+                <div data-testid="lang-switch-mobile" className="relative" ref={mobileLangMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsLangOpen((value) => !value)}
+                    className="inline-flex w-full items-center justify-between rounded-xl border border-border bg-white/70 px-3 py-2 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:bg-white/80"
+                    aria-haspopup="menu"
+                    aria-expanded={isLangOpen}
+                    aria-label={languageAriaLabel}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Globe2 className="h-4 w-4" />
+                      {t("nav.languageLabel")}
+                    </span>
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                  {isLangOpen ? (
+                    <div className="mt-2 w-full rounded-xl border border-border bg-white/95 p-1 shadow-lg backdrop-blur">
+                      {[
+                        [enHref, "en", t("nav.english")],
+                        [frHref, "fr", t("nav.french")],
+                        [arHref, "ar", t("nav.arabic")],
+                      ].map(([href, key, label]) => (
+                        <a
+                          key={key}
+                          href={href}
+                          className={`block rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                            locale === key ? "bg-primary text-white" : "text-foreground hover:bg-white/80"
+                          }`}
+                          onClick={() => {
+                            setIsLangOpen(false);
+                            setIsMenuOpen(false);
+                          }}
+                        >
+                          {label}
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </div>
+
+              <div className="rounded-2xl bg-white/35 p-2">
+                <div className="px-3 py-2 text-xs font-black uppercase tracking-[0.25em] text-slate-500">{formationsLabel}</div>
+                <a href={trainingHref} className="block rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40" onClick={() => setIsMenuOpen(false)}>
+                  {t("nav.training")}
+                </a>
+                <button type="button" onClick={() => scrollToSection("packages")} className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40">
+                  {t("nav.packages")}
+                </button>
+                <a href={designPricingHref} className="block rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40" onClick={() => setIsMenuOpen(false)}>
+                  {t("nav.designPricing")}
+                </a>
+              </div>
+
+              <div className="rounded-2xl bg-white/35 p-2">
+                <div className="px-3 py-2 text-xs font-black uppercase tracking-[0.25em] text-slate-500">{solutionsLabel}</div>
+                <button type="button" className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40" onClick={() => scrollToSection("services")}>
+                  {servicesOverviewLabel}
+                </button>
+                {serviceMenuLinks.map((link) => (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    className="block rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-white/40 hover:text-primary"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+
+              <div className="rounded-2xl bg-white/35 p-2">
+                <div className="px-3 py-2 text-xs font-black uppercase tracking-[0.25em] text-slate-500">{resourcesLabel}</div>
+                <a href={articlesHref} className="block rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40" onClick={() => setIsMenuOpen(false)}>
+                  {articlesLabel}
+                </a>
+                <a href={guidesHref} className="block rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40" onClick={() => setIsMenuOpen(false)}>
+                  {guidesLabel}
+                </a>
+                <button type="button" onClick={() => scrollToSection("faq")} className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40">
+                  {t("nav.faq")}
+                </button>
+              </div>
+
+              <a
+                href={aboutHref}
+                className="block w-full rounded-xl bg-white/35 px-5 py-3 text-left font-semibold transition-colors hover:bg-white/50"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {aboutLabel}
+              </a>
+
+              {isAuthed ? (
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="block w-full rounded-xl bg-white/35 px-5 py-3 text-left font-semibold transition-colors hover:bg-white/50"
+                >
+                  {t("auth.signOut")}
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>
