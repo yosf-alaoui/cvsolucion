@@ -12,6 +12,7 @@ export type PaymentLineItem = {
 
 export type PaymentTotals = {
   subtotal: number;
+  fees: number;
   taxes: number;
   total: number;
 };
@@ -20,12 +21,14 @@ export type PaymentConfigResponse = {
   enabled: boolean;
   publishableKey: string | null;
   currency: PaymentCurrency;
+  cardPaymentFeeCents?: number;
 };
 
 export type CreatePaymentIntentPayload = {
   amount?: number;
   currency?: PaymentCurrency;
   email?: string | null;
+  cardPaymentFeeCents?: number;
   metadata?: Record<string, string>;
   lineItems?: PaymentLineItem[];
 };

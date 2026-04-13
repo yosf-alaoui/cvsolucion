@@ -31,6 +31,7 @@ function getCopy(locale: string) {
       priority: "الأولوية",
       package: "الباقة",
       subtotal: "المجموع الفرعي",
+      cardFee: "رسوم الدفع بالبطاقة",
       taxes: "الضرائب",
       total: "الإجمالي المستحق",
       selectedCount: "عدد الجلسات",
@@ -59,6 +60,7 @@ function getCopy(locale: string) {
       priority: "Priorite",
       package: "Forfait",
       subtotal: "Sous-total",
+      cardFee: "Frais de paiement par carte",
       taxes: "Taxes",
       total: "Total a payer",
       selectedCount: "Sessions",
@@ -86,6 +88,7 @@ function getCopy(locale: string) {
     priority: "Priority",
     package: "Package",
     subtotal: "Subtotal",
+    cardFee: "Card payment fee",
     taxes: "Taxes",
     total: "Total due now",
     selectedCount: "Selected sessions",
@@ -145,7 +148,7 @@ export default function BookingCart() {
   useEffect(() => {
     getStripeBookingConfig()
       .then((response) => setStripeConfig(response))
-      .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", prices: {} }));
+      .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", cardPaymentFeeCents: 1500, prices: {} }));
   }, []);
 
   useEffect(() => {
@@ -225,6 +228,7 @@ export default function BookingCart() {
                   currency={stripeConfig?.currency || "usd"}
                   draft={draft}
                   unitAmount={unitAmount}
+                  cardPaymentFeeCents={stripeConfig?.cardPaymentFeeCents ?? 0}
                   serviceLabel={serviceLabel}
                   priorityLabel={priorityLabel}
                   packageLabel={packageLabel}
@@ -236,6 +240,7 @@ export default function BookingCart() {
                     priority: copy.priority,
                     package: copy.package,
                     subtotal: copy.subtotal,
+                    cardFee: copy.cardFee,
                     taxes: copy.taxes,
                     total: copy.total,
                     selectedCount: copy.selectedCount,

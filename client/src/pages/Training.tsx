@@ -96,6 +96,9 @@ function getCopy(locale: PageLocale) {
       contactText: "Send us your current setup and we will recommend the right starting point.",
       contactButton: "Ask for guidance",
       payTitle: "Training payment",
+      subtotal: "Subtotal",
+      cardFee: "Card payment fee",
+      total: "Total due now",
       paySubtitle: "Confirm the selected training level and pay securely.",
       secure: "Secure payment by Stripe",
       cardNumber: "Card number",
@@ -138,6 +141,9 @@ function getCopy(locale: PageLocale) {
       contactText: "Envoyez-nous votre setup actuel et nous recommandons le bon point de départ.",
       contactButton: "Demander une recommandation",
       payTitle: "Paiement formation",
+      subtotal: "Sous-total",
+      cardFee: "Frais de paiement par carte",
+      total: "Total a payer",
       paySubtitle: "Confirmez le niveau choisi et payez en sécurité.",
       secure: "Paiement sécurisé par Stripe",
       cardNumber: "Numéro de carte",
@@ -180,6 +186,9 @@ function getCopy(locale: PageLocale) {
       contactText: "أرسل لنا إعدادك الحالي وسنقترح نقطة البداية المناسبة.",
       contactButton: "اطلب توجيها",
       payTitle: "دفع التدريب",
+      subtotal: "المجموع الفرعي",
+      cardFee: "رسوم الدفع بالبطاقة",
+      total: "الإجمالي المستحق الآن",
       paySubtitle: "أكد مستوى التدريب المختار وادفع بأمان.",
       secure: "دفع آمن عبر Stripe",
       cardNumber: "رقم البطاقة",
@@ -257,7 +266,10 @@ export default function Training() {
   const selectedProgramId = selected?.id ?? "";
   const selectedPrice = getProgramPrice(selectedProgramId);
   const currency = pricing?.currency || "usd";
+  const selectedCardPaymentFee = selectedPrice > 0 ? pricing?.cardPaymentFeeCents ?? 0 : 0;
+  const selectedTotal = selectedPrice + selectedCardPaymentFee;
   const selectedPriceLabel = selectedPrice ? moneyLabel(selectedPrice, pageLocale, currency) : copy.loginToSeePrice;
+  const selectedTotalLabel = selectedTotal ? moneyLabel(selectedTotal, pageLocale, currency) : copy.loginToSeePrice;
   const paymentReady = Boolean(selectedProgramId && user && pricing?.enabled && pricing.publishableKey && selectedPrice > 0);
   const loginHref = `${localPath(pageLocale, "/login")}?next=${encodeURIComponent(localPath(pageLocale, "/training"))}`;
   const whatsappHref = buildWhatsAppLink("+1 438 807 8747", copy.contactText);
@@ -462,6 +474,24 @@ export default function Training() {
                   <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{selected.badge}</div>
                   <h3 className="mt-3 text-3xl font-black text-slate-950">{selected.title}</h3>
                   <div className="mt-4 text-4xl font-black text-primary">{selectedPriceLabel}</div>
+                  {user && selectedPrice > 0 ? (
+                    <div className="mt-5 space-y-2 rounded-2xl border border-slate-200 bg-white/70 p-4 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-500">{copy.subtotal}</span>
+                        <span className="font-semibold text-slate-900">{selectedPriceLabel}</span>
+                      </div>
+                      {selectedCardPaymentFee > 0 ? (
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-slate-500">{copy.cardFee}</span>
+                          <span className="font-semibold text-slate-900">{moneyLabel(selectedCardPaymentFee, pageLocale, currency)}</span>
+                        </div>
+                      ) : null}
+                      <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-2">
+                        <span className="font-semibold text-slate-950">{copy.total}</span>
+                        <span className="font-black text-primary">{selectedTotalLabel}</span>
+                      </div>
+                    </div>
+                  ) : null}
                   <p className="mt-4 text-sm leading-7 text-slate-600">{selected.project}</p>
                   {!authLoading && !user ? (
                     <Button asChild className="mt-6 w-full rounded-full bg-primary text-white hover:bg-primary/90">
@@ -481,7 +511,7 @@ export default function Training() {
                 <StripePaymentForm
                   publishableKey={pricing.publishableKey}
                   clientSecret={paymentClientSecret}
-                  amountLabel={selectedPriceLabel}
+                  amountLabel={selectedTotalLabel}
                   billingReady={Boolean(user.email)}
                   billingDetails={{ name: user.email, email: user.email, phone: "" }}
                   copy={{

@@ -4,6 +4,7 @@ export type StripeConfigResponse = {
   enabled: boolean;
   publishableKey: string | null;
   currency: string;
+  cardPaymentFeeCents: number;
   prices: Record<string, number>;
 };
 

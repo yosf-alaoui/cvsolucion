@@ -8,6 +8,7 @@ export type TrainingPricingResponse = {
   enabled: boolean;
   publishableKey: string | null;
   currency: string;
+  cardPaymentFeeCents: number;
   prices: CatalogTrainingPrices;
   programs: Array<PublicTrainingProgram & { priceCents: number }>;
 };

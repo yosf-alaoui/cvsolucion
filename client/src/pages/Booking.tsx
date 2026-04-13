@@ -115,6 +115,7 @@ function getCopy(locale: string) {
       remove: "إزالة",
       item: "جلسة",
       subtotal: "المجموع الفرعي",
+      cardFee: "رسوم الدفع بالبطاقة",
       taxes: "الضرائب",
       total: "الإجمالي المستحق",
       note: "خدمة رقمية بدون شحن. كل موعد مختار يُحاسب كجلسة مستقلة.",
@@ -150,6 +151,7 @@ function getCopy(locale: string) {
       remove: "Retirer",
       item: "Session",
       subtotal: "Sous-total",
+      cardFee: "Frais de paiement par carte",
       taxes: "Taxes",
       total: "Total a payer",
       note: "Service numerique sans livraison. Chaque horaire choisi est facture comme une session separee.",
@@ -184,6 +186,7 @@ function getCopy(locale: string) {
     remove: "Remove",
     item: "Session",
     subtotal: "Subtotal",
+    cardFee: "Card payment fee",
     taxes: "Taxes",
     total: "Total due now",
     note: "Digital service with no shipping. Each selected appointment is billed as a separate session.",
@@ -359,7 +362,9 @@ export default function Booking() {
   const cartHref = locale === "en" ? "/book/cart" : `/${locale}/book/cart`;
   const priceKey = `${priority}:${serviceType}`;
   const unitAmount = stripeConfig?.prices?.[priceKey] ?? 0;
-  const totalAmount = unitAmount * selectedSlots.length;
+  const subtotalAmount = unitAmount * selectedSlots.length;
+  const cardPaymentFeeCents = subtotalAmount > 0 ? stripeConfig?.cardPaymentFeeCents ?? 0 : 0;
+  const totalAmount = subtotalAmount + cardPaymentFeeCents;
   const totalAmountLabel =
     totalAmount > 0
       ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
@@ -599,6 +604,7 @@ export default function Booking() {
                 locale={locale}
                 currency={stripeConfig?.currency || "usd"}
                 unitAmount={unitAmount}
+                cardPaymentFeeCents={cardPaymentFeeCents}
                 serviceLabel={serviceLabel}
                 priorityLabel={priorityLabel}
                 packageLabel={packageLabel}
@@ -610,6 +616,7 @@ export default function Booking() {
                 priorityText={copy.priority}
                 packageText={copy.package}
                 subtotalText={copy.subtotal}
+                cardFeeText={copy.cardFee}
                 taxText={copy.taxes}
                 totalText={copy.total}
                 removeText={copy.remove}

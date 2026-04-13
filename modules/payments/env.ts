@@ -22,6 +22,12 @@ export const paymentsModuleEnv: ModuleEnvRequirement[] = [
     description: "Default currency code for digital service payments.",
     example: "usd",
   },
+  {
+    key: "STRIPE_CARD_PAYMENT_FEE_CENTS",
+    required: false,
+    description: "Optional fixed card-payment fee in cents added to Stripe checkout totals.",
+    example: "1500",
+  },
 ];
 
 export const paymentsModuleManifest: ReusableModuleManifest = {

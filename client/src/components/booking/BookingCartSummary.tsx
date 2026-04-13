@@ -16,6 +16,7 @@ type BookingCartSummaryProps = {
   locale: string;
   currency: string;
   unitAmount: number;
+  cardPaymentFeeCents?: number;
   serviceLabel: string;
   priorityLabel: string;
   packageLabel?: string | null;
@@ -27,6 +28,7 @@ type BookingCartSummaryProps = {
   priorityText: string;
   packageText: string;
   subtotalText: string;
+  cardFeeText?: string;
   taxText: string;
   totalText: string;
   removeText: string;
@@ -113,6 +115,7 @@ export default function BookingCartSummary({
   locale,
   currency,
   unitAmount,
+  cardPaymentFeeCents = 0,
   serviceLabel,
   priorityLabel,
   packageLabel,
@@ -124,6 +127,7 @@ export default function BookingCartSummary({
   priorityText,
   packageText,
   subtotalText,
+  cardFeeText,
   taxText,
   totalText,
   removeText,
@@ -140,8 +144,9 @@ export default function BookingCartSummary({
 }: BookingCartSummaryProps) {
   const timeZone = draft.timeZone || "America/Toronto";
   const subtotal = unitAmount * draft.slots.length;
+  const cardPaymentFee = subtotal > 0 ? cardPaymentFeeCents : 0;
   const taxes = 0;
-  const total = subtotal + taxes;
+  const total = subtotal + cardPaymentFee + taxes;
 
   return (
     <GlassCard className="card-static rounded-[32px] p-7">
@@ -215,6 +220,12 @@ export default function BookingCartSummary({
                 <span className="text-slate-500">{subtotalText}</span>
                 <span className="font-semibold text-slate-900">{moneyLabel(subtotal, locale, currency)}</span>
               </div>
+              {cardPaymentFee > 0 ? (
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-slate-500">{cardFeeText || "Card payment fee"}</span>
+                  <span className="font-semibold text-slate-900">{moneyLabel(cardPaymentFee, locale, currency)}</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between gap-4">
                 <span className="text-slate-500">{taxText}</span>
                 <span className="font-semibold text-slate-900">{moneyLabel(taxes, locale, currency)}</span>

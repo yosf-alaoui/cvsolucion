@@ -20,6 +20,16 @@ export function getStripeCurrency() {
   return (process.env.STRIPE_CURRENCY?.trim() || "usd").toLowerCase();
 }
 
+function parseNonNegativeCents(value: string | undefined, fallback: number) {
+  if (typeof value === "undefined" || !value.trim()) return fallback;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+export function getCardPaymentFeeCents() {
+  return parseNonNegativeCents(process.env.STRIPE_CARD_PAYMENT_FEE_CENTS, 1500);
+}
+
 export function isStripeConfigured() {
   return Boolean(getStripeSecretKey() && getStripePublishableKey());
 }
@@ -74,6 +84,7 @@ export function getStripePricingSnapshot() {
     enabled: isStripeConfigured(),
     publishableKey: getStripePublishableKey(),
     currency: getStripeCurrency(),
+    cardPaymentFeeCents: getCardPaymentFeeCents(),
     prices: getPriceMap(),
   };
 }
@@ -84,6 +95,7 @@ export function getTrainingPricingSnapshot() {
     enabled: isStripeConfigured(),
     publishableKey: getStripePublishableKey(),
     currency: getStripeCurrency(),
+    cardPaymentFeeCents: getCardPaymentFeeCents(),
     prices: snapshot.trainingPrices,
     programs: snapshot.trainingPrograms
       .filter((program) => program.active)
@@ -114,13 +126,15 @@ export async function createBookingPaymentIntent(input: {
 
   const unitAmount = getBookingPrice(input.priority, input.serviceType);
   const slotCount = input.slots.length;
-  const amount = unitAmount * slotCount;
-  if (!amount) {
+  if (!unitAmount) {
     throw new Error("Stripe pricing is not configured for this booking type.");
   }
   if (!slotCount) {
     throw new Error("At least one booking slot is required.");
   }
+  const subtotal = unitAmount * slotCount;
+  const cardPaymentFeeCents = getCardPaymentFeeCents();
+  const amount = subtotal + cardPaymentFeeCents;
 
   const slotsDigest = buildBookingSlotsDigest(input.slots);
 
@@ -138,6 +152,9 @@ export async function createBookingPaymentIntent(input: {
       priority: input.priority,
       slotCount: String(slotCount),
       slotsDigest,
+      bookingSubtotalCents: String(subtotal),
+      cardPaymentFeeCents: String(cardPaymentFeeCents),
+      bookingTotalCents: String(amount),
       locale: input.locale,
     },
   });
@@ -161,13 +178,15 @@ export async function createTrainingPaymentIntent(input: {
   }
 
   const program = getTrainingProgram(input.level);
-  const amount = program?.priceCents || 0;
-  if (!amount) {
+  const subtotal = program?.priceCents || 0;
+  if (!subtotal) {
     throw new Error("Stripe pricing is not configured for this training program.");
   }
   if (!program?.active) {
     throw new Error("This training program is not available.");
   }
+  const cardPaymentFeeCents = getCardPaymentFeeCents();
+  const amount = subtotal + cardPaymentFeeCents;
 
   const intent = await stripe.paymentIntents.create({
     amount,
@@ -183,7 +202,9 @@ export async function createTrainingPaymentIntent(input: {
       trainingLevel: program.key,
       trainingProgramId: program.id,
       trainingProgramKey: program.key,
-      trainingPriceCents: String(program.priceCents),
+      trainingSubtotalCents: String(subtotal),
+      cardPaymentFeeCents: String(cardPaymentFeeCents),
+      trainingPriceCents: String(amount),
       locale: input.locale,
     },
   });
@@ -209,13 +230,15 @@ export async function verifyBookingPayment(input: {
 
   const unitAmount = getBookingPrice(input.priority, input.serviceType);
   const slotCount = input.slots.length;
-  const amount = unitAmount * slotCount;
-  if (!amount) {
+  if (!unitAmount) {
     throw new Error("Stripe pricing is not configured for this booking type.");
   }
   if (!slotCount) {
     throw new Error("At least one booking slot is required.");
   }
+  const subtotal = unitAmount * slotCount;
+  const cardPaymentFeeCents = getCardPaymentFeeCents();
+  const amount = subtotal + cardPaymentFeeCents;
 
   const intent = await stripe.paymentIntents.retrieve(input.paymentIntentId);
   if (!intent) {
@@ -226,7 +249,12 @@ export async function verifyBookingPayment(input: {
     throw new Error("Payment has not been completed.");
   }
 
-  if (intent.amount !== amount || intent.currency.toLowerCase() !== getStripeCurrency()) {
+  const metadataAmount = Number(intent.metadata?.bookingTotalCents || "");
+  const expectedAmount = Number.isInteger(metadataAmount) && metadataAmount > 0 ? metadataAmount : amount;
+  const amountMatches =
+    intent.amount === expectedAmount ||
+    (!intent.metadata?.bookingTotalCents && intent.amount === subtotal);
+  if (!amountMatches || intent.currency.toLowerCase() !== getStripeCurrency()) {
     throw new Error("Payment amount does not match this booking type.");
   }
 
@@ -260,10 +288,12 @@ export async function verifyTrainingPayment(input: {
   }
 
   const program = getTrainingProgram(input.level);
-  const amount = program?.priceCents || 0;
-  if (!amount) {
+  const subtotal = program?.priceCents || 0;
+  if (!subtotal) {
     throw new Error("Stripe pricing is not configured for this training program.");
   }
+  const cardPaymentFeeCents = getCardPaymentFeeCents();
+  const amount = subtotal + cardPaymentFeeCents;
 
   const intent = await stripe.paymentIntents.retrieve(input.paymentIntentId);
   if (!intent) {
@@ -276,7 +306,10 @@ export async function verifyTrainingPayment(input: {
 
   const metadataAmount = Number(intent.metadata?.trainingPriceCents || "");
   const expectedAmount = Number.isInteger(metadataAmount) && metadataAmount > 0 ? metadataAmount : amount;
-  if (intent.amount !== expectedAmount || intent.currency.toLowerCase() !== getStripeCurrency()) {
+  const amountMatches =
+    intent.amount === expectedAmount ||
+    (!intent.metadata?.cardPaymentFeeCents && intent.amount === subtotal);
+  if (!amountMatches || intent.currency.toLowerCase() !== getStripeCurrency()) {
     throw new Error("Payment amount does not match this training program.");
   }
 

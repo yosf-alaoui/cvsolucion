@@ -37,6 +37,7 @@ function getCopy(locale: string) {
       priority: "الأولوية",
       package: "الباقة",
       subtotal: "المجموع الفرعي",
+      cardFee: "رسوم الدفع بالبطاقة",
       taxes: "الضرائب",
       total: "الإجمالي المستحق الآن",
       selectedCount: "عدد الجلسات",
@@ -88,6 +89,7 @@ function getCopy(locale: string) {
       priority: "Priorite",
       package: "Forfait",
       subtotal: "Sous-total",
+      cardFee: "Frais de paiement par carte",
       taxes: "Taxes",
       total: "Total a payer",
       selectedCount: "Sessions",
@@ -138,6 +140,7 @@ function getCopy(locale: string) {
     priority: "Priority",
     package: "Package",
     subtotal: "Subtotal",
+    cardFee: "Card payment fee",
     taxes: "Taxes",
     total: "Total due now",
     selectedCount: "Selected sessions",
@@ -242,7 +245,7 @@ export default function BookingCheckout() {
   useEffect(() => {
     getStripeBookingConfig()
       .then((response) => setStripeConfig(response))
-      .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", prices: {} }));
+      .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", cardPaymentFeeCents: 1500, prices: {} }));
   }, []);
 
   useEffect(() => {
@@ -296,7 +299,9 @@ export default function BookingCheckout() {
   }, [copy.profileAutoFill, user]);
 
   const unitAmount = draft ? stripeConfig?.prices?.[`${draft.priority}:${draft.serviceType}`] ?? 0 : 0;
-  const totalAmount = unitAmount * (draft?.slots.length || 0);
+  const subtotalAmount = unitAmount * (draft?.slots.length || 0);
+  const cardPaymentFeeCents = subtotalAmount > 0 ? stripeConfig?.cardPaymentFeeCents ?? 0 : 0;
+  const totalAmount = subtotalAmount + cardPaymentFeeCents;
   const currency = stripeConfig?.currency || "usd";
   const totalLabel = moneyLabel(totalAmount, locale, currency);
   const stripeEnabled = Boolean(stripeConfig?.enabled && stripeConfig.publishableKey && totalAmount > 0);
@@ -429,6 +434,7 @@ export default function BookingCheckout() {
                   currency={currency}
                   draft={draft}
                   unitAmount={unitAmount}
+                  cardPaymentFeeCents={cardPaymentFeeCents}
                   serviceLabel={serviceLabel}
                   priorityLabel={priorityLabel}
                   packageLabel={packageLabel}
@@ -440,6 +446,7 @@ export default function BookingCheckout() {
                     priority: copy.priority,
                     package: copy.package,
                     subtotal: copy.subtotal,
+                    cardFee: copy.cardFee,
                     taxes: copy.taxes,
                     total: copy.total,
                     selectedCount: copy.selectedCount,

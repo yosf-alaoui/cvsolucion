@@ -11,6 +11,7 @@ export type CreateStripePaymentsModuleOptions = {
   publishableKey?: string | null;
   webhookSecret?: string | null;
   currency?: string;
+  cardPaymentFeeCents?: number;
 };
 
 function computeLineItemTotal(item: Omit<PaymentLineItem, "totalAmount">) {
@@ -19,14 +20,17 @@ function computeLineItemTotal(item: Omit<PaymentLineItem, "totalAmount">) {
 
 export function calculateOrderTotals(
   lineItems: Array<Omit<PaymentLineItem, "totalAmount">>,
-  taxRate = 0
+  taxRate = 0,
+  fees = 0
 ): PaymentTotals {
   const subtotal = lineItems.reduce((sum, item) => sum + computeLineItemTotal(item), 0);
   const taxes = Math.round(subtotal * taxRate);
+  const safeFees = Number.isInteger(fees) && fees > 0 ? fees : 0;
   return {
     subtotal,
+    fees: safeFees,
     taxes,
-    total: subtotal + taxes,
+    total: subtotal + taxes + safeFees,
   };
 }
 
@@ -46,6 +50,7 @@ export function createStripePaymentsModule(options: CreateStripePaymentsModuleOp
         enabled: Boolean(stripe && options.publishableKey?.trim()),
         publishableKey: options.publishableKey?.trim() || null,
         currency,
+        cardPaymentFeeCents: Number.isInteger(options.cardPaymentFeeCents) && Number(options.cardPaymentFeeCents) > 0 ? Number(options.cardPaymentFeeCents) : 0,
       };
     },
     async createPaymentIntent(payload: CreatePaymentIntentPayload) {
@@ -57,19 +62,23 @@ export function createStripePaymentsModule(options: CreateStripePaymentsModuleOp
         payload.lineItems?.length
           ? payload.lineItems.reduce((sum, item) => sum + item.totalAmount, 0)
           : payload.amount || 0;
+      const cardPaymentFeeCents = Number.isInteger(payload.cardPaymentFeeCents) && Number(payload.cardPaymentFeeCents) > 0 ? Number(payload.cardPaymentFeeCents) : 0;
+      const paymentTotal = total + cardPaymentFeeCents;
 
-      if (!total || total < 1) {
+      if (!paymentTotal || paymentTotal < 1) {
         throw new Error("Payment amount must be greater than zero.");
       }
 
       const intent = await stripe.paymentIntents.create({
-        amount: total,
+        amount: paymentTotal,
         currency: payload.currency?.toLowerCase() || currency,
         automatic_payment_methods: {
           enabled: true,
         },
         receipt_email: payload.email || undefined,
-        metadata: payload.metadata || {},
+        metadata: cardPaymentFeeCents > 0
+          ? { ...(payload.metadata || {}), cardPaymentFeeCents: String(cardPaymentFeeCents) }
+          : payload.metadata || {},
       });
 
       if (!intent.client_secret) {

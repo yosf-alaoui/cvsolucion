@@ -38,6 +38,7 @@ const payment = await booking.createCheckoutIntent({
 
 ## Notes
 - Prices are per selected slot.
+- Checkout can add a fixed card-payment fee through `STRIPE_CARD_PAYMENT_FEE_CENTS`.
 - This module assumes no physical shipping.
 - Keep business-hour logic server-side.
 - Keep persisted appointment slots on Quebec time and only localize display by country/timezone on the client.
