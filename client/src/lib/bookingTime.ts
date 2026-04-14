@@ -1,3 +1,5 @@
+import { getAllCountries, getCountry, getCountryForTimezone } from "countries-and-timezones";
+
 type RegionConfig = {
   code: string;
   timeZone: string;
@@ -14,7 +16,7 @@ type CountryConfig = {
   regions: RegionConfig[];
 };
 
-const COUNTRY_CONFIG: CountryConfig[] = [
+const DETAILED_COUNTRY_CONFIG: CountryConfig[] = [
   {
     code: "CA",
     defaultTimeZone: "America/Toronto",
@@ -80,6 +82,14 @@ const COUNTRY_CONFIG: CountryConfig[] = [
   { code: "ZA", defaultTimeZone: "Africa/Johannesburg", regions: [{ code: "ZA-DEFAULT", timeZone: "Africa/Johannesburg", labels: { en: "National", fr: "National", ar: "National" } }] },
 ];
 
+const ALL_COUNTRY_CODES = Object.keys(getAllCountries()).sort();
+
+function nationalLabel(language: "en" | "fr" | "ar") {
+  if (language === "fr") return "National";
+  if (language === "ar") return "وطني";
+  return "National";
+}
+
 export type BookingCountryOption = {
   code: string;
   label: string;
@@ -111,15 +121,15 @@ function getDisplayNames(locale: string) {
 }
 
 function getCountryConfig(countryCode: string | null | undefined) {
-  return COUNTRY_CONFIG.find((country) => country.code === countryCode);
+  return DETAILED_COUNTRY_CONFIG.find((country) => country.code === countryCode);
 }
 
 export function getBookingCountryOptions(locale: string): BookingCountryOption[] {
   const names = getDisplayNames(locale);
-  return COUNTRY_CONFIG.map((country) => ({
-    code: country.code,
-    label: names.of(country.code) || country.code,
-  }));
+  return ALL_COUNTRY_CODES.map((code) => ({
+    code,
+    label: names.of(code) || getCountry(code)?.name || code,
+  })).sort((a, b) => a.label.localeCompare(b.label, localeTag(locale)));
 }
 
 export function getBookingCountryLabel(code: string, locale: string) {
@@ -128,9 +138,17 @@ export function getBookingCountryLabel(code: string, locale: string) {
 
 export function getBookingRegionOptions(countryCode: string, locale: string): BookingRegionOption[] {
   const country = getCountryConfig(countryCode);
-  if (!country) return [];
-
   const language = locale === "ar" ? "ar" : locale === "fr" ? "fr" : "en";
+  if (!country) {
+    const defaultTimeZone = getCountry(countryCode)?.timezones?.[0] || "America/Toronto";
+    return [{
+      code: `${countryCode}-DEFAULT`,
+      countryCode,
+      timeZone: defaultTimeZone,
+      label: nationalLabel(language),
+    }];
+  }
+
   return country.regions.map((region) => ({
     code: region.code,
     countryCode: country.code,
@@ -146,7 +164,7 @@ export function getBookingRegionLabel(countryCode: string, regionCode: string | 
 
 export function getBookingTimeZone(countryCode: string | null | undefined, regionCode?: string | null) {
   const country = getCountryConfig(countryCode);
-  if (!country) return "America/Toronto";
+  if (!country) return getCountry(countryCode || "")?.timezones?.[0] || "America/Toronto";
 
   if (regionCode) {
     const region = country.regions.find((entry) => entry.code === regionCode);
@@ -160,8 +178,9 @@ export function findBookingCountryCode(value: string | null | undefined) {
   const normalized = normalizeText(value || "");
   if (!normalized) return null;
 
-  const byCode = COUNTRY_CONFIG.find((country) => country.code.toLowerCase() === normalized);
-  if (byCode) return byCode.code;
+  const code = normalized.toUpperCase();
+  const byCode = getCountry(code);
+  if (byCode) return byCode.id;
 
   for (const locale of ["en", "fr", "ar"]) {
     const options = getBookingCountryOptions(locale);
@@ -178,10 +197,13 @@ export function guessBookingCountryCode(value: string | null | undefined) {
 
   if (typeof window !== "undefined") {
     const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const matched = COUNTRY_CONFIG.find((country) =>
+    const detailedMatch = DETAILED_COUNTRY_CONFIG.find((country) =>
       country.regions.some((region) => region.timeZone === browserTimeZone)
     );
-    if (matched) return matched.code;
+    if (detailedMatch) return detailedMatch.code;
+
+    const matched = getCountryForTimezone(browserTimeZone);
+    if (matched?.id) return matched.id;
   }
 
   return "CA";
