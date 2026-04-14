@@ -44,8 +44,8 @@ function getStripeClient() {
   return stripeClient;
 }
 
-function getPriceMap(): StripeBookingPriceMap {
-  const bookingPrices = getCatalogSnapshot().bookingPrices;
+function getPriceMap(countryCode?: string | null): StripeBookingPriceMap {
+  const bookingPrices = getCatalogSnapshot(countryCode).bookingPrices;
   return {
     "standard:consultation": bookingPrices.standardConsultation,
     "standard:support": bookingPrices.standardSupport,
@@ -54,21 +54,21 @@ function getPriceMap(): StripeBookingPriceMap {
   };
 }
 
-function getTrainingPriceMap() {
-  return getCatalogSnapshot().trainingPrices;
+function getTrainingPriceMap(countryCode?: string | null) {
+  return getCatalogSnapshot(countryCode).trainingPrices;
 }
 
-function getTrainingProgram(identifier: string) {
-  return getCatalogTrainingProgram(identifier);
+function getTrainingProgram(identifier: string, countryCode?: string | null) {
+  return getCatalogTrainingProgram(identifier, countryCode);
 }
 
-export function getBookingPrice(priority: BookingPriority, serviceType: BookingServiceType) {
-  const priceMap = getPriceMap();
+export function getBookingPrice(priority: BookingPriority, serviceType: BookingServiceType, countryCode?: string | null) {
+  const priceMap = getPriceMap(countryCode);
   return priceMap[`${priority}:${serviceType}`];
 }
 
-export function getTrainingPrice(level: TrainingPriceKey) {
-  return getTrainingProgram(level)?.priceCents || 0;
+export function getTrainingPrice(level: TrainingPriceKey, countryCode?: string | null) {
+  return getTrainingProgram(level, countryCode)?.priceCents || 0;
 }
 
 export function buildBookingSlotsDigest(slots: Array<{ date: string; hour: number }>) {
@@ -79,24 +79,27 @@ export function buildBookingSlotsDigest(slots: Array<{ date: string; hour: numbe
   return crypto.createHash("sha256").update(normalized).digest("hex");
 }
 
-export function getStripePricingSnapshot() {
+export function getStripePricingSnapshot(countryCode?: string | null) {
+  const snapshot = getCatalogSnapshot(countryCode);
   return {
     enabled: isStripeConfigured(),
     publishableKey: getStripePublishableKey(),
     currency: getStripeCurrency(),
     cardPaymentFeeCents: getCardPaymentFeeCents(),
-    prices: getPriceMap(),
+    prices: getPriceMap(countryCode),
+    appliedCountryCode: snapshot.appliedCountryCode,
   };
 }
 
-export function getTrainingPricingSnapshot() {
-  const snapshot = getCatalogSnapshot();
+export function getTrainingPricingSnapshot(countryCode?: string | null) {
+  const snapshot = getCatalogSnapshot(countryCode);
   return {
     enabled: isStripeConfigured(),
     publishableKey: getStripePublishableKey(),
     currency: getStripeCurrency(),
     cardPaymentFeeCents: getCardPaymentFeeCents(),
     prices: snapshot.trainingPrices,
+    appliedCountryCode: snapshot.appliedCountryCode,
     programs: snapshot.trainingPrograms
       .filter((program) => program.active)
       .map((program) => ({
@@ -116,6 +119,7 @@ export async function createBookingPaymentIntent(input: {
   email: string;
   serviceType: BookingServiceType;
   priority: BookingPriority;
+  countryCode?: string | null;
   slots: Array<{ date: string; hour: number }>;
   locale: "en" | "fr" | "ar";
 }) {
@@ -124,7 +128,7 @@ export async function createBookingPaymentIntent(input: {
     throw new Error("Stripe is not configured.");
   }
 
-  const unitAmount = getBookingPrice(input.priority, input.serviceType);
+  const unitAmount = getBookingPrice(input.priority, input.serviceType, input.countryCode);
   const slotCount = input.slots.length;
   if (!unitAmount) {
     throw new Error("Stripe pricing is not configured for this booking type.");
@@ -150,6 +154,7 @@ export async function createBookingPaymentIntent(input: {
       email: input.email,
       serviceType: input.serviceType,
       priority: input.priority,
+      countryCode: input.countryCode || "",
       slotCount: String(slotCount),
       slotsDigest,
       bookingSubtotalCents: String(subtotal),
@@ -170,6 +175,7 @@ export async function createTrainingPaymentIntent(input: {
   userId: string;
   email: string;
   level: TrainingPriceKey;
+  countryCode?: string | null;
   locale: "en" | "fr" | "ar";
 }) {
   const stripe = getStripeClient();
@@ -177,7 +183,7 @@ export async function createTrainingPaymentIntent(input: {
     throw new Error("Stripe is not configured.");
   }
 
-  const program = getTrainingProgram(input.level);
+  const program = getTrainingProgram(input.level, input.countryCode);
   const subtotal = program?.priceCents || 0;
   if (!subtotal) {
     throw new Error("Stripe pricing is not configured for this training program.");
@@ -202,6 +208,7 @@ export async function createTrainingPaymentIntent(input: {
       trainingLevel: program.key,
       trainingProgramId: program.id,
       trainingProgramKey: program.key,
+      countryCode: input.countryCode || "",
       trainingSubtotalCents: String(subtotal),
       cardPaymentFeeCents: String(cardPaymentFeeCents),
       trainingPriceCents: String(amount),
@@ -221,6 +228,7 @@ export async function verifyBookingPayment(input: {
   userId: string;
   serviceType: BookingServiceType;
   priority: BookingPriority;
+  countryCode?: string | null;
   slots: Array<{ date: string; hour: number }>;
 }) {
   const stripe = getStripeClient();
@@ -228,7 +236,8 @@ export async function verifyBookingPayment(input: {
     throw new Error("Stripe is not configured.");
   }
 
-  const unitAmount = getBookingPrice(input.priority, input.serviceType);
+  const pricingCountryCode = input.countryCode || null;
+  const unitAmount = getBookingPrice(input.priority, input.serviceType, pricingCountryCode);
   const slotCount = input.slots.length;
   if (!unitAmount) {
     throw new Error("Stripe pricing is not configured for this booking type.");
@@ -281,13 +290,15 @@ export async function verifyTrainingPayment(input: {
   paymentIntentId: string;
   userId: string;
   level: TrainingPriceKey;
+  countryCode?: string | null;
 }) {
   const stripe = getStripeClient();
   if (!stripe) {
     throw new Error("Stripe is not configured.");
   }
 
-  const program = getTrainingProgram(input.level);
+  const pricingCountryCode = input.countryCode || null;
+  const program = getTrainingProgram(input.level, pricingCountryCode);
   const subtotal = program?.priceCents || 0;
   if (!subtotal) {
     throw new Error("Stripe pricing is not configured for this training program.");

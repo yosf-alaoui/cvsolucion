@@ -53,6 +53,7 @@ export type BookingRecord = {
   email: string;
   phone: string;
   country: string | null;
+  countryCode: string | null;
   company: string | null;
   notes: string | null;
   locale: "en" | "fr" | "ar";
@@ -103,6 +104,7 @@ export function createBooking(payload: {
   email: string;
   phone: string;
   country: string;
+  countryCode?: string | null;
   company: string;
   notes: string;
   paymentIntentId?: string;

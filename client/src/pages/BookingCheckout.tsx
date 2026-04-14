@@ -243,10 +243,10 @@ export default function BookingCheckout() {
   }, [currentDraftOwner]);
 
   useEffect(() => {
-    getStripeBookingConfig()
+    getStripeBookingConfig(draft?.countryCode)
       .then((response) => setStripeConfig(response))
       .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", cardPaymentFeeCents: 1500, prices: {} }));
-  }, []);
+  }, [draft?.countryCode]);
 
   useEffect(() => {
     if (!user || !draft?.slots.length) {
@@ -340,6 +340,7 @@ export default function BookingCheckout() {
     createBookingPaymentIntent({
       serviceType: draft.serviceType,
       priority: draft.priority,
+      countryCode: draft.countryCode,
       slots: draft.slots.map((slot) => ({ date: slot.date, hour: slot.hour })),
       locale,
     })
@@ -380,6 +381,7 @@ export default function BookingCheckout() {
         email: form.email,
         phone: form.phone,
         country: form.country,
+        countryCode: draft.countryCode || undefined,
         company: form.company,
         notes: form.problem,
         paymentIntentId,

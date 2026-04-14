@@ -61,11 +61,21 @@ export type CatalogTrainingProgramRecord = {
   translations: Record<CatalogLocale, CatalogTrainingTranslation>;
 };
 
+export type CatalogCountryPriceOverride = {
+  countryCode: string;
+  active: boolean;
+  bookingPrices: Partial<CatalogBookingPrices>;
+  trainingProgramPrices: Record<string, number>;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type CatalogDb = {
   bookingPrices: CatalogBookingPrices;
   trainingPrices: CatalogTrainingPrices;
   trainingPrograms: CatalogTrainingProgramRecord[];
   servicePackages: CatalogPackageRecord[];
+  countryPriceOverrides: CatalogCountryPriceOverride[];
 };
 
 const DATA_DIR = getAppDataDir();
@@ -82,6 +92,17 @@ function randomId(size = 10) {
 function parseAmount(value: string | undefined, fallback: number) {
   const amount = Number(value || "");
   return Number.isInteger(amount) && amount > 0 ? amount : fallback;
+}
+
+function normalizeCountryCode(value: unknown) {
+  const countryCode = String(value || "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(countryCode) ? countryCode : "";
+}
+
+function normalizePriceOverride(value: unknown) {
+  if (value === null || value === undefined || value === "") return undefined;
+  const amount = Number(value);
+  return Number.isInteger(amount) && amount >= 0 ? amount : undefined;
 }
 
 function defaultBookingPrices(): CatalogBookingPrices {
@@ -559,6 +580,7 @@ function ensureDbFile() {
       trainingPrices,
       trainingPrograms: createDefaultTrainingPrograms(trainingPrices),
       servicePackages: createDefaultPackages(),
+      countryPriceOverrides: [],
     };
     fs.writeFileSync(DB_PATH, JSON.stringify(initial, null, 2), "utf8");
   }
@@ -638,6 +660,34 @@ function normalizeTrainingProgram(
   } satisfies CatalogTrainingProgramRecord;
 }
 
+function normalizeCountryPriceOverride(item: Partial<CatalogCountryPriceOverride>) {
+  const countryCode = normalizeCountryCode(item.countryCode);
+  if (!countryCode) return null;
+
+  const bookingPrices: Partial<CatalogBookingPrices> = {};
+  for (const key of ["standardConsultation", "standardSupport", "expressConsultation", "expressSupport"] as const) {
+    const amount = normalizePriceOverride(item.bookingPrices?.[key]);
+    if (typeof amount === "number") bookingPrices[key] = amount;
+  }
+
+  const trainingProgramPrices: Record<string, number> = {};
+  const rawTrainingPrices = item.trainingProgramPrices && typeof item.trainingProgramPrices === "object" ? item.trainingProgramPrices : {};
+  for (const [key, value] of Object.entries(rawTrainingPrices)) {
+    const normalizedKey = normalizeTrainingKey(key);
+    const amount = normalizePriceOverride(value);
+    if (normalizedKey && typeof amount === "number") trainingProgramPrices[normalizedKey] = amount;
+  }
+
+  return {
+    countryCode,
+    active: typeof item.active === "boolean" ? item.active : true,
+    bookingPrices,
+    trainingProgramPrices,
+    createdAt: item.createdAt || nowIso(),
+    updatedAt: item.updatedAt || item.createdAt || nowIso(),
+  } satisfies CatalogCountryPriceOverride;
+}
+
 function deriveTrainingPrices(trainingPrices: CatalogTrainingPrices, trainingPrograms: CatalogTrainingProgramRecord[]) {
   const nextPrices = { ...trainingPrices };
   for (const key of ["level1", "level2", "level3", "level4", "bundle"] as Array<keyof CatalogTrainingPrices>) {
@@ -645,6 +695,42 @@ function deriveTrainingPrices(trainingPrices: CatalogTrainingPrices, trainingPro
     if (program) nextPrices[key] = program.priceCents;
   }
   return nextPrices;
+}
+
+function applyCountryPriceOverride(db: CatalogDb, countryCode?: string | null) {
+  const normalizedCountryCode = normalizeCountryCode(countryCode);
+  const override = normalizedCountryCode
+    ? db.countryPriceOverrides.find((item) => item.active && item.countryCode === normalizedCountryCode)
+    : null;
+
+  if (!override) {
+    return {
+      bookingPrices: db.bookingPrices,
+      trainingPrices: db.trainingPrices,
+      trainingPrograms: db.trainingPrograms,
+      appliedCountryCode: null as string | null,
+    };
+  }
+
+  const bookingPrices: CatalogBookingPrices = {
+    ...db.bookingPrices,
+    ...override.bookingPrices,
+  };
+  const trainingPrograms = db.trainingPrograms.map((program) => {
+    const overridePrice =
+      override.trainingProgramPrices[program.key] ??
+      override.trainingProgramPrices[program.id];
+    return typeof overridePrice === "number" && overridePrice >= 0
+      ? { ...program, priceCents: overridePrice }
+      : program;
+  });
+
+  return {
+    bookingPrices,
+    trainingPrices: deriveTrainingPrices(db.trainingPrices, trainingPrograms),
+    trainingPrograms,
+    appliedCountryCode: override.countryCode,
+  };
 }
 
 function loadDb(): CatalogDb {
@@ -657,6 +743,9 @@ function loadDb(): CatalogDb {
   const trainingPrograms = Array.isArray(parsed.trainingPrograms) && parsed.trainingPrograms.length
     ? parsed.trainingPrograms.map((item, index) => normalizeTrainingProgram(item, index, trainingPrices))
     : createDefaultTrainingPrograms(trainingPrices);
+  const countryPriceOverrides = (parsed.countryPriceOverrides || [])
+    .map((item) => normalizeCountryPriceOverride(item))
+    .filter((item): item is CatalogCountryPriceOverride => Boolean(item));
   return {
     bookingPrices: {
       ...defaultBookingPrices(),
@@ -677,6 +766,7 @@ function loadDb(): CatalogDb {
         ar: normalizeTranslation(item.translations?.ar),
       },
     })),
+    countryPriceOverrides,
   };
 }
 
@@ -692,20 +782,24 @@ function sortTrainingPrograms(programs: CatalogTrainingProgramRecord[]) {
   return [...programs].sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
 }
 
-export function getCatalogSnapshot() {
+export function getCatalogSnapshot(countryCode?: string | null) {
   const db = loadDb();
+  const resolved = applyCountryPriceOverride(db, countryCode);
   return {
-    bookingPrices: db.bookingPrices,
-    trainingPrices: db.trainingPrices,
-    trainingPrograms: sortTrainingPrograms(db.trainingPrograms),
+    bookingPrices: resolved.bookingPrices,
+    trainingPrices: resolved.trainingPrices,
+    trainingPrograms: sortTrainingPrograms(resolved.trainingPrograms),
     servicePackages: sortPackages(db.servicePackages),
+    countryPriceOverrides: db.countryPriceOverrides,
+    appliedCountryCode: resolved.appliedCountryCode,
   };
 }
 
-export function getPublicCatalog(locale: CatalogLocale) {
-  const snapshot = getCatalogSnapshot();
+export function getPublicCatalog(locale: CatalogLocale, countryCode?: string | null) {
+  const snapshot = getCatalogSnapshot(countryCode);
   return {
     bookingPrices: snapshot.bookingPrices,
+    appliedCountryCode: snapshot.appliedCountryCode,
     servicePackages: snapshot.servicePackages
       .filter((item) => item.active)
       .map((item) => ({
@@ -743,6 +837,75 @@ export function updateCatalogBookingPrices(input: Partial<CatalogBookingPrices>)
   return db.bookingPrices;
 }
 
+export function upsertCatalogCountryPriceOverride(input: {
+  countryCode: string;
+  active?: boolean;
+  bookingPrices?: Partial<CatalogBookingPrices>;
+  trainingProgramPrices?: Record<string, number | null | undefined>;
+}) {
+  const db = loadDb();
+  const countryCode = normalizeCountryCode(input.countryCode);
+  if (!countryCode) {
+    throw new Error("A valid country code is required.");
+  }
+
+  const timestamp = nowIso();
+  const existing = db.countryPriceOverrides.find((item) => item.countryCode === countryCode);
+  const bookingPrices: Partial<CatalogBookingPrices> = {};
+  for (const key of ["standardConsultation", "standardSupport", "expressConsultation", "expressSupport"] as const) {
+    const amount = normalizePriceOverride(input.bookingPrices?.[key]);
+    if (typeof amount === "number") bookingPrices[key] = amount;
+  }
+
+  const validProgramKeys = new Set(db.trainingPrograms.flatMap((program) => [program.id, program.key]));
+  const trainingProgramPrices: Record<string, number> = {};
+  for (const [key, value] of Object.entries(input.trainingProgramPrices || {})) {
+    const normalizedKey = normalizeTrainingKey(key);
+    const amount = normalizePriceOverride(value);
+    if (normalizedKey && validProgramKeys.has(normalizedKey) && typeof amount === "number") {
+      trainingProgramPrices[normalizedKey] = amount;
+    }
+  }
+
+  if (existing) {
+    existing.active = typeof input.active === "boolean" ? input.active : existing.active;
+    existing.bookingPrices = bookingPrices;
+    existing.trainingProgramPrices = trainingProgramPrices;
+    existing.updatedAt = timestamp;
+    saveDb(db);
+    return existing;
+  }
+
+  const record: CatalogCountryPriceOverride = {
+    countryCode,
+    active: typeof input.active === "boolean" ? input.active : true,
+    bookingPrices,
+    trainingProgramPrices,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  db.countryPriceOverrides.push(record);
+  db.countryPriceOverrides.sort((a, b) => a.countryCode.localeCompare(b.countryCode));
+  saveDb(db);
+  return record;
+}
+
+export function deleteCatalogCountryPriceOverride(countryCodeInput: string) {
+  const db = loadDb();
+  const countryCode = normalizeCountryCode(countryCodeInput);
+  if (!countryCode) {
+    throw new Error("A valid country code is required.");
+  }
+
+  const nextOverrides = db.countryPriceOverrides.filter((item) => item.countryCode !== countryCode);
+  if (nextOverrides.length === db.countryPriceOverrides.length) {
+    throw new Error("Country price override not found.");
+  }
+  db.countryPriceOverrides = nextOverrides;
+  saveDb(db);
+  return true;
+}
+
 export function updateCatalogTrainingPrices(input: Partial<CatalogTrainingPrices>) {
   const db = loadDb();
   db.trainingPrices = {
@@ -766,10 +929,10 @@ export function updateCatalogTrainingPrices(input: Partial<CatalogTrainingPrices
   return db.trainingPrices;
 }
 
-export function getCatalogTrainingProgram(identifier: string) {
+export function getCatalogTrainingProgram(identifier: string, countryCode?: string | null) {
   const normalized = String(identifier || "").trim();
   if (!normalized) return null;
-  return getCatalogSnapshot().trainingPrograms.find((program) => program.id === normalized || program.key === normalized) || null;
+  return getCatalogSnapshot(countryCode).trainingPrograms.find((program) => program.id === normalized || program.key === normalized) || null;
 }
 
 export function createCatalogTrainingProgram(input: {
@@ -851,6 +1014,11 @@ export function deleteCatalogTrainingProgram(id: string) {
     throw new Error("Training program not found.");
   }
   db.trainingPrograms = nextPrograms;
+  db.countryPriceOverrides = db.countryPriceOverrides.map((override) => {
+    const trainingProgramPrices = { ...override.trainingProgramPrices };
+    delete trainingProgramPrices[id];
+    return { ...override, trainingProgramPrices, updatedAt: nowIso() };
+  });
   db.trainingPrices = deriveTrainingPrices(defaultTrainingPrices(), db.trainingPrograms);
   saveDb(db);
   return true;

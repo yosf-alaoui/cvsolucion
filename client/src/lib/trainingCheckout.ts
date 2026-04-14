@@ -9,6 +9,7 @@ export type TrainingPricingResponse = {
   publishableKey: string | null;
   currency: string;
   cardPaymentFeeCents: number;
+  appliedCountryCode?: string | null;
   prices: CatalogTrainingPrices;
   programs: Array<PublicTrainingProgram & { priceCents: number }>;
 };

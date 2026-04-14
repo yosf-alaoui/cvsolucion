@@ -7,6 +7,7 @@ export type CustomerProfileRecord = {
   email: string;
   name: string | null;
   country: string | null;
+  countryCode: string | null;
   phone: string | null;
   company: string | null;
   createdAt: string;
@@ -22,6 +23,11 @@ const DB_PATH = path.join(DATA_DIR, "customer-profiles-db.json");
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function normalizeCountryCode(value: string | null | undefined) {
+  const countryCode = String(value || "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(countryCode) ? countryCode : null;
 }
 
 function ensureDbFile() {
@@ -47,7 +53,12 @@ function saveDb(db: CustomerProfileDb) {
 
 export function getCustomerProfile(userId: string) {
   const db = loadDb();
-  return db.profiles.find((profile) => profile.userId === userId) ?? null;
+  const profile = db.profiles.find((item) => item.userId === userId) ?? null;
+  if (!profile) return null;
+  return {
+    ...profile,
+    countryCode: normalizeCountryCode(profile.countryCode) || null,
+  };
 }
 
 export function upsertCustomerProfile(input: {
@@ -55,6 +66,7 @@ export function upsertCustomerProfile(input: {
   email: string;
   name?: string | null;
   country?: string | null;
+  countryCode?: string | null;
   phone?: string | null;
   company?: string | null;
 }) {
@@ -66,6 +78,7 @@ export function upsertCustomerProfile(input: {
     existing.email = input.email.trim().toLowerCase();
     existing.name = input.name?.trim() || existing.name || null;
     existing.country = input.country?.trim() || existing.country || null;
+    existing.countryCode = normalizeCountryCode(input.countryCode) || existing.countryCode || null;
     existing.phone = input.phone?.trim() || existing.phone || null;
     existing.company = input.company?.trim() || existing.company || null;
     existing.updatedAt = timestamp;
@@ -78,6 +91,7 @@ export function upsertCustomerProfile(input: {
     email: input.email.trim().toLowerCase(),
     name: input.name?.trim() || null,
     country: input.country?.trim() || null,
+    countryCode: normalizeCountryCode(input.countryCode),
     phone: input.phone?.trim() || null,
     company: input.company?.trim() || null,
     createdAt: timestamp,
@@ -94,6 +108,7 @@ export function updateCustomerProfile(input: {
   email: string;
   name: string;
   country: string;
+  countryCode?: string | null;
   phone: string;
   company?: string | null;
 }) {

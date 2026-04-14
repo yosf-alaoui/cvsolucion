@@ -5,6 +5,7 @@ export type CustomerProfile = {
   email: string;
   name: string | null;
   country: string | null;
+  countryCode: string | null;
   phone: string | null;
   company: string | null;
   createdAt: string;
@@ -63,6 +64,7 @@ export function getCustomerDashboard() {
 export function updateCustomerProfile(payload: {
   name: string;
   country: string;
+  countryCode?: string | null;
   phone: string;
   company: string;
 }) {

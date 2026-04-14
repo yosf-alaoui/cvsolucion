@@ -38,6 +38,15 @@ export type CatalogTrainingProgramRecord = {
   translations: Record<CatalogLocale, CatalogTrainingTranslation>;
 };
 
+export type CatalogCountryPriceOverride = {
+  countryCode: string;
+  active: boolean;
+  bookingPrices: Partial<CatalogBookingPrices>;
+  trainingProgramPrices: Record<string, number>;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CatalogPackageTranslation = {
   title: string;
   subtitle: string;
@@ -70,6 +79,7 @@ export type PublicCatalogPackage = {
 
 export type PublicCatalogResponse = {
   bookingPrices: CatalogBookingPrices;
+  appliedCountryCode?: string | null;
   servicePackages: PublicCatalogPackage[];
 };
 
@@ -78,6 +88,8 @@ export type AdminCatalogResponse = {
   trainingPrices: CatalogTrainingPrices;
   trainingPrograms: CatalogTrainingProgramRecord[];
   servicePackages: CatalogPackageRecord[];
+  countryPriceOverrides: CatalogCountryPriceOverride[];
+  appliedCountryCode?: string | null;
 };
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
@@ -97,8 +109,10 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
   return data;
 }
 
-export function getPublicCatalog(locale: CatalogLocale) {
-  return request<PublicCatalogResponse>(`/api/catalog/public?locale=${encodeURIComponent(locale)}`, { method: "GET" });
+export function getPublicCatalog(locale: CatalogLocale, countryCode?: string | null) {
+  const params = new URLSearchParams({ locale });
+  if (countryCode) params.set("countryCode", countryCode);
+  return request<PublicCatalogResponse>(`/api/catalog/public?${params.toString()}`, { method: "GET" });
 }
 
 export function getAdminCatalog() {
@@ -117,6 +131,27 @@ export function updateAdminCatalogTrainingPricing(payload: CatalogTrainingPrices
     method: "PUT",
     body: JSON.stringify(payload),
   });
+}
+
+export function upsertAdminCatalogCountryPricing(countryCode: string, payload: {
+  active: boolean;
+  bookingPrices: Partial<CatalogBookingPrices>;
+  trainingProgramPrices: Record<string, number>;
+}) {
+  return request<{ ok: true; countryPriceOverride: CatalogCountryPriceOverride; countryPriceOverrides: CatalogCountryPriceOverride[] }>(
+    `/api/admin/catalog/country-pricing/${encodeURIComponent(countryCode)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function deleteAdminCatalogCountryPricing(countryCode: string) {
+  return request<{ ok: true; countryPriceOverrides: CatalogCountryPriceOverride[] }>(
+    `/api/admin/catalog/country-pricing/${encodeURIComponent(countryCode)}`,
+    { method: "DELETE" }
+  );
 }
 
 export function createAdminCatalogTrainingProgram(payload: {

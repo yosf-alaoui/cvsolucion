@@ -3,12 +3,15 @@ import { toast } from "sonner";
 import {
   createAdminCatalogPackage,
   deleteAdminCatalogPackage,
+  deleteAdminCatalogCountryPricing,
   getAdminCatalog,
   updateAdminCatalogPackage,
   updateAdminCatalogPricing,
   updateAdminCatalogTrainingPricing,
+  upsertAdminCatalogCountryPricing,
   type AdminCatalogResponse,
   type CatalogBookingPrices,
+  type CatalogCountryPriceOverride,
   type CatalogLocale,
   type CatalogPackageRecord,
   type CatalogPackageTranslation,
@@ -18,8 +21,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { getBookingCountryLabel, getBookingCountryOptions, type BookingCountryOption } from "@/lib/bookingTime";
 
 function centsToDollars(value: number) {
   return (value / 100).toFixed(2);
@@ -28,6 +33,11 @@ function centsToDollars(value: number) {
 function dollarsToCents(value: string) {
   const normalized = Number(String(value || "0").replace(/[^\d.]/g, ""));
   return Number.isFinite(normalized) ? Math.round(normalized * 100) : 0;
+}
+
+function optionalDollarsToCents(value: string) {
+  if (!String(value || "").trim()) return undefined;
+  return dollarsToCents(value);
 }
 
 function emptyTranslation(): CatalogPackageTranslation {
@@ -53,8 +63,10 @@ export default function CatalogManager({ locale }: { locale: string }) {
   const [loading, setLoading] = useState(true);
   const [savingPricing, setSavingPricing] = useState(false);
   const [savingTrainingPricing, setSavingTrainingPricing] = useState(false);
+  const [savingCountryPricing, setSavingCountryPricing] = useState(false);
   const [savingPackage, setSavingPackage] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedCountryCode, setSelectedCountryCode] = useState("US");
   const [priceForm, setPriceForm] = useState({
     standardConsultation: "",
     standardSupport: "",
@@ -67,6 +79,20 @@ export default function CatalogManager({ locale }: { locale: string }) {
     level3: "",
     level4: "",
     bundle: "",
+  });
+  const [countryPricingForm, setCountryPricingForm] = useState<{
+    active: boolean;
+    bookingPrices: Record<keyof CatalogBookingPrices, string>;
+    trainingProgramPrices: Record<string, string>;
+  }>({
+    active: true,
+    bookingPrices: {
+      standardConsultation: "",
+      standardSupport: "",
+      expressConsultation: "",
+      expressSupport: "",
+    },
+    trainingProgramPrices: {},
   });
   const [packageForm, setPackageForm] = useState<{
     active: boolean;
@@ -108,6 +134,15 @@ export default function CatalogManager({ locale }: { locale: string }) {
         priceSaved: "تم تحديث الأسعار.",
         packageSaved: "تم حفظ الباقة.",
         packageDeleted: "تم حذف الباقة.",
+        countryPricing: "تسعير حسب الدولة",
+        countryPricingHint: "اترك أي خانة فارغة لاستعمال السعر الرئيسي.",
+        country: "الدولة",
+        saveCountryPrices: "حفظ تسعير الدولة",
+        deleteCountryPrices: "حذف تسعير الدولة",
+        countryPricesSaved: "تم تحديث تسعير الدولة.",
+        countryPricesDeleted: "تم حذف تسعير الدولة.",
+        noCountryOverrides: "لا يوجد تسعير خاص بالدول بعد.",
+        inactiveCountry: "غير مفعلة",
       };
     }
     if (locale === "fr") {
@@ -137,6 +172,15 @@ export default function CatalogManager({ locale }: { locale: string }) {
         priceSaved: "Tarifs mis a jour.",
         packageSaved: "Package enregistre.",
         packageDeleted: "Package supprime.",
+        countryPricing: "Tarifs par pays",
+        countryPricingHint: "Laissez un champ vide pour utiliser le tarif principal.",
+        country: "Pays",
+        saveCountryPrices: "Enregistrer le pays",
+        deleteCountryPrices: "Supprimer le pays",
+        countryPricesSaved: "Tarifs pays mis a jour.",
+        countryPricesDeleted: "Tarifs pays supprimes.",
+        noCountryOverrides: "Aucun tarif par pays pour l'instant.",
+        inactiveCountry: "inactif",
       };
     }
     return {
@@ -165,6 +209,15 @@ export default function CatalogManager({ locale }: { locale: string }) {
       priceSaved: "Prices updated.",
       packageSaved: "Package saved.",
       packageDeleted: "Package deleted.",
+      countryPricing: "Country pricing",
+      countryPricingHint: "Leave a field blank to use the main price.",
+      country: "Country",
+      saveCountryPrices: "Save country prices",
+      deleteCountryPrices: "Delete country pricing",
+      countryPricesSaved: "Country pricing updated.",
+      countryPricesDeleted: "Country pricing deleted.",
+      noCountryOverrides: "No country overrides yet.",
+      inactiveCountry: "off",
     };
   }, [locale]);
 
@@ -236,6 +289,10 @@ export default function CatalogManager({ locale }: { locale: string }) {
         },
       });
     }
+
+    const firstCountryOverride = response.countryPriceOverrides?.[0];
+    const nextCountryCode = firstCountryOverride?.countryCode || selectedCountryCode;
+    syncCountryPricingForm(nextCountryCode, response.countryPriceOverrides || [], response.trainingPrograms || []);
   }
 
   useEffect(() => {
@@ -245,6 +302,34 @@ export default function CatalogManager({ locale }: { locale: string }) {
   }, []);
 
   const packages = data?.servicePackages ?? [];
+  const countryOptions = useMemo(() => getBookingCountryOptions(locale), [locale]);
+  const countryOverrides = data?.countryPriceOverrides ?? [];
+  const selectedCountryOverride = countryOverrides.find((item) => item.countryCode === selectedCountryCode) ?? null;
+  const trainingPrograms = data?.trainingPrograms ?? [];
+
+  function syncCountryPricingForm(
+    countryCode: string,
+    overrides: CatalogCountryPriceOverride[] = countryOverrides,
+    programs = trainingPrograms
+  ) {
+    const override = overrides.find((item) => item.countryCode === countryCode) ?? null;
+    setSelectedCountryCode(countryCode);
+    setCountryPricingForm({
+      active: override?.active ?? true,
+      bookingPrices: {
+        standardConsultation: typeof override?.bookingPrices.standardConsultation === "number" ? centsToDollars(override.bookingPrices.standardConsultation) : "",
+        standardSupport: typeof override?.bookingPrices.standardSupport === "number" ? centsToDollars(override.bookingPrices.standardSupport) : "",
+        expressConsultation: typeof override?.bookingPrices.expressConsultation === "number" ? centsToDollars(override.bookingPrices.expressConsultation) : "",
+        expressSupport: typeof override?.bookingPrices.expressSupport === "number" ? centsToDollars(override.bookingPrices.expressSupport) : "",
+      },
+      trainingProgramPrices: Object.fromEntries(
+        programs.map((program) => [
+          program.key,
+          typeof override?.trainingProgramPrices[program.key] === "number" ? centsToDollars(override.trainingProgramPrices[program.key]) : "",
+        ])
+      ),
+    });
+  }
 
   function syncPackageForm(record: CatalogPackageRecord) {
     setSelectedId(record.id);
@@ -296,6 +381,50 @@ export default function CatalogManager({ locale }: { locale: string }) {
       toast.error(error?.message || "Failed to save training prices.");
     } finally {
       setSavingTrainingPricing(false);
+    }
+  }
+
+  async function handleSaveCountryPrices() {
+    try {
+      setSavingCountryPricing(true);
+      const bookingPrices: Partial<CatalogBookingPrices> = {};
+      for (const key of ["standardConsultation", "standardSupport", "expressConsultation", "expressSupport"] as const) {
+        const cents = optionalDollarsToCents(countryPricingForm.bookingPrices[key]);
+        if (typeof cents === "number") bookingPrices[key] = cents;
+      }
+
+      const trainingProgramPrices: Record<string, number> = {};
+      for (const program of trainingPrograms) {
+        const cents = optionalDollarsToCents(countryPricingForm.trainingProgramPrices[program.key]);
+        if (typeof cents === "number") trainingProgramPrices[program.key] = cents;
+      }
+
+      const response = await upsertAdminCatalogCountryPricing(selectedCountryCode, {
+        active: countryPricingForm.active,
+        bookingPrices,
+        trainingProgramPrices,
+      });
+      setData((current) => (current ? { ...current, countryPriceOverrides: response.countryPriceOverrides } : current));
+      syncCountryPricingForm(selectedCountryCode, response.countryPriceOverrides, trainingPrograms);
+      toast.success(copy.countryPricesSaved);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to save country pricing.");
+    } finally {
+      setSavingCountryPricing(false);
+    }
+  }
+
+  async function handleDeleteCountryPrices() {
+    try {
+      setSavingCountryPricing(true);
+      const response = await deleteAdminCatalogCountryPricing(selectedCountryCode);
+      setData((current) => (current ? { ...current, countryPriceOverrides: response.countryPriceOverrides } : current));
+      syncCountryPricingForm(selectedCountryCode, response.countryPriceOverrides, trainingPrograms);
+      toast.success(copy.countryPricesDeleted);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to delete country pricing.");
+    } finally {
+      setSavingCountryPricing(false);
     }
   }
 
@@ -438,6 +567,130 @@ export default function CatalogManager({ locale }: { locale: string }) {
             </div>
             <div className="sm:col-span-2">
               <Button type="button" onClick={handleSaveTrainingPrices} disabled={savingTrainingPricing}>{trainingCopy.save}</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="xl:col-span-2">
+          <CardHeader>
+            <CardTitle>{copy.countryPricing}</CardTitle>
+            <p className="text-sm text-slate-600">{copy.countryPricingHint}</p>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>{copy.country}</Label>
+                  <Select
+                    value={selectedCountryCode}
+                    onValueChange={(countryCode) => syncCountryPricingForm(countryCode)}
+                  >
+                    <SelectTrigger className="w-full bg-white">
+                      <SelectValue placeholder={copy.country} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {countryOptions.map((option: BookingCountryOption) => (
+                        <SelectItem key={option.code} value={option.code}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={countryPricingForm.active}
+                    onChange={(event) => setCountryPricingForm((current) => ({ ...current, active: event.target.checked }))}
+                  />
+                  {copy.active}
+                </label>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                  {countryOverrides.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {countryOverrides.map((override) => (
+                        <button
+                          key={override.countryCode}
+                          type="button"
+                          onClick={() => syncCountryPricingForm(override.countryCode)}
+                          className={`rounded-full border px-3 py-1 font-semibold ${
+                            selectedCountryCode === override.countryCode ? "border-primary bg-primary text-white" : "border-slate-200 bg-white text-slate-700"
+                          }`}
+                        >
+                          {getBookingCountryLabel(override.countryCode, locale)} {override.active ? "" : `(${copy.inactiveCountry})`}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span>{copy.noCountryOverrides}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <div className="mb-4 text-sm font-bold text-slate-900">{copy.bookingPrices}</div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {(["standardConsultation", "standardSupport", "expressConsultation", "expressSupport"] as const).map((key) => (
+                      <div key={key} className="space-y-2">
+                        <Label>
+                          {{
+                            standardConsultation: copy.standardConsultation,
+                            standardSupport: copy.standardSupport,
+                            expressConsultation: copy.expressConsultation,
+                            expressSupport: copy.expressSupport,
+                          }[key]}
+                        </Label>
+                        <Input
+                          value={countryPricingForm.bookingPrices[key]}
+                          placeholder={centsToDollars(data?.bookingPrices[key] || 0)}
+                          onChange={(event) =>
+                            setCountryPricingForm((current) => ({
+                              ...current,
+                              bookingPrices: { ...current.bookingPrices, [key]: event.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <div className="mb-4 text-sm font-bold text-slate-900">{trainingCopy.title}</div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {trainingPrograms.map((program) => (
+                      <div key={program.key} className="space-y-2">
+                        <Label>{program.translations.en.title || program.key}</Label>
+                        <Input
+                          value={countryPricingForm.trainingProgramPrices[program.key] || ""}
+                          placeholder={centsToDollars(program.priceCents)}
+                          onChange={(event) =>
+                            setCountryPricingForm((current) => ({
+                              ...current,
+                              trainingProgramPrices: { ...current.trainingProgramPrices, [program.key]: event.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button type="button" onClick={handleSaveCountryPrices} disabled={savingCountryPricing}>
+                {copy.saveCountryPrices}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDeleteCountryPrices}
+                disabled={savingCountryPricing || !selectedCountryOverride}
+              >
+                {copy.deleteCountryPrices}
+              </Button>
             </div>
           </CardContent>
         </Card>

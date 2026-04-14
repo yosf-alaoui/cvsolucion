@@ -81,6 +81,7 @@ import {
   createBookingPaymentIntent,
   createBookingRefund,
   createTrainingPaymentIntent,
+  getBookingPrice,
   getStripePricingSnapshot,
   getTrainingPricingSnapshot,
   type TrainingPriceKey,
@@ -91,6 +92,7 @@ import { hasProcessedStripeEvent, markStripeEventProcessed } from "./stripeEvent
 import {
   createCatalogPackage,
   createCatalogTrainingProgram,
+  deleteCatalogCountryPriceOverride,
   deleteCatalogPackage,
   deleteCatalogTrainingProgram,
   getCatalogSnapshot,
@@ -98,6 +100,7 @@ import {
   getPublicCatalog,
   getPublicTrainingPrograms,
   updateCatalogBookingPrices,
+  upsertCatalogCountryPriceOverride,
   updateCatalogPackage,
   updateCatalogTrainingPrices,
   updateCatalogTrainingProgram,
@@ -195,6 +198,46 @@ function parseRequestedBookingSlots(value: unknown) {
 function parseTrainingLevel(value: unknown): TrainingPriceKey | null {
   const level = String(value || "").trim();
   return level ? level : null;
+}
+
+function normalizeCountryCode(value: unknown) {
+  const countryCode = String(value || "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(countryCode) ? countryCode : null;
+}
+
+function getRequestCountryCode(req: express.Request) {
+  const headerCandidates = [
+    req.get("cf-ipcountry"),
+    req.get("x-vercel-ip-country"),
+    req.get("cloudfront-viewer-country"),
+    req.get("x-country-code"),
+    req.get("x-appengine-country"),
+  ];
+
+  for (const candidate of headerCandidates) {
+    const countryCode = normalizeCountryCode(candidate);
+    if (countryCode && countryCode !== "XX") return countryCode;
+  }
+
+  return null;
+}
+
+function getProfileCountryCode(userId: string) {
+  const profile = getCustomerProfile(userId);
+  return normalizeCountryCode(profile?.countryCode) || normalizeCountryCode(profile?.country) || null;
+}
+
+function getPricingCountryCode(req: express.Request) {
+  const explicit = normalizeCountryCode(req.query?.countryCode ?? req.body?.countryCode);
+  if (explicit) return explicit;
+
+  const auth = getCurrentUser(req);
+  if (auth) {
+    const profileCountryCode = getProfileCountryCode(auth.user.id);
+    if (profileCountryCode) return profileCountryCode;
+  }
+
+  return getRequestCountryCode(req);
 }
 
 function escapeHtml(value: string) {
@@ -728,6 +771,16 @@ async function startServer() {
     return res.json({ user: serializePublicUser(auth.user), isAdmin: isAdminEmail(auth.user.email) });
   });
 
+  app.get("/api/geo/country", rateLimit({ key: "geo-country", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    const auth = getCurrentUser(req);
+    const profileCountryCode = auth ? getProfileCountryCode(auth.user.id) : null;
+    const requestCountryCode = getRequestCountryCode(req);
+    return res.json({
+      countryCode: profileCountryCode || requestCountryCode || null,
+      source: profileCountryCode ? "profile" : requestCountryCode ? "request" : "unknown",
+    });
+  });
+
   app.get("/api/customer/dashboard", rateLimit({ key: "customer-dashboard", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
     const auth = getCurrentUser(req);
     if (!auth) {
@@ -793,6 +846,7 @@ async function startServer() {
 
     const name = String(req.body?.name || "").trim();
     const country = String(req.body?.country || "").trim();
+    const countryCode = normalizeCountryCode(req.body?.countryCode);
     const phone = String(req.body?.phone || "").trim();
     const company = String(req.body?.company || "").trim();
 
@@ -811,6 +865,7 @@ async function startServer() {
       email: auth.user.email,
       name,
       country,
+      countryCode,
       phone,
       company,
     });
@@ -1280,7 +1335,8 @@ async function startServer() {
 
   app.get("/api/catalog/public", rateLimit({ key: "catalog-public", windowMs: 1000 * 60, limit: 180 }), (req, res) => {
     const locale = normalizeAuthLocale(String(req.query.locale || "en"));
-    return res.json(getPublicCatalog(locale));
+    const countryCode = getPricingCountryCode(req);
+    return res.json(getPublicCatalog(locale, countryCode));
   });
 
   app.get("/api/bookings/availability", rateLimit({ key: "booking-availability", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
@@ -1292,8 +1348,8 @@ async function startServer() {
     return res.json(getBookingAvailability(priority));
   });
 
-  app.get("/api/stripe/config", rateLimit({ key: "stripe-config", windowMs: 1000 * 60, limit: 120 }), (_req, res) => {
-    return res.json(getStripePricingSnapshot());
+  app.get("/api/stripe/config", rateLimit({ key: "stripe-config", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    return res.json(getStripePricingSnapshot(getPricingCountryCode(req)));
   });
 
   app.get("/api/training/programs", rateLimit({ key: "training-programs", windowMs: 1000 * 60, limit: 180 }), (_req, res) => {
@@ -1305,7 +1361,7 @@ async function startServer() {
     if (!auth) {
       return res.status(401).json({ error: "Please sign in to view training prices." });
     }
-    return res.json(getTrainingPricingSnapshot());
+    return res.json(getTrainingPricingSnapshot(getPricingCountryCode(req)));
   });
 
   app.post("/api/stripe/training-payment-intent", rateLimit({ key: "stripe-training-payment-intent", windowMs: 1000 * 60 * 10, limit: 30 }), async (req, res, next) => {
@@ -1317,6 +1373,7 @@ async function startServer() {
 
       const level = parseTrainingLevel(req.body?.programId ?? req.body?.level);
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+      const countryCode = getPricingCountryCode(req);
 
       if (!level) {
         return res.status(400).json({ error: "Please choose a valid training program." });
@@ -1326,6 +1383,7 @@ async function startServer() {
         userId: auth.user.id,
         email: auth.user.email,
         level,
+        countryCode,
         locale,
       });
 
@@ -1349,6 +1407,7 @@ async function startServer() {
       const level = parseTrainingLevel(req.body?.programId ?? req.body?.level);
       const paymentIntentId = String(req.body?.paymentIntentId || "").trim();
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+      const countryCode = getPricingCountryCode(req);
 
       if (!level) {
         return res.status(400).json({ error: "Please choose a valid training program." });
@@ -1361,6 +1420,7 @@ async function startServer() {
         paymentIntentId,
         userId: auth.user.id,
         level,
+        countryCode,
       });
 
       const program = getCatalogTrainingProgram(level);
@@ -1454,6 +1514,7 @@ async function startServer() {
       const priority = String(req.body?.priority || "standard").trim() === "express" ? "express" : "standard";
       const slots = parseRequestedBookingSlots(req.body?.slots);
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+      const countryCode = getPricingCountryCode(req);
 
       if (!slots.length) {
         return res.status(400).json({ error: "Please choose at least one valid appointment time." });
@@ -1469,6 +1530,7 @@ async function startServer() {
         email: auth.user.email,
         serviceType,
         priority: priority as BookingPriority,
+        countryCode,
         slots,
         locale,
       });
@@ -1497,6 +1559,7 @@ async function startServer() {
       const email = auth.user.email;
       const phone = String(req.body?.phone || "").trim();
       const country = String(req.body?.country || "").trim();
+      const countryCode = getPricingCountryCode(req);
       const company = String(req.body?.company || "").trim();
       const notes = String(req.body?.notes || "").trim();
       const packageKey = String(req.body?.packageKey || "").trim() || null;
@@ -1527,7 +1590,7 @@ async function startServer() {
         });
       }
 
-      const stripeConfig = getStripePricingSnapshot();
+      const stripeConfig = getStripePricingSnapshot(countryCode);
       let verifiedPayment: Awaited<ReturnType<typeof verifyBookingPayment>> | null = null;
       if (stripeConfig.enabled) {
         if (!paymentIntentId) {
@@ -1539,6 +1602,7 @@ async function startServer() {
           userId: auth.user.id,
           serviceType,
           priority: priority as BookingPriority,
+          countryCode,
           slots,
         });
       }
@@ -1553,6 +1617,7 @@ async function startServer() {
             email: auth.user.email,
             name,
             country,
+            countryCode,
             phone,
             company,
           });
@@ -1560,6 +1625,12 @@ async function startServer() {
           return res.status(201).json({ ok: true, bookings: existingBookings, booking: existingBookings[0] });
         }
       }
+
+      const metadataSubtotal = Number(verifiedPayment?.metadata?.bookingSubtotalCents || "");
+      const paidUnitAmount =
+        Number.isInteger(metadataSubtotal) && metadataSubtotal > 0 && slots.length
+          ? Math.round(metadataSubtotal / slots.length)
+          : getBookingPrice(priority as BookingPriority, serviceType, countryCode);
 
       const bookings = slots.map((slot) =>
         createBooking({
@@ -1573,12 +1644,14 @@ async function startServer() {
           email,
           phone,
           country,
+          countryCode,
           company,
           notes,
           locale,
           paymentStatus: verifiedPayment ? "paid" : "unpaid",
           paymentProvider: verifiedPayment ? "stripe" : null,
           paymentReference: verifiedPayment?.id || null,
+          unitAmount: paidUnitAmount,
         })
       );
 
@@ -1587,6 +1660,7 @@ async function startServer() {
         email: auth.user.email,
         name,
         country,
+        countryCode,
         phone,
         company,
       });
@@ -1712,6 +1786,8 @@ async function startServer() {
       const password = String(req.body?.password || "");
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
       const termsAccepted = Boolean(req.body?.termsAccepted);
+      const countryCode = normalizeCountryCode(req.body?.countryCode);
+      const country = String(req.body?.country || "").trim();
       const termsVersion = "04/2026";
 
       if (!EMAIL_REGEX.test(email) || !password || password.length < 8) {
@@ -1719,6 +1795,9 @@ async function startServer() {
       }
       if (!termsAccepted) {
         return res.status(400).json({ error: "You must accept the Terms and Conditions before creating an account." });
+      }
+      if (!countryCode || country.length < 2) {
+        return res.status(400).json({ error: "Country is required." });
       }
 
       const user = createUser(email, password, termsVersion);
@@ -1742,6 +1821,13 @@ async function startServer() {
         }
         return res.status(502).json({ error: authEmailDeliveryMessage(locale, "delivery_failed") });
       }
+
+      upsertCustomerProfile({
+        userId: user.id,
+        email: user.email,
+        country,
+        countryCode,
+      });
 
       return res.status(201).json({ ok: true });
     } catch (error) {
@@ -1958,6 +2044,36 @@ async function startServer() {
       });
 
       return res.json({ ok: true, trainingPrices: pricing });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.put("/api/admin/catalog/country-pricing/:countryCode", rateLimit({ key: "admin-catalog-country-pricing", windowMs: 1000 * 60 * 5, limit: 80 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const override = upsertCatalogCountryPriceOverride({
+        countryCode: String(req.params.countryCode || req.body?.countryCode || ""),
+        active: typeof req.body?.active === "boolean" ? req.body.active : true,
+        bookingPrices: req.body?.bookingPrices,
+        trainingProgramPrices: req.body?.trainingProgramPrices,
+      });
+
+      return res.json({ ok: true, countryPriceOverride: override, countryPriceOverrides: getCatalogSnapshot().countryPriceOverrides });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.delete("/api/admin/catalog/country-pricing/:countryCode", rateLimit({ key: "admin-catalog-country-pricing-delete", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      deleteCatalogCountryPriceOverride(String(req.params.countryCode || ""));
+      return res.json({ ok: true, countryPriceOverrides: getCatalogSnapshot().countryPriceOverrides });
     } catch (error) {
       return next(error);
     }

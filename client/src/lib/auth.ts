@@ -37,10 +37,18 @@ export function loginWithPassword(email: string, password: string) {
   });
 }
 
-export function signUp(email: string, password: string, locale: string, termsAccepted: boolean, termsVersion = "04/2026") {
+export function signUp(
+  email: string,
+  password: string,
+  locale: string,
+  termsAccepted: boolean,
+  countryCode: string,
+  country: string,
+  termsVersion = "04/2026"
+) {
   return request<{ ok: true }>("/api/auth/signup", {
     method: "POST",
-    body: JSON.stringify({ email, password, locale, termsAccepted, termsVersion }),
+    body: JSON.stringify({ email, password, locale, termsAccepted, countryCode, country, termsVersion }),
   });
 }
 

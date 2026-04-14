@@ -353,10 +353,10 @@ export default function Booking() {
   }, [regionOptions, selectedCountryCode]);
 
   useEffect(() => {
-    getStripeBookingConfig()
+    getStripeBookingConfig(selectedCountryCode)
       .then((response) => setStripeConfig(response))
       .catch(() => setStripeConfig(null));
-  }, []);
+  }, [selectedCountryCode]);
 
   const weeks = useMemo(() => chunkDays(localizedDays, priority === "express" ? 2 : 5), [localizedDays, priority]);
   const cartHref = locale === "en" ? "/book/cart" : `/${locale}/book/cart`;

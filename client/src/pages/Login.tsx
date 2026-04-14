@@ -7,8 +7,11 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useI18n } from "@/i18n/i18n";
 import { useAuth } from "@/contexts/AuthContext";
+import { getBookingCountryLabel, getBookingCountryOptions, guessBookingCountryCode } from "@/lib/bookingTime";
+import { getDetectedCountry } from "@/lib/geo";
 
 type AuthMode = "login" | "signup";
 
@@ -21,6 +24,7 @@ export default function Login() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptTerms, setAcceptTerms] = useState(false);
+  const [countryCode, setCountryCode] = useState(() => guessBookingCountryCode(null));
   const [showPassword, setShowPassword] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [recoveryMode, setRecoveryMode] = useState(false);
@@ -33,9 +37,19 @@ export default function Login() {
   const disabled = useMemo(() => {
     if (recoveryMode) return !resetToken || !newPassword || newPassword !== confirmPassword;
     if (resetMode) return !email;
-    if (mode === "signup") return !email || !password || !acceptTerms;
+    if (mode === "signup") return !email || !password || !acceptTerms || !countryCode;
     return !email || !password;
-  }, [email, password, resetMode, recoveryMode, newPassword, confirmPassword, resetToken, mode, acceptTerms]);
+  }, [email, password, resetMode, recoveryMode, newPassword, confirmPassword, resetToken, mode, acceptTerms, countryCode]);
+
+  const countryOptions = useMemo(() => getBookingCountryOptions(locale), [locale]);
+  const selectedCountryLabel = useMemo(() => getBookingCountryLabel(countryCode, locale), [countryCode, locale]);
+  const countryLabel = locale === "ar" ? "الدولة" : locale === "fr" ? "Pays" : "Country";
+  const countryHint =
+    locale === "ar"
+      ? "نستعمل الدولة لإظهار السعر المناسب لحسابك."
+      : locale === "fr"
+        ? "Nous utilisons le pays pour afficher le bon tarif."
+        : "We use the country to show the correct price.";
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -63,6 +77,19 @@ export default function Login() {
       setResetToken(token);
     }
   }, [t]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDetectedCountry()
+      .then((response) => {
+        if (cancelled || !response.countryCode) return;
+        setCountryCode(guessBookingCountryCode(response.countryCode));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const homeHref = locale === "en" ? "/" : `/${locale}`;
   const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
@@ -142,7 +169,12 @@ export default function Login() {
           setStatusTone("error");
           return;
         }
-        await signup(email, password, locale, acceptTerms);
+        if (!countryCode) {
+          setStatus(locale === "ar" ? "الدولة مطلوبة لإنشاء الحساب." : locale === "fr" ? "Le pays est obligatoire pour créer le compte." : "Country is required to create the account.");
+          setStatusTone("error");
+          return;
+        }
+        await signup(email, password, locale, acceptTerms, countryCode, selectedCountryLabel);
         setStatus(t("auth.checkEmail"));
         setStatusTone("success");
         setAcceptTerms(false);
@@ -308,30 +340,48 @@ export default function Login() {
                     ) : null}
 
                     {!resetMode && mode === "signup" ? (
-                      <div className="rounded-xl border border-slate-200 bg-white/70 p-4">
-                        <div className="flex items-start gap-3">
-                          <Checkbox
-                            id="accept-terms"
-                            checked={acceptTerms}
-                            onCheckedChange={(checked) => setAcceptTerms(checked === true)}
-                            className="mt-1"
-                          />
-                          <div className="space-y-1 text-sm">
-                            <Label htmlFor="accept-terms" className="cursor-pointer leading-6 text-slate-700">
-                              {termsLabel}
-                            </Label>
-                            <div className="text-xs text-muted-foreground">{termsHint}</div>
-                            <a
-                              href={termsHref}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex text-xs font-semibold text-primary hover:text-primary/80"
-                            >
-                              {termsLinkLabel}
-                            </a>
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="signup-country">{countryLabel}</Label>
+                          <Select value={countryCode} onValueChange={setCountryCode}>
+                            <SelectTrigger id="signup-country" className="w-full bg-white">
+                              <SelectValue placeholder={countryLabel} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {countryOptions.map((option) => (
+                                <SelectItem key={option.code} value={option.code}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">{countryHint}</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-white/70 p-4">
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              id="accept-terms"
+                              checked={acceptTerms}
+                              onCheckedChange={(checked) => setAcceptTerms(checked === true)}
+                              className="mt-1"
+                            />
+                            <div className="space-y-1 text-sm">
+                              <Label htmlFor="accept-terms" className="cursor-pointer leading-6 text-slate-700">
+                                {termsLabel}
+                              </Label>
+                              <div className="text-xs text-muted-foreground">{termsHint}</div>
+                              <a
+                                href={termsHref}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex text-xs font-semibold text-primary hover:text-primary/80"
+                              >
+                                {termsLinkLabel}
+                              </a>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      </>
                     ) : null}
 
                     <Button type="submit" className="w-full" disabled={disabled || busy}>

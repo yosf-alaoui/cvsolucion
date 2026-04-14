@@ -61,6 +61,7 @@ export type BookingRecord = {
   email: string;
   phone: string;
   country: string | null;
+  countryCode: string | null;
   company: string | null;
   notes: string | null;
   locale: "en" | "fr" | "ar";
@@ -110,6 +111,7 @@ function loadDb(): BookingDb {
       packageKey: typeof booking.packageKey === "string" && booking.packageKey.trim() ? booking.packageKey.trim() : null,
       currency: typeof booking.currency === "string" && booking.currency.trim() ? booking.currency.trim().toLowerCase() : "cad",
       country: booking.country ?? null,
+      countryCode: typeof booking.countryCode === "string" && booking.countryCode.trim() ? booking.countryCode.trim().toUpperCase() : null,
       status: booking.status ?? "confirmed",
       updatedAt: booking.updatedAt ?? booking.createdAt ?? nowIso(),
       rescheduledFromBookingId: booking.rescheduledFromBookingId ?? null,
@@ -439,12 +441,14 @@ export function createBooking(input: {
   email: string;
   phone: string;
   country?: string | null;
+  countryCode?: string | null;
   company?: string | null;
   notes?: string | null;
   locale: "en" | "fr" | "ar";
   paymentStatus?: BookingPaymentStatus;
   paymentProvider?: BookingRecord["paymentProvider"];
   paymentReference?: string | null;
+  unitAmount?: number;
 }) {
   const db = loadDb();
   const quebecNow = getQuebecNow();
@@ -515,6 +519,7 @@ export function createBooking(input: {
     email: input.email.trim().toLowerCase(),
     phone: input.phone.trim(),
     country: input.country?.trim() || null,
+    countryCode: input.countryCode?.trim().toUpperCase() || null,
     company: input.company?.trim() || null,
     notes: input.notes?.trim() || null,
     locale: input.locale,
@@ -525,10 +530,12 @@ export function createBooking(input: {
     paymentStatus: input.paymentStatus ?? "unpaid",
     paymentProvider: input.paymentProvider ?? null,
     paymentReference: input.paymentReference ?? null,
-    unitAmount: resolveBookingUnitAmount({
-      serviceType: input.serviceType,
-      priority: input.priority,
-    }),
+    unitAmount: Number.isInteger(input.unitAmount) && Number(input.unitAmount) > 0
+      ? Number(input.unitAmount)
+      : resolveBookingUnitAmount({
+          serviceType: input.serviceType,
+          priority: input.priority,
+        }),
     refundStatus: "none",
     refundReference: null,
     refundAmount: 0,

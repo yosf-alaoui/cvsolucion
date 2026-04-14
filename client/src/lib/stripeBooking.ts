@@ -5,6 +5,7 @@ export type StripeConfigResponse = {
   publishableKey: string | null;
   currency: string;
   cardPaymentFeeCents: number;
+  appliedCountryCode?: string | null;
   prices: Record<string, number>;
 };
 
@@ -25,13 +26,17 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
   return data;
 }
 
-export function getStripeBookingConfig() {
-  return request<StripeConfigResponse>("/api/stripe/config", { method: "GET" });
+export function getStripeBookingConfig(countryCode?: string | null) {
+  const params = new URLSearchParams();
+  if (countryCode) params.set("countryCode", countryCode);
+  const query = params.toString();
+  return request<StripeConfigResponse>(`/api/stripe/config${query ? `?${query}` : ""}`, { method: "GET" });
 }
 
 export function createBookingPaymentIntent(payload: {
   serviceType: BookingServiceType;
   priority: BookingPriority;
+  countryCode?: string | null;
   slots: Array<{ date: string; hour: number }>;
   locale: string;
 }) {

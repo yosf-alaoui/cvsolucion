@@ -146,10 +146,10 @@ export default function BookingCart() {
   }, [currentDraftOwner]);
 
   useEffect(() => {
-    getStripeBookingConfig()
+    getStripeBookingConfig(draft?.countryCode)
       .then((response) => setStripeConfig(response))
       .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", cardPaymentFeeCents: 1500, prices: {} }));
-  }, []);
+  }, [draft?.countryCode]);
 
   useEffect(() => {
     if (!user || !draft?.slots.length) {
