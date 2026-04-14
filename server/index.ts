@@ -5,6 +5,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import type Stripe from "stripe";
+import { getCountry as getTimezoneCountry } from "countries-and-timezones";
 import { COOKIE_NAME, ONE_YEAR_MS, VISITOR_COOKIE_NAME } from "../shared/const";
 import {
   consumeToken,
@@ -845,16 +846,17 @@ async function startServer() {
     }
 
     const name = String(req.body?.name || "").trim();
-    const country = String(req.body?.country || "").trim();
     const countryCode = normalizeCountryCode(req.body?.countryCode);
+    const countryRecord = countryCode ? getTimezoneCountry(countryCode) : null;
+    const country = countryRecord?.name || String(req.body?.country || "").trim();
     const phone = String(req.body?.phone || "").trim();
     const company = String(req.body?.company || "").trim();
 
     if (name.length < 2) {
       return res.status(400).json({ error: "Name is required." });
     }
-    if (country.length < 2) {
-      return res.status(400).json({ error: "Country is required." });
+    if (!countryCode || !countryRecord) {
+      return res.status(400).json({ error: "Select a valid country from the list." });
     }
     if (phone.length < 6) {
       return res.status(400).json({ error: "A valid phone number is required." });
@@ -1558,8 +1560,9 @@ async function startServer() {
       const name = String(req.body?.name || "").trim();
       const email = auth.user.email;
       const phone = String(req.body?.phone || "").trim();
-      const country = String(req.body?.country || "").trim();
       const countryCode = getPricingCountryCode(req);
+      const countryRecord = countryCode ? getTimezoneCountry(countryCode) : null;
+      const country = countryRecord?.name || String(req.body?.country || "").trim();
       const company = String(req.body?.company || "").trim();
       const notes = String(req.body?.notes || "").trim();
       const packageKey = String(req.body?.packageKey || "").trim() || null;
@@ -1572,8 +1575,8 @@ async function startServer() {
       if (phone.length < 6) {
         return res.status(400).json({ error: "A valid phone number is required." });
       }
-      if (country.length < 2) {
-        return res.status(400).json({ error: "Country is required." });
+      if (!countryCode || !countryRecord) {
+        return res.status(400).json({ error: "Select a valid country from the list." });
       }
       if (company.length < 2) {
         return res.status(400).json({ error: "Company name is required." });
@@ -1787,7 +1790,8 @@ async function startServer() {
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
       const termsAccepted = Boolean(req.body?.termsAccepted);
       const countryCode = normalizeCountryCode(req.body?.countryCode);
-      const country = String(req.body?.country || "").trim();
+      const countryRecord = countryCode ? getTimezoneCountry(countryCode) : null;
+      const country = countryRecord?.name || String(req.body?.country || "").trim();
       const termsVersion = "04/2026";
 
       if (!EMAIL_REGEX.test(email) || !password || password.length < 8) {
@@ -1796,8 +1800,8 @@ async function startServer() {
       if (!termsAccepted) {
         return res.status(400).json({ error: "You must accept the Terms and Conditions before creating an account." });
       }
-      if (!countryCode || country.length < 2) {
-        return res.status(400).json({ error: "Country is required." });
+      if (!countryCode || !countryRecord) {
+        return res.status(400).json({ error: "Select a valid country from the list." });
       }
 
       const user = createUser(email, password, termsVersion);

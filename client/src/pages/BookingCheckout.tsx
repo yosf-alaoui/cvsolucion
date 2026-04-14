@@ -9,6 +9,7 @@ import Seo from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -20,7 +21,8 @@ import {
 } from "@/lib/bookingCheckout";
 import { createBooking, getBookingAvailability, type BookingAvailabilityResponse } from "@/lib/bookings";
 import { getCustomerDashboard } from "@/lib/customer";
-import { getBookingCountryLabel, getBookingRegionLabel } from "@/lib/bookingTime";
+import { getBookingCountryLabel, getBookingCountryOptions, getBookingRegionLabel } from "@/lib/bookingTime";
+import { buildInternationalPhone, getDefaultPhoneCountryCode, getPhoneCountryOptions, splitInternationalPhone } from "@/lib/phone";
 import { createBookingPaymentIntent, getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
 import { useI18n } from "@/i18n/i18n";
 
@@ -202,6 +204,10 @@ function moneyLabel(amount: number, locale: string, currency: string) {
   }).format(amount / 100);
 }
 
+function firstCountryCode(...values: Array<string | null | undefined>) {
+  return values.find((value) => typeof value === "string" && value.trim()) || "CA";
+}
+
 export default function BookingCheckout() {
   const { locale } = useI18n();
   const { user, loading: authLoading } = useAuth();
@@ -217,18 +223,23 @@ export default function BookingCheckout() {
     name: "",
     email: "",
     phone: "",
+    phoneCountryCode: "",
     country: "",
+    countryCode: "",
     company: "",
     problem: "",
   });
 
   const copy = useMemo(() => getCopy(locale), [locale]);
+  const countryOptions = useMemo(() => getBookingCountryOptions(locale), [locale]);
+  const phoneCountryOptions = useMemo(() => getPhoneCountryOptions(locale), [locale]);
   const bookingHref = locale === "en" ? "/book" : `/${locale}/book`;
   const cartHref = locale === "en" ? "/book/cart" : `/${locale}/book/cart`;
   const checkoutHref = locale === "en" ? "/book/checkout" : `/${locale}/book/checkout`;
   const dashboardHref = locale === "en" ? "/dashboard" : `/${locale}/dashboard`;
   const loginPath = locale === "en" ? "/login" : `/${locale}/login`;
   const loginHref = `${loginPath}?next=${encodeURIComponent(checkoutHref)}`;
+  const pricingCountryCode = form.countryCode || draft?.countryCode || null;
 
   useEffect(() => {
     const sync = () => setDraft(getBookingCheckoutDraft(currentDraftOwner));
@@ -243,10 +254,10 @@ export default function BookingCheckout() {
   }, [currentDraftOwner]);
 
   useEffect(() => {
-    getStripeBookingConfig(draft?.countryCode)
+    getStripeBookingConfig(pricingCountryCode)
       .then((response) => setStripeConfig(response))
       .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", cardPaymentFeeCents: 1500, prices: {} }));
-  }, [draft?.countryCode]);
+  }, [pricingCountryCode]);
 
   useEffect(() => {
     if (!user || !draft?.slots.length) {
@@ -261,10 +272,12 @@ export default function BookingCheckout() {
 
   useEffect(() => {
     if (!user?.email) return;
-    const draftLocation = draft?.countryCode
+    const draftCountryCode = draft?.countryCode || "";
+    const draftRegionCode = draft?.regionCode || "";
+    const draftLocation = draftCountryCode
       ? [
-          getBookingCountryLabel(draft.countryCode, locale),
-          draft.regionCode ? getBookingRegionLabel(draft.countryCode, draft.regionCode, locale) : "",
+          getBookingCountryLabel(draftCountryCode, locale),
+          draftRegionCode ? getBookingRegionLabel(draftCountryCode, draftRegionCode, locale) : "",
         ]
           .filter(Boolean)
           .join(" - ")
@@ -273,7 +286,9 @@ export default function BookingCheckout() {
     setForm((current) => ({
       ...current,
       email: user.email,
+      countryCode: current.countryCode || draftCountryCode,
       country: current.country || draftLocation,
+      phoneCountryCode: current.phoneCountryCode || getDefaultPhoneCountryCode(draftCountryCode),
     }));
   }, [draft?.countryCode, draft?.regionCode, locale, user?.email]);
 
@@ -284,12 +299,18 @@ export default function BookingCheckout() {
         const latestBooking = [...response.bookings]
           .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())[0];
 
+        const profileCountryCode = firstCountryCode(response.profile.countryCode, latestBooking?.countryCode, draft?.countryCode);
+
         setForm((current) => ({
           ...current,
           name: current.name || response.profile.name || latestBooking?.name || "",
           email: user.email,
-          phone: current.phone || response.profile.phone || latestBooking?.phone || "",
-          country: current.country || response.profile.country || latestBooking?.country || "",
+          phone: current.phone || splitInternationalPhone(response.profile.phone || latestBooking?.phone, current.countryCode || profileCountryCode).localPhone,
+          phoneCountryCode:
+            current.phoneCountryCode ||
+            splitInternationalPhone(response.profile.phone || latestBooking?.phone, current.countryCode || profileCountryCode).phoneCountryCode,
+          countryCode: current.countryCode || profileCountryCode,
+          country: current.country || getBookingCountryLabel(current.countryCode || profileCountryCode, locale) || response.profile.country || latestBooking?.country || "",
           company: current.company || response.profile.company || latestBooking?.company || "",
         }));
 
@@ -322,7 +343,7 @@ export default function BookingCheckout() {
     () => draft?.slots.filter((slot) => !availableSlotIds.has(slot.id)).map((slot) => slot.id) ?? [],
     [availableSlotIds, draft?.slots]
   );
-  const billingReady = Boolean(form.name.trim() && form.email.trim() && form.phone.trim() && form.country.trim() && form.problem.trim());
+  const billingReady = Boolean(form.name.trim() && form.email.trim() && form.phone.trim() && pricingCountryCode && form.problem.trim());
   const replaceHref = draft
     ? `${bookingHref}?priority=${encodeURIComponent(draft.priority)}&service=${encodeURIComponent(draft.serviceType)}${draft.packageKey ? `&package=${encodeURIComponent(draft.packageKey)}` : ""}`
     : bookingHref;
@@ -340,7 +361,7 @@ export default function BookingCheckout() {
     createBookingPaymentIntent({
       serviceType: draft.serviceType,
       priority: draft.priority,
-      countryCode: draft.countryCode,
+      countryCode: pricingCountryCode,
       slots: draft.slots.map((slot) => ({ date: slot.date, hour: slot.hour })),
       locale,
     })
@@ -363,7 +384,7 @@ export default function BookingCheckout() {
     return () => {
       cancelled = true;
     };
-  }, [draft, locale, stripeEnabled, unavailableSlotIds.length, user]);
+  }, [draft, locale, pricingCountryCode, stripeEnabled, unavailableSlotIds.length, user]);
 
   async function finalizeBooking(paymentIntentId: string) {
     if (!draft || !draft.slots.length) return;
@@ -379,9 +400,9 @@ export default function BookingCheckout() {
         slots: draft.slots.map((slot) => ({ date: slot.date, hour: slot.hour })),
         name: form.name,
         email: form.email,
-        phone: form.phone,
-        country: form.country,
-        countryCode: draft.countryCode || undefined,
+        phone: buildInternationalPhone(form.phoneCountryCode || pricingCountryCode, form.phone),
+        country: pricingCountryCode ? getBookingCountryLabel(pricingCountryCode, locale) : form.country,
+        countryCode: pricingCountryCode || undefined,
         company: form.company,
         notes: form.problem,
         paymentIntentId,
@@ -496,11 +517,49 @@ export default function BookingCheckout() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="booking-phone">{copy.phone}</Label>
-                        <Input id="booking-phone" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} required />
+                        <div className="grid grid-cols-[minmax(120px,150px)_1fr] gap-2">
+                          <Select
+                            value={form.phoneCountryCode || getDefaultPhoneCountryCode(pricingCountryCode)}
+                            onValueChange={(phoneCountryCode) => setForm((current) => ({ ...current, phoneCountryCode }))}
+                          >
+                            <SelectTrigger id="booking-phone-code" className="w-full bg-white">
+                              <SelectValue placeholder="+1" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {phoneCountryOptions.map((option) => (
+                                <SelectItem key={option.code} value={option.code}>
+                                  +{option.callingCode} {option.code}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input id="booking-phone" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} required />
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="booking-country">{copy.country}</Label>
-                        <Input id="booking-country" value={form.country} onChange={(event) => setForm((current) => ({ ...current, country: event.target.value }))} required />
+                        <Select
+                          value={pricingCountryCode || ""}
+                          onValueChange={(countryCode) =>
+                            setForm((current) => ({
+                              ...current,
+                              countryCode,
+                              country: getBookingCountryLabel(countryCode, locale),
+                              phoneCountryCode: getDefaultPhoneCountryCode(countryCode),
+                            }))
+                          }
+                        >
+                          <SelectTrigger id="booking-country" className="w-full bg-white">
+                            <SelectValue placeholder={copy.country} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {countryOptions.map((option) => (
+                              <SelectItem key={option.code} value={option.code}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-2 md:col-span-2">
                         <Label htmlFor="booking-company">{copy.company}</Label>
@@ -544,7 +603,7 @@ export default function BookingCheckout() {
                       billingDetails={{
                         name: form.name,
                         email: form.email,
-                        phone: form.phone,
+                        phone: buildInternationalPhone(form.phoneCountryCode || pricingCountryCode, form.phone),
                       }}
                       copy={{
                         title: copy.paymentTitle,

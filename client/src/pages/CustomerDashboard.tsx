@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Clock3, Mail, MapPin, Phone, ReceiptText, RefreshCcw, UserRound } from "lucide-react";
+import { CalendarDays, Clock3, Mail, ReceiptText, RefreshCcw, UserRound } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Seo from "@/components/Seo";
@@ -11,7 +11,10 @@ import { getBookingAvailability, rescheduleBooking, type BookingAvailabilitySlot
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getBookingCountryLabel, getBookingCountryOptions } from "@/lib/bookingTime";
+import { buildInternationalPhone, getDefaultPhoneCountryCode, getPhoneCountryOptions, splitInternationalPhone } from "@/lib/phone";
 import { toast } from "sonner";
 
 function formatDateTime(date: string, hour: number, locale: string) {
@@ -53,7 +56,9 @@ export default function CustomerDashboard() {
   const [profileForm, setProfileForm] = useState({
     name: "",
     country: "",
+    countryCode: "",
     phone: "",
+    phoneCountryCode: "CA",
     company: "",
   });
 
@@ -200,13 +205,20 @@ export default function CustomerDashboard() {
     };
   }, [locale]);
 
+  const countryOptions = useMemo(() => getBookingCountryOptions(locale), [locale]);
+  const phoneCountryOptions = useMemo(() => getPhoneCountryOptions(locale), [locale]);
+
   async function loadDashboard() {
     const response = await getCustomerDashboard();
+    const resolvedCountryCode = response.profile.countryCode || "CA";
+    const resolvedPhone = splitInternationalPhone(response.profile.phone, resolvedCountryCode);
     setData(response);
     setProfileForm({
       name: response.profile.name || "",
-      country: response.profile.country || "",
-      phone: response.profile.phone || "",
+      country: response.profile.country || getBookingCountryLabel(resolvedCountryCode, locale),
+      countryCode: resolvedCountryCode,
+      phone: resolvedPhone.localPhone,
+      phoneCountryCode: resolvedPhone.phoneCountryCode,
       company: response.profile.company || "",
     });
   }
@@ -256,7 +268,13 @@ export default function CustomerDashboard() {
     event.preventDefault();
     try {
       setSavingProfile(true);
-      const response = await updateCustomerProfile(profileForm);
+      const response = await updateCustomerProfile({
+        name: profileForm.name,
+        country: getBookingCountryLabel(profileForm.countryCode, locale),
+        countryCode: profileForm.countryCode,
+        phone: buildInternationalPhone(profileForm.phoneCountryCode, profileForm.phone),
+        company: profileForm.company,
+      });
       setData((current) => (current ? { ...current, profile: response.profile } : current));
       toast.success(copy.profileSaved);
     } catch (error: any) {
@@ -515,11 +533,25 @@ export default function CustomerDashboard() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="customer-phone">{copy.phone}</Label>
-                        <div className="relative">
-                          <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <div className="grid grid-cols-[minmax(120px,150px)_1fr] gap-2">
+                          <Select
+                            value={profileForm.phoneCountryCode}
+                            onValueChange={(phoneCountryCode) => setProfileForm((current) => ({ ...current, phoneCountryCode }))}
+                          >
+                            <SelectTrigger id="customer-phone-code" className="w-full bg-white">
+                              <SelectValue placeholder="+1" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {phoneCountryOptions.map((option) => (
+                                <SelectItem key={option.code} value={option.code}>
+                                  +{option.callingCode} {option.code}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <Input
                             id="customer-phone"
-                            className="pl-9"
+                            className="bg-white"
                             value={profileForm.phone}
                             onChange={(event) => setProfileForm((current) => ({ ...current, phone: event.target.value }))}
                             required
@@ -528,16 +560,28 @@ export default function CustomerDashboard() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="customer-country">{copy.country}</Label>
-                        <div className="relative">
-                          <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                          <Input
-                            id="customer-country"
-                            className="pl-9"
-                            value={profileForm.country}
-                            onChange={(event) => setProfileForm((current) => ({ ...current, country: event.target.value }))}
-                            required
-                          />
-                        </div>
+                        <Select
+                          value={profileForm.countryCode}
+                          onValueChange={(countryCode) =>
+                            setProfileForm((current) => ({
+                              ...current,
+                              countryCode,
+                              country: getBookingCountryLabel(countryCode, locale),
+                              phoneCountryCode: getDefaultPhoneCountryCode(countryCode),
+                            }))
+                          }
+                        >
+                          <SelectTrigger id="customer-country" className="w-full bg-white">
+                            <SelectValue placeholder={copy.country} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {countryOptions.map((option) => (
+                              <SelectItem key={option.code} value={option.code}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-2 md:col-span-2">
                         <Label htmlFor="customer-company">{copy.company}</Label>
