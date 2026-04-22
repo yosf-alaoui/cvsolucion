@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { CalendarDays, ChevronDown, Globe2, LogOut, Mail, Menu, ShoppingCart, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,6 +22,7 @@ export default function Header() {
   const [cartCount, setCartCount] = useState(0);
   const langMenuRef = useRef<HTMLDivElement | null>(null);
   const mobileLangMenuRef = useRef<HTMLDivElement | null>(null);
+  const [location] = useLocation();
 
   const { locale, t } = useI18n();
   const { user, loading: authLoading, logout } = useAuth();
@@ -64,6 +66,46 @@ export default function Header() {
       document.removeEventListener("touchstart", handlePointerDown);
     };
   }, [isLangOpen]);
+
+  useEffect(() => {
+    setIsMenuOpen(false);
+    setIsLangOpen(false);
+  }, [location]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncViewportState = () => {
+      if (window.innerWidth >= 1280) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    syncViewportState();
+    window.addEventListener("resize", syncViewportState);
+    return () => window.removeEventListener("resize", syncViewportState);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || typeof window === "undefined") return;
+    if (window.innerWidth >= 1280) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousTouchAction = document.body.style.touchAction;
+
+    if (isMenuOpen) {
+      document.body.style.overflow = "hidden";
+      document.body.style.touchAction = "none";
+    } else {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouchAction;
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouchAction;
+    };
+  }, [isMenuOpen]);
 
   const getLocaleHref = (target: "en" | "fr" | "ar") => {
     if (typeof window === "undefined") {
@@ -146,9 +188,9 @@ export default function Header() {
 
   return (
     <header className="fixed left-0 right-0 top-0 z-50">
-      <div className="container mx-auto px-4">
-        <div className="mt-3 rounded-2xl border border-white/25 bg-white/85 shadow-xl backdrop-blur-xl">
-          <div className="flex items-center justify-between px-4 py-3">
+      <div className="container mx-auto px-3 sm:px-4">
+        <div className="mt-2 rounded-[22px] border border-white/35 bg-white/88 shadow-[0_16px_36px_rgba(15,23,42,0.12)] backdrop-blur-lg sm:mt-3 sm:rounded-2xl sm:bg-white/85 sm:shadow-xl sm:backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3 px-3 py-3 sm:px-4">
             <a href={homeHref} className="flex items-center transition-opacity hover:opacity-90">
               <picture>
                 <source srcSet="/logo.webp" type="image/webp" />
@@ -158,7 +200,7 @@ export default function Header() {
                   width={1600}
                   height={533}
                   decoding="async"
-                  className="h-10 w-auto drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)] sm:h-11 md:h-12"
+                  className="h-9 w-auto drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)] sm:h-11 md:h-12"
                 />
               </picture>
             </a>
@@ -378,8 +420,11 @@ export default function Header() {
             </div>
 
             <button
-              onClick={() => setIsMenuOpen((value) => !value)}
-              className="rounded-xl p-2 transition-colors hover:bg-white/30 xl:hidden"
+              onClick={() => {
+                setIsLangOpen(false);
+                setIsMenuOpen((value) => !value);
+              }}
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white/65 transition-colors hover:bg-white/80 active:scale-[0.98] xl:hidden"
               aria-label="Toggle menu"
             >
               {isMenuOpen ? <X className="h-6 w-6 text-foreground" /> : <Menu className="h-6 w-6 text-foreground" />}
@@ -387,7 +432,8 @@ export default function Header() {
           </div>
 
           {isMenuOpen ? (
-            <div className="space-y-4 border-t border-white/20 px-4 py-4 xl:hidden">
+            <div className="border-t border-slate-200/70 bg-white/92 px-3 pb-4 pt-4 backdrop-blur-xl xl:hidden">
+              <div className="max-h-[calc(100svh-5.75rem)] space-y-4 overflow-y-auto overscroll-contain pr-1">
               <div className="grid gap-2 sm:grid-cols-3">
                 <Button asChild className="w-full rounded-full bg-primary text-white hover:bg-primary/90">
                   <a
@@ -483,7 +529,7 @@ export default function Header() {
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-white/35 p-2">
+              <div className="rounded-2xl border border-white/70 bg-white/72 p-2 shadow-sm">
                 <div className="px-3 py-2 text-xs font-black uppercase tracking-[0.25em] text-slate-500">{formationsLabel}</div>
                 <a href={trainingHref} className="block rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40" onClick={() => setIsMenuOpen(false)}>
                   {t("nav.training")}
@@ -496,7 +542,7 @@ export default function Header() {
                 </a>
               </div>
 
-              <div className="rounded-2xl bg-white/35 p-2">
+              <div className="rounded-2xl border border-white/70 bg-white/72 p-2 shadow-sm">
                 <div className="px-3 py-2 text-xs font-black uppercase tracking-[0.25em] text-slate-500">{solutionsLabel}</div>
                 <button type="button" className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40" onClick={() => scrollToSection("services")}>
                   {servicesOverviewLabel}
@@ -513,7 +559,7 @@ export default function Header() {
                 ))}
               </div>
 
-              <div className="rounded-2xl bg-white/35 p-2">
+              <div className="rounded-2xl border border-white/70 bg-white/72 p-2 shadow-sm">
                 <div className="px-3 py-2 text-xs font-black uppercase tracking-[0.25em] text-slate-500">{resourcesLabel}</div>
                 <a href={articlesHref} className="block rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40" onClick={() => setIsMenuOpen(false)}>
                   {articlesLabel}
@@ -543,6 +589,7 @@ export default function Header() {
                   {t("auth.signOut")}
                 </button>
               ) : null}
+              </div>
             </div>
           ) : null}
         </div>
