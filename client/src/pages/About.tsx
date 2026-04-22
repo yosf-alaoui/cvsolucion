@@ -140,7 +140,7 @@ export default function About() {
             <p className="mt-5 text-lg leading-8 text-slate-600">{copy.description}</p>
           </div>
 
-          <div className="mx-auto mt-12 grid max-w-6xl gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="card-stage mx-auto mt-12 grid max-w-6xl gap-8 lg:grid-cols-[1.15fr_0.85fr]">
             <GlassCard className="card-static rounded-[32px] p-8">
               <h2 className="text-3xl font-bold text-slate-950">{copy.introTitle}</h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">{copy.introBody}</p>

@@ -130,7 +130,7 @@ export default function TestimonialsSection() {
           <p className="mt-5 text-lg leading-8 text-slate-600">{copy.subtitle}</p>
         </div>
 
-        <div className="mx-auto mt-10 grid max-w-6xl gap-5 md:grid-cols-3">
+        <div className="card-stage mx-auto mt-10 grid max-w-6xl gap-5 md:grid-cols-3">
           {copy.metrics.map((metric, index) => {
             const Icon = icons[index];
             return (
@@ -157,7 +157,7 @@ export default function TestimonialsSection() {
           ))}
         </div>
 
-        <div className="mx-auto mt-10 grid max-w-6xl gap-6 lg:grid-cols-3">
+        <div className="card-stage mx-auto mt-10 grid max-w-6xl gap-6 lg:grid-cols-3">
           {copy.quotes.map((item) => (
             <GlassCard key={`${item.author}-${item.location}`} className="p-7">
               <div className="glass-chip mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl text-primary">

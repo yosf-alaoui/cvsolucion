@@ -108,7 +108,7 @@ export default function Guides() {
             <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-slate-600">{pageCopy.subtitle}</p>
           </div>
 
-          <div className="mx-auto mt-14 grid max-w-[1180px] gap-6 md:grid-cols-2">
+          <div className="card-stage mx-auto mt-14 grid max-w-[1180px] gap-6 md:grid-cols-2">
             {guides.map((guide) => (
               <GlassCard key={guide.href} className="group rounded-[30px] p-7">
                 <article className="flex h-full flex-col">
