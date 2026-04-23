@@ -1,6 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { CalendarDays, ChevronDown, Globe2, LogOut, Mail, Menu, ShoppingCart, UserRound, X } from "lucide-react";
+import {
+  BookOpenCheck,
+  Boxes,
+  CalendarDays,
+  ChevronDown,
+  Code2,
+  Cpu,
+  FileText,
+  Gauge,
+  Globe2,
+  GraduationCap,
+  LogOut,
+  Mail,
+  Menu,
+  ShoppingCart,
+  UserRound,
+  Wrench,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
@@ -176,6 +194,105 @@ export default function Header() {
     };
   });
 
+  const trainingMenu = [
+    {
+      href: trainingHref,
+      label: t("nav.training"),
+      description:
+        locale === "ar"
+          ? "مستويات تكوين عملية حسب خبرة فريقك."
+          : locale === "fr"
+            ? "Parcours de formation structure par niveau."
+            : "Structured training paths by skill level.",
+      icon: GraduationCap,
+    },
+    {
+      action: () => scrollToSection("packages"),
+      label: t("nav.packages"),
+      description:
+        locale === "ar"
+          ? "باقات تدخل واضحة للتدريب والدعم."
+          : locale === "fr"
+            ? "Offres claires pour support et intervention."
+            : "Clear intervention packages and support plans.",
+      icon: Boxes,
+    },
+    {
+      href: designPricingHref,
+      label: t("nav.designPricing"),
+      description:
+        locale === "ar"
+          ? "تنظيم التسعير والتقارير ومخرجات الإنتاج."
+          : locale === "fr"
+            ? "Structurer devis, rapports et logique atelier."
+            : "Organize pricing, reports, and production logic.",
+      icon: Gauge,
+    },
+  ] as const;
+
+  const serviceIcons = [Wrench, Boxes, Cpu, Gauge, BookOpenCheck, Code2];
+  const solutionsMenu = [
+    {
+      action: () => scrollToSection("services"),
+      label: servicesOverviewLabel,
+      description:
+        locale === "ar"
+          ? "نظرة سريعة على كل مسارات الخدمة."
+          : locale === "fr"
+            ? "Vue rapide de tous les parcours de service."
+            : "Quick overview of every service path.",
+      icon: BookOpenCheck,
+      featured: true,
+    },
+    ...serviceMenuLinks.map((link, index) => ({
+      href: link.href,
+      label: link.label,
+      description:
+        locale === "ar"
+          ? "صفحة مفصلة خاصة بهذه الخدمة."
+          : locale === "fr"
+            ? "Page detaillee pour ce service."
+            : "Dedicated page for this service.",
+      icon: serviceIcons[index] ?? Wrench,
+    })),
+  ] as const;
+
+  const resourcesMenu = [
+    {
+      href: articlesHref,
+      label: articlesLabel,
+      description:
+        locale === "ar"
+          ? "مقالات عملية من مشاكل حقيقية في الورش."
+          : locale === "fr"
+            ? "Articles pratiques issus de vrais cas atelier."
+            : "Practical articles from real production cases.",
+      icon: FileText,
+    },
+    {
+      href: guidesHref,
+      label: guidesLabel,
+      description:
+        locale === "ar"
+          ? "أدلة تشخيص مباشرة للمشاكل المتكررة."
+          : locale === "fr"
+            ? "Guides directs pour les problemes recurrents."
+            : "Direct guides for the most common issues.",
+      icon: BookOpenCheck,
+    },
+    {
+      action: () => scrollToSection("faq"),
+      label: t("nav.faq"),
+      description:
+        locale === "ar"
+          ? "إجابات سريعة قبل التواصل أو الحجز."
+          : locale === "fr"
+            ? "Reponses rapides avant prise de contact."
+            : "Fast answers before you contact or book.",
+      icon: Mail,
+    },
+  ] as const;
+
   const scrollToSection = (sectionId: string) => {
     navigateToHomeSection(locale, sectionId);
     setIsMenuOpen(false);
@@ -185,6 +302,81 @@ export default function Header() {
     await logout().catch(() => {});
     setIsMenuOpen(false);
   };
+
+  const renderDesktopDropdown = (
+    title: string,
+    badge: string,
+    description: string,
+    items: readonly {
+      href?: string;
+      action?: () => void;
+      label: string;
+      description: string;
+      icon: React.ComponentType<{ className?: string }>;
+      featured?: boolean;
+    }[],
+    widthClass: string,
+    columnsClass = "grid-cols-1",
+  ) => (
+    <DropdownMenuContent
+      align="center"
+      sideOffset={14}
+      className={`w-[min(92vw,26rem)] ${widthClass} overflow-hidden rounded-[28px] border border-white/55 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(248,250,252,0.96)_100%)] p-0 shadow-[0_28px_80px_rgba(15,23,42,0.18)] ring-1 ring-slate-200/70 backdrop-blur-2xl`}
+    >
+      <div className="border-b border-slate-200/70 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_52%),linear-gradient(180deg,rgba(248,250,252,0.98)_0%,rgba(255,255,255,0.96)_100%)] px-5 py-4">
+        <div className="text-[11px] font-black uppercase tracking-[0.26em] text-primary/75">{badge}</div>
+        <div className="mt-2 text-lg font-bold text-slate-950">{title}</div>
+        <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+      </div>
+      <div className={`grid gap-2 p-3 ${columnsClass}`}>
+        {items.map((item) => {
+          const Icon = item.icon;
+          const content = (
+            <div
+              className={`group flex min-h-[84px] items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${
+                item.featured
+                  ? "border-primary/20 bg-primary/[0.06] shadow-[0_10px_25px_rgba(30,58,138,0.08)] hover:border-primary/35 hover:bg-primary/[0.09]"
+                  : "border-transparent bg-white/60 hover:border-slate-200 hover:bg-white hover:shadow-[0_10px_22px_rgba(15,23,42,0.06)]"
+              }`}
+            >
+              <span
+                className={`mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
+                  item.featured ? "bg-primary text-white" : "bg-slate-100 text-primary"
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-slate-900">{item.label}</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">{item.description}</span>
+              </span>
+            </div>
+          );
+
+          if (item.href) {
+            return (
+              <DropdownMenuItem key={item.label} asChild className="cursor-pointer rounded-2xl p-0 focus:bg-transparent">
+                <a href={item.href}>{content}</a>
+              </DropdownMenuItem>
+            );
+          }
+
+          return (
+            <DropdownMenuItem
+              key={item.label}
+              className="cursor-pointer rounded-2xl p-0 focus:bg-transparent"
+              onSelect={(event) => {
+                event.preventDefault();
+                item.action?.();
+              }}
+            >
+              {content}
+            </DropdownMenuItem>
+          );
+        })}
+      </div>
+    </DropdownMenuContent>
+  );
 
   return (
     <header className="fixed left-0 right-0 top-0 z-50">
@@ -208,79 +400,72 @@ export default function Header() {
             <nav className="hidden flex-1 items-center justify-center gap-4 xl:flex 2xl:gap-6">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" className="inline-flex items-center gap-1.5 font-semibold text-foreground transition-colors hover:text-primary">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 font-semibold text-foreground transition-all hover:bg-white/60 hover:text-primary data-[state=open]:bg-white/75 data-[state=open]:text-primary"
+                  >
                     {formationsLabel}
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="center" className="w-64 rounded-2xl border-slate-200 bg-white/95 p-2 backdrop-blur-xl">
-                  <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
-                    <a href={trainingHref}>{t("nav.training")}</a>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="cursor-pointer rounded-xl px-3 py-2 font-semibold"
-                    onSelect={(event) => {
-                      event.preventDefault();
-                      scrollToSection("packages");
-                    }}
-                  >
-                    {t("nav.packages")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
-                    <a href={designPricingHref}>{t("nav.designPricing")}</a>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
+                {renderDesktopDropdown(
+                  formationsLabel,
+                  locale === "ar" ? "برامج" : locale === "fr" ? "Parcours" : "Programs",
+                  locale === "ar"
+                    ? "اختر نوع التكوين أو الباقة الأنسب قبل بدء التنفيذ."
+                    : locale === "fr"
+                      ? "Choisissez le bon parcours avant de lancer votre implementation."
+                      : "Choose the right path before you start implementation.",
+                  trainingMenu,
+                  "max-w-[28rem]",
+                )}
               </DropdownMenu>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" className="inline-flex items-center gap-1.5 font-semibold text-foreground transition-colors hover:text-primary">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 font-semibold text-foreground transition-all hover:bg-white/60 hover:text-primary data-[state=open]:bg-white/75 data-[state=open]:text-primary"
+                  >
                     {solutionsLabel}
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="center" className="w-80 rounded-2xl border-slate-200 bg-white/95 p-2 backdrop-blur-xl">
-                  <DropdownMenuItem
-                    className="cursor-pointer rounded-xl px-3 py-2 font-semibold"
-                    onSelect={(event) => {
-                      event.preventDefault();
-                      scrollToSection("services");
-                    }}
-                  >
-                    {servicesOverviewLabel}
-                  </DropdownMenuItem>
-                  {serviceMenuLinks.map((link) => (
-                    <DropdownMenuItem key={link.href} asChild className="cursor-pointer rounded-xl px-3 py-2">
-                      <a href={link.href}>{link.label}</a>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
+                {renderDesktopDropdown(
+                  solutionsLabel,
+                  locale === "ar" ? "خدمات" : locale === "fr" ? "Services" : "Services",
+                  locale === "ar"
+                    ? "مسارات خدمة متخصصة حسب نوع المشكلة أو مرحلة المشروع."
+                    : locale === "fr"
+                      ? "Des parcours specialises selon le probleme ou l'etape du projet."
+                      : "Specialized service paths based on the problem and project stage.",
+                  solutionsMenu,
+                  "max-w-[42rem]",
+                  "grid-cols-2",
+                )}
               </DropdownMenu>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" className="inline-flex items-center gap-1.5 font-semibold text-foreground transition-colors hover:text-primary">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 font-semibold text-foreground transition-all hover:bg-white/60 hover:text-primary data-[state=open]:bg-white/75 data-[state=open]:text-primary"
+                  >
                     {resourcesLabel}
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="center" className="w-56 rounded-2xl border-slate-200 bg-white/95 p-2 backdrop-blur-xl">
-                  <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
-                    <a href={articlesHref}>{articlesLabel}</a>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
-                    <a href={guidesHref}>{guidesLabel}</a>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="cursor-pointer rounded-xl px-3 py-2 font-semibold"
-                    onSelect={(event) => {
-                      event.preventDefault();
-                      scrollToSection("faq");
-                    }}
-                  >
-                    {t("nav.faq")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
+                {renderDesktopDropdown(
+                  resourcesLabel,
+                  locale === "ar" ? "محتوى" : locale === "fr" ? "Contenu" : "Content",
+                  locale === "ar"
+                    ? "مراجع ومقالات وأجوبة سريعة قبل التواصل أو الحجز."
+                    : locale === "fr"
+                      ? "Guides, articles et reponses rapides avant contact."
+                      : "Guides, articles, and fast answers before you contact us.",
+                  resourcesMenu,
+                  "max-w-[29rem]",
+                )}
               </DropdownMenu>
 
               <a href={aboutHref} className="font-semibold text-foreground transition-colors hover:text-primary">
