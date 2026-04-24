@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
+  ArrowUpRight,
   BookOpenCheck,
   Boxes,
   CalendarDays,
@@ -303,80 +304,72 @@ export default function Header() {
     setIsMenuOpen(false);
   };
 
-  const renderDesktopDropdown = (
-    title: string,
-    badge: string,
-    description: string,
-    items: readonly {
+  const renderDesktopMenuLink = (
+    item: {
       href?: string;
       action?: () => void;
       label: string;
       description: string;
       icon: React.ComponentType<{ className?: string }>;
-      featured?: boolean;
-    }[],
-    widthClass: string,
-    columnsClass = "grid-cols-1",
-  ) => (
-    <DropdownMenuContent
-      align="center"
-      sideOffset={14}
-      className={`w-[min(92vw,26rem)] ${widthClass} overflow-hidden rounded-[28px] border border-white/55 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(248,250,252,0.96)_100%)] p-0 shadow-[0_28px_80px_rgba(15,23,42,0.18)] ring-1 ring-slate-200/70 backdrop-blur-2xl`}
-    >
-      <div className="border-b border-slate-200/70 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_52%),linear-gradient(180deg,rgba(248,250,252,0.98)_0%,rgba(255,255,255,0.96)_100%)] px-5 py-4">
-        <div className="text-[11px] font-black uppercase tracking-[0.26em] text-primary/75">{badge}</div>
-        <div className="mt-2 text-lg font-bold text-slate-950">{title}</div>
-        <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+    },
+    options?: {
+      compact?: boolean;
+      accent?: "blue" | "emerald" | "violet";
+    },
+  ) => {
+    const Icon = item.icon;
+    const accentClass =
+      options?.accent === "emerald"
+        ? "from-emerald-500/14 to-cyan-500/8 text-emerald-700"
+        : options?.accent === "violet"
+          ? "from-violet-500/14 to-fuchsia-500/8 text-violet-700"
+          : "from-blue-600/14 to-sky-500/8 text-primary";
+    const content = (
+      <div
+        className={`group relative overflow-hidden rounded-[24px] border border-transparent bg-white/62 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:bg-white hover:shadow-[0_18px_38px_rgba(15,23,42,0.08)] ${
+          options?.compact ? "px-3 py-3" : "px-4 py-4"
+        }`}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.75),transparent_42%)] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+        <div className="relative flex items-start gap-3">
+          <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${accentClass}`}>
+            <Icon className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2 text-sm font-bold text-slate-950">
+              {item.label}
+              <ArrowUpRight className="h-3.5 w-3.5 text-slate-300 transition-colors group-hover:text-primary" />
+            </span>
+            <span className="mt-1.5 block text-xs leading-5 text-slate-500">{item.description}</span>
+          </span>
+        </div>
       </div>
-      <div className={`grid gap-2 p-3 ${columnsClass}`}>
-        {items.map((item) => {
-          const Icon = item.icon;
-          const content = (
-            <div
-              className={`group flex min-h-[84px] items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${
-                item.featured
-                  ? "border-primary/20 bg-primary/[0.06] shadow-[0_10px_25px_rgba(30,58,138,0.08)] hover:border-primary/35 hover:bg-primary/[0.09]"
-                  : "border-transparent bg-white/60 hover:border-slate-200 hover:bg-white hover:shadow-[0_10px_22px_rgba(15,23,42,0.06)]"
-              }`}
-            >
-              <span
-                className={`mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
-                  item.featured ? "bg-primary text-white" : "bg-slate-100 text-primary"
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-slate-900">{item.label}</span>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">{item.description}</span>
-              </span>
-            </div>
-          );
+    );
 
-          if (item.href) {
-            return (
-              <DropdownMenuItem key={item.label} asChild className="cursor-pointer rounded-2xl p-0 focus:bg-transparent">
-                <a href={item.href}>{content}</a>
-              </DropdownMenuItem>
-            );
-          }
+    if (item.href) {
+      return (
+        <DropdownMenuItem key={item.label} asChild className="cursor-pointer rounded-[24px] p-0 focus:bg-transparent">
+          <a href={item.href}>{content}</a>
+        </DropdownMenuItem>
+      );
+    }
 
-          return (
-            <DropdownMenuItem
-              key={item.label}
-              className="cursor-pointer rounded-2xl p-0 focus:bg-transparent"
-              onSelect={(event) => {
-                event.preventDefault();
-                item.action?.();
-              }}
-            >
-              {content}
-            </DropdownMenuItem>
-          );
-        })}
-      </div>
-    </DropdownMenuContent>
-  );
+    return (
+      <DropdownMenuItem
+        key={item.label}
+        className="cursor-pointer rounded-[24px] p-0 focus:bg-transparent"
+        onSelect={(event) => {
+          event.preventDefault();
+          item.action?.();
+        }}
+      >
+        {content}
+      </DropdownMenuItem>
+    );
+  };
+
+  const desktopDropdownTriggerClass =
+    "inline-flex items-center gap-1.5 rounded-full px-3 py-2 font-semibold text-foreground transition-all hover:bg-white/60 hover:text-primary data-[state=open]:bg-white/75 data-[state=open]:text-primary";
 
   return (
     <header className="fixed left-0 right-0 top-0 z-50">
@@ -400,72 +393,161 @@ export default function Header() {
             <nav className="hidden flex-1 items-center justify-center gap-4 xl:flex 2xl:gap-6">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 font-semibold text-foreground transition-all hover:bg-white/60 hover:text-primary data-[state=open]:bg-white/75 data-[state=open]:text-primary"
-                  >
+                  <button type="button" className={desktopDropdownTriggerClass}>
                     {formationsLabel}
                     <ChevronDown className="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
                   </button>
                 </DropdownMenuTrigger>
-                {renderDesktopDropdown(
-                  formationsLabel,
-                  locale === "ar" ? "برامج" : locale === "fr" ? "Parcours" : "Programs",
-                  locale === "ar"
-                    ? "اختر نوع التكوين أو الباقة الأنسب قبل بدء التنفيذ."
-                    : locale === "fr"
-                      ? "Choisissez le bon parcours avant de lancer votre implementation."
-                      : "Choose the right path before you start implementation.",
-                  trainingMenu,
-                  "max-w-[28rem]",
-                )}
+                <DropdownMenuContent
+                  align="center"
+                  sideOffset={14}
+                  className="w-[34rem] overflow-hidden rounded-[30px] border border-white/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.96)_100%)] p-0 shadow-[0_34px_90px_rgba(15,23,42,0.2)] ring-1 ring-slate-200/70 backdrop-blur-2xl"
+                >
+                  <div className="grid grid-cols-[1.1fr_0.9fr]">
+                    <div className="relative overflow-hidden border-r border-slate-200/70 bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.16),transparent_48%),linear-gradient(180deg,rgba(239,246,255,0.9)_0%,rgba(255,255,255,0.96)_100%)] px-5 py-5">
+                      <div className="text-[11px] font-black uppercase tracking-[0.28em] text-primary/70">
+                        {locale === "ar" ? "مسار" : locale === "fr" ? "Parcours" : "Path"}
+                      </div>
+                      <h3 className="mt-3 text-xl font-bold text-slate-950">{formationsLabel}</h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {locale === "ar"
+                          ? "ابدأ بالمسار الأنسب لفريقك ثم انتقل إلى التنفيذ أو التسعير المنظم."
+                          : locale === "fr"
+                            ? "Choisissez le bon parcours pour votre equipe avant l'implementation."
+                            : "Choose the right path for your team before implementation."}
+                      </p>
+                      <div className="mt-5 rounded-[24px] border border-primary/15 bg-white/70 p-4 shadow-[0_14px_32px_rgba(30,58,138,0.08)]">
+                        <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white">
+                          <GraduationCap className="h-5 w-5" />
+                        </div>
+                        <div className="mt-4 text-base font-bold text-slate-950">{t("nav.training")}</div>
+                        <div className="mt-1 text-sm leading-6 text-slate-600">
+                          {locale === "ar"
+                            ? "مستويات تكوين متدرجة وموجهة حسب خبرة المصمم أو الفريق."
+                            : locale === "fr"
+                              ? "Formation par niveaux adaptee au designer ou a l'equipe."
+                              : "Level-based training tailored to the designer or team."}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid gap-2 p-3">
+                      {trainingMenu.map((item, index) =>
+                        renderDesktopMenuLink(item, {
+                          accent: index === 0 ? "blue" : index === 1 ? "emerald" : "violet",
+                        }),
+                      )}
+                    </div>
+                  </div>
+                </DropdownMenuContent>
               </DropdownMenu>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 font-semibold text-foreground transition-all hover:bg-white/60 hover:text-primary data-[state=open]:bg-white/75 data-[state=open]:text-primary"
-                  >
+                  <button type="button" className={desktopDropdownTriggerClass}>
                     {solutionsLabel}
                     <ChevronDown className="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
                   </button>
                 </DropdownMenuTrigger>
-                {renderDesktopDropdown(
-                  solutionsLabel,
-                  locale === "ar" ? "خدمات" : locale === "fr" ? "Services" : "Services",
-                  locale === "ar"
-                    ? "مسارات خدمة متخصصة حسب نوع المشكلة أو مرحلة المشروع."
-                    : locale === "fr"
-                      ? "Des parcours specialises selon le probleme ou l'etape du projet."
-                      : "Specialized service paths based on the problem and project stage.",
-                  solutionsMenu,
-                  "max-w-[42rem]",
-                  "grid-cols-2",
-                )}
+                <DropdownMenuContent
+                  align="center"
+                  sideOffset={14}
+                  className="w-[52rem] overflow-hidden rounded-[32px] border border-white/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.96)_100%)] p-0 shadow-[0_36px_100px_rgba(15,23,42,0.22)] ring-1 ring-slate-200/70 backdrop-blur-2xl"
+                >
+                  <div className="grid grid-cols-[0.92fr_1.08fr]">
+                    <div className="relative overflow-hidden border-r border-slate-200/70 bg-[radial-gradient(circle_at_top_left,rgba(30,64,175,0.16),transparent_46%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.12),transparent_36%),linear-gradient(180deg,rgba(239,246,255,0.94)_0%,rgba(255,255,255,0.98)_100%)] px-6 py-6">
+                      <div className="text-[11px] font-black uppercase tracking-[0.28em] text-primary/70">
+                        {locale === "ar" ? "خريطة" : locale === "fr" ? "Carte" : "Map"}
+                      </div>
+                      <h3 className="mt-3 text-[1.35rem] font-bold leading-tight text-slate-950">{solutionsLabel}</h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {locale === "ar"
+                          ? "بدلاً من قائمة طويلة، اختر المسار حسب المشكلة الفعلية داخل الإنتاج."
+                          : locale === "fr"
+                            ? "Choisissez le parcours selon le vrai probleme atelier."
+                            : "Choose the path based on the real production problem."}
+                      </p>
+
+                      <div className="mt-6 overflow-hidden rounded-[26px] border border-primary/15 bg-slate-950 px-5 py-5 text-white shadow-[0_18px_40px_rgba(15,23,42,0.2)]">
+                        <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/12">
+                          <BookOpenCheck className="h-5 w-5" />
+                        </div>
+                        <div className="mt-4 text-lg font-bold">{servicesOverviewLabel}</div>
+                        <div className="mt-2 text-sm leading-6 text-slate-300">
+                          {locale === "ar"
+                            ? "ادخل من هنا إذا كنت تريد رؤية الصورة الكاملة قبل اختيار خدمة مفصلة."
+                            : locale === "fr"
+                              ? "Point d'entree ideal pour voir tout avant de choisir un service detaille."
+                              : "Start here if you want the full picture before choosing a specific service."}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => scrollToSection("services")}
+                          className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-slate-100"
+                        >
+                          {locale === "ar" ? "استكشف الخدمات" : locale === "fr" ? "Voir les services" : "Explore services"}
+                          <ArrowUpRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        {solutionsMenu.slice(1).map((item, index) =>
+                          renderDesktopMenuLink(item, {
+                            compact: true,
+                            accent: index % 3 === 0 ? "blue" : index % 3 === 1 ? "emerald" : "violet",
+                          }),
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </DropdownMenuContent>
               </DropdownMenu>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 font-semibold text-foreground transition-all hover:bg-white/60 hover:text-primary data-[state=open]:bg-white/75 data-[state=open]:text-primary"
-                  >
+                  <button type="button" className={desktopDropdownTriggerClass}>
                     {resourcesLabel}
                     <ChevronDown className="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
                   </button>
                 </DropdownMenuTrigger>
-                {renderDesktopDropdown(
-                  resourcesLabel,
-                  locale === "ar" ? "محتوى" : locale === "fr" ? "Contenu" : "Content",
-                  locale === "ar"
-                    ? "مراجع ومقالات وأجوبة سريعة قبل التواصل أو الحجز."
-                    : locale === "fr"
-                      ? "Guides, articles et reponses rapides avant contact."
-                      : "Guides, articles, and fast answers before you contact us.",
-                  resourcesMenu,
-                  "max-w-[29rem]",
-                )}
+                <DropdownMenuContent
+                  align="center"
+                  sideOffset={14}
+                  className="w-[35rem] overflow-hidden rounded-[30px] border border-white/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.96)_100%)] p-0 shadow-[0_34px_90px_rgba(15,23,42,0.2)] ring-1 ring-slate-200/70 backdrop-blur-2xl"
+                >
+                  <div className="grid grid-cols-[1fr_1fr]">
+                    <div className="border-r border-slate-200/70 p-3">
+                      <div className="rounded-[26px] bg-[linear-gradient(135deg,rgba(30,58,138,0.96)_0%,rgba(51,65,85,0.96)_100%)] px-5 py-5 text-white shadow-[0_18px_40px_rgba(30,58,138,0.18)]">
+                        <div className="text-[11px] font-black uppercase tracking-[0.28em] text-white/60">
+                          {locale === "ar" ? "اقرأ أولاً" : locale === "fr" ? "A lire" : "Read first"}
+                        </div>
+                        <div className="mt-3 text-xl font-bold">{articlesLabel}</div>
+                        <p className="mt-2 text-sm leading-6 text-white/75">
+                          {locale === "ar"
+                            ? "تحليلات ومقالات مبنية على مشاكل تنفيذ حقيقية."
+                            : locale === "fr"
+                              ? "Articles et analyses issus de vrais problemes terrain."
+                              : "Articles and analysis built from real production issues."}
+                        </p>
+                        <a
+                          href={articlesHref}
+                          className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-slate-100"
+                        >
+                          {locale === "ar" ? "افتح المقالات" : locale === "fr" ? "Voir les articles" : "Open articles"}
+                          <ArrowUpRight className="h-4 w-4" />
+                        </a>
+                      </div>
+                    </div>
+                    <div className="grid gap-2 p-3">
+                      {resourcesMenu.map((item, index) =>
+                        renderDesktopMenuLink(item, {
+                          accent: index === 0 ? "violet" : index === 1 ? "emerald" : "blue",
+                        }),
+                      )}
+                    </div>
+                  </div>
+                </DropdownMenuContent>
               </DropdownMenu>
 
               <a href={aboutHref} className="font-semibold text-foreground transition-colors hover:text-primary">
