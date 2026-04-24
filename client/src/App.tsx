@@ -8,8 +8,7 @@ import Home from "./pages/Home";
 import DotWaveBackground from "./components/DotWaveBackground";
 import { I18nProvider } from "@/i18n/i18n";
 import { AuthProvider } from "./contexts/AuthContext";
-import { SEO_SERVICE_PAGE_ORDER, SEO_SERVICE_PAGES } from "@shared/seoServicePages";
-import { SEO_KNOWLEDGE_PAGE_ORDER, SEO_KNOWLEDGE_PAGES } from "@shared/seoKnowledgePages";
+import { SEO_KNOWLEDGE_CANONICAL_PATHS, SEO_SERVICE_CANONICAL_PATHS } from "@shared/seoRoutePaths";
 
 const Training = lazy(() => import("./pages/Training"));
 const Login = lazy(() => import("./pages/Login"));
@@ -30,13 +29,11 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Analytics = lazy(() => import("./components/Analytics"));
 const ChatWidget = lazy(() => import("./components/ChatWidget"));
 
-const serviceRoutes = SEO_SERVICE_PAGE_ORDER.flatMap((key) => {
-  const path = SEO_SERVICE_PAGES[key].canonicalPath;
+const serviceRoutes = SEO_SERVICE_CANONICAL_PATHS.flatMap((path) => {
   return [path, `/fr${path}`, `/ar${path}`];
 });
 
-const knowledgeRoutes = SEO_KNOWLEDGE_PAGE_ORDER.flatMap((key) => {
-  const path = SEO_KNOWLEDGE_PAGES[key].canonicalPath;
+const knowledgeRoutes = SEO_KNOWLEDGE_CANONICAL_PATHS.flatMap((path) => {
   return [path, `/fr${path}`, `/ar${path}`];
 });
 
