@@ -26,6 +26,7 @@ This folder turns the main services of CVsolucion into reusable module kits that
 
 Each module contains:
 - `README.md`: purpose, current file map, integration notes
+- `USAGE.md`: short setup file with only the inputs you need to start
 - `contracts.ts`: portable request/response and domain types
 - `client.ts` or `server.ts`: reusable adapter
 - `env.ts`: environment variables and manifest
@@ -33,10 +34,11 @@ Each module contains:
 ## Recommended reuse flow
 
 1. Start with `modules/module-catalog.json` to pick the service you need.
-2. Copy the target module folder into the new project.
-3. Wire its `client.ts` or `server.ts` to your routing and storage.
-4. Review the `currentProject` file map to see the working implementation in CVsolucion.
-5. Add the environment variables listed in the module `env.ts`.
+2. Read the module `USAGE.md` first.
+3. Copy the target module folder into the new project.
+4. Wire its `client.ts` or `server.ts` to your routing and storage.
+5. Review the `currentProject` file map to see the working implementation in CVsolucion.
+6. Add the environment variables listed in the module `env.ts`.
 
 ## Important design rule
 

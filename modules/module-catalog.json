@@ -1,9 +1,19 @@
 [
   {
+    "name": "shared",
+    "summary": "Shared HTTP wrapper and manifest types used by the rest of the reusable modules.",
+    "runtime": ["client", "server"],
+    "entrypoints": ["modules/shared/http.ts", "modules/shared/env.ts"],
+    "currentProject": {
+      "client": ["modules/shared/http.ts"],
+      "server": ["modules/shared/env.ts"]
+    }
+  },
+  {
     "name": "auth",
     "summary": "Email/password auth with verification, sessions, and password reset.",
     "runtime": ["client", "server"],
-    "entrypoints": ["modules/auth/contracts.ts", "modules/auth/client.ts", "modules/auth/env.ts"],
+    "entrypoints": ["modules/auth/contracts.ts", "modules/auth/client.ts", "modules/auth/server.ts", "modules/auth/env.ts"],
     "currentProject": {
       "client": [
         "client/src/lib/auth.ts",
@@ -33,7 +43,7 @@
     "name": "chat",
     "summary": "OpenAI-backed support chat with intake handoff.",
     "runtime": ["client", "server"],
-    "entrypoints": ["modules/chat/contracts.ts", "modules/chat/client.ts", "modules/chat/env.ts"],
+    "entrypoints": ["modules/chat/contracts.ts", "modules/chat/client.ts", "modules/chat/server.ts", "modules/chat/env.ts"],
     "currentProject": {
       "client": ["client/src/lib/chat.ts", "client/src/components/ChatWidget.tsx"],
       "server": ["server/chatAssistant.ts", "server/chatStore.ts", "server/index.ts"],
@@ -44,7 +54,7 @@
     "name": "booking",
     "summary": "Booking availability, checkout, Stripe, rescheduling, and refunds.",
     "runtime": ["client", "server"],
-    "entrypoints": ["modules/booking/contracts.ts", "modules/booking/client.ts", "modules/booking/env.ts"],
+    "entrypoints": ["modules/booking/contracts.ts", "modules/booking/client.ts", "modules/booking/server.ts", "modules/booking/env.ts"],
     "currentProject": {
       "client": [
         "client/src/lib/bookings.ts",
@@ -61,7 +71,7 @@
     "name": "dashboard",
     "summary": "Customer and admin dashboards for bookings, pricing, packages, and operations.",
     "runtime": ["client", "server"],
-    "entrypoints": ["modules/dashboard/contracts.ts", "modules/dashboard/client.ts", "modules/dashboard/env.ts"],
+    "entrypoints": ["modules/dashboard/contracts.ts", "modules/dashboard/client.ts", "modules/dashboard/server.ts", "modules/dashboard/env.ts"],
     "currentProject": {
       "client": [
         "client/src/lib/customer.ts",

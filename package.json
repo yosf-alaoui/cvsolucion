@@ -12,6 +12,7 @@
     "serve:prod": "node scripts/serve-production.mjs",
     "verify:prod": "pnpm run build && pnpm run serve:prod",
     "preview": "vite preview --host",
+    "test:modules": "tsx modules/tests/smoke.ts",
     "check": "tsc --noEmit",
     "format": "prettier --write ."
   },

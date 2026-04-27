@@ -8,6 +8,7 @@ export type ModuleEnvRequirement = {
 export type ReusableModuleManifest = {
   name: string;
   category:
+    | "shared"
     | "auth"
     | "email"
     | "chat"
@@ -19,6 +20,7 @@ export type ReusableModuleManifest = {
     | "contact"
     | "catalog"
     | "payments"
+    | "invoices"
     | "i18n"
     | "customer-profile"
     | "visitor-tracking";
