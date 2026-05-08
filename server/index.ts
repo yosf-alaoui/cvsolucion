@@ -15,13 +15,16 @@ import {
   deleteUserById,
   deleteSession,
   deleteUserSessions,
+  getUserRole,
   getAdminSnapshot,
   getSession,
   getUserByEmail,
   getUserById,
+  isAdminEmailAddress,
   markUserEmailVerified,
   recordEvent,
   serializePublicUser,
+  type AuthUserRole,
   updateAdminUser,
   updateUserPassword,
   verifyPassword,
@@ -56,12 +59,14 @@ import {
 } from "./articleStore";
 import {
   applyStripeRefundUpdate,
+  assignBookingDesigner,
   blockBookingSlotByAdmin,
   cancelBookingByAdmin,
   createBooking,
   getAdminBookingSlotsForDate,
   getBookingById,
   getBookingAvailability,
+  listBookingsForDesigner,
   listBookings,
   listBookingsByPaymentReference,
   listBookingsForUser,
@@ -69,6 +74,7 @@ import {
   rescheduleBooking,
   serializeCustomerBooking,
   unblockBookingSlotByAdmin,
+  unassignDesignerFromBookings,
   type BookingPriority,
 } from "./bookingStore";
 import { getBookingScheduleSettings, isBookingScheduleOpen, updateBookingScheduleSettings } from "./bookingSettingsStore";
@@ -107,6 +113,18 @@ import {
   updateCatalogTrainingProgram,
 } from "./catalogStore";
 import { getAppDataDir } from "./dataDir";
+import {
+  createDesignerTask,
+  deleteDesignerProfile,
+  deleteDesignerTask,
+  getDesignerProfile,
+  listDesignerProfiles,
+  listDesignerTasks,
+  upsertDesignerProfile,
+  updateDesignerTask,
+  type DesignerTaskPriority,
+  type DesignerTaskStatus,
+} from "./designerStore";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -160,6 +178,29 @@ function canonicalOrigin(req: express.Request) {
   }
 
   return "https://cvsolucion.com";
+}
+
+function getCookieDomain(req: express.Request) {
+  const configured = String(process.env.SESSION_COOKIE_DOMAIN || "")
+    .trim()
+    .replace(/^\./, "")
+    .toLowerCase();
+  if (configured) return configured;
+
+  const host = String(req.get("host") || "")
+    .trim()
+    .replace(/:\d+$/, "")
+    .toLowerCase();
+
+  if (!host || /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(host)) {
+    return undefined;
+  }
+
+  if (host === "cvsolucion.com" || host.endsWith(".cvsolucion.com")) {
+    return "cvsolucion.com";
+  }
+
+  return undefined;
 }
 
 function localePrefix(locale?: string | null) {
@@ -266,6 +307,25 @@ function serializeCustomerInvoice(invoice: InvoiceRecord) {
     date: invoice.date,
     hour: invoice.hour,
     downloadUrl: `/api/customer/invoices/${encodeURIComponent(invoice.id)}/download`,
+  };
+}
+
+function fallbackDisplayNameFromEmail(email: string) {
+  const localPart = email.split("@")[0] || email;
+  return localPart
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function serializeDesignerTaskForApi(
+  task: ReturnType<typeof listDesignerTasks>[number],
+  bookingMap: Map<string, ReturnType<typeof serializeCustomerBooking>>
+) {
+  return {
+    ...task,
+    booking: task.bookingId ? bookingMap.get(task.bookingId) ?? null : null,
   };
 }
 
@@ -390,32 +450,38 @@ function renderRefundEmailTemplate(args: {
   };
 }
 
-function setSessionCookie(res: express.Response, sessionId: string) {
+function setSessionCookie(req: express.Request, res: express.Response, sessionId: string) {
+  const domain = getCookieDomain(req);
   res.cookie(COOKIE_NAME, sessionId, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     maxAge: ONE_YEAR_MS,
     path: "/",
+    ...(domain ? { domain } : {}),
   });
 }
 
-function clearSessionCookie(res: express.Response) {
+function clearSessionCookie(req: express.Request, res: express.Response) {
+  const domain = getCookieDomain(req);
   res.clearCookie(COOKIE_NAME, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
+    ...(domain ? { domain } : {}),
   });
 }
 
-function setVisitorCookie(res: express.Response, visitorId: string) {
+function setVisitorCookie(req: express.Request, res: express.Response, visitorId: string) {
+  const domain = getCookieDomain(req);
   res.cookie(VISITOR_COOKIE_NAME, visitorId, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     maxAge: ONE_YEAR_MS,
     path: "/",
+    ...(domain ? { domain } : {}),
   });
 }
 
@@ -445,17 +511,17 @@ function getRequestIp(req: express.Request) {
   return req.ip || null;
 }
 
-function isAdminEmail(email: string) {
-  const configured = (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
+function isRoleAllowed(role: AuthUserRole, allowed: AuthUserRole[]) {
+  return allowed.includes(role);
+}
 
-  if (configured.length > 0) {
-    return configured.includes(email.toLowerCase());
+function requireAuthenticatedUser(req: express.Request, res: express.Response) {
+  const auth = getCurrentUser(req);
+  if (!auth) {
+    res.status(401).json({ error: "Authentication required." });
+    return null;
   }
-
-  return email.toLowerCase().endsWith("@cvsolucion.com");
+  return auth;
 }
 
 function rateLimit(options: { key: string; windowMs: number; limit: number }) {
@@ -481,13 +547,12 @@ function rateLimit(options: { key: string; windowMs: number; limit: number }) {
 }
 
 function requireAdmin(req: express.Request, res: express.Response) {
-  const auth = getCurrentUser(req);
+  const auth = requireAuthenticatedUser(req, res);
   if (!auth) {
-    res.status(401).json({ error: "Authentication required." });
     return null;
   }
 
-  if (!isAdminEmail(auth.user.email)) {
+  if (getUserRole(auth.user) !== "admin") {
     res.status(403).json({ error: "Admin access required." });
     return null;
   }
@@ -495,12 +560,25 @@ function requireAdmin(req: express.Request, res: express.Response) {
   return auth;
 }
 
+function requireUserRole(req: express.Request, res: express.Response, allowed: AuthUserRole[]) {
+  const auth = requireAuthenticatedUser(req, res);
+  if (!auth) return null;
+
+  const role = getUserRole(auth.user);
+  if (!isRoleAllowed(role, allowed)) {
+    res.status(403).json({ error: "Access denied for this account." });
+    return null;
+  }
+
+  return { ...auth, role };
+}
+
 function getOrCreateRequestVisitor(req: express.Request, res: express.Response) {
   const cookies = parseCookies(req.headers.cookie);
   const existingVisitorId = cookies[VISITOR_COOKIE_NAME];
   const visitorId = existingVisitorId || createVisitorId();
   if (!existingVisitorId) {
-    setVisitorCookie(res, visitorId);
+    setVisitorCookie(req, res, visitorId);
   }
   return visitorId;
 }
@@ -766,10 +844,11 @@ async function startServer() {
   app.get("/api/auth/me", (req, res) => {
     const auth = getCurrentUser(req);
     if (!auth) {
-      clearSessionCookie(res);
+      clearSessionCookie(req, res);
       return res.json({ user: null });
     }
-    return res.json({ user: serializePublicUser(auth.user), isAdmin: isAdminEmail(auth.user.email) });
+    const role = getUserRole(auth.user);
+    return res.json({ user: serializePublicUser(auth.user), role, isAdmin: role === "admin", isDesigner: role === "designer" });
   });
 
   app.get("/api/geo/country", rateLimit({ key: "geo-country", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
@@ -875,6 +954,61 @@ async function startServer() {
     return res.json({ ok: true, profile });
   });
 
+  app.get("/api/designer/dashboard", rateLimit({ key: "designer-dashboard", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    const auth = requireUserRole(req, res, ["designer"]);
+    if (!auth) return;
+
+    const profile =
+      getDesignerProfile(auth.user.id) ??
+      upsertDesignerProfile({
+        userId: auth.user.id,
+        email: auth.user.email,
+        displayName: fallbackDisplayNameFromEmail(auth.user.email),
+      });
+
+    const assignedBookings = listBookingsForDesigner(auth.user.id).map(serializeCustomerBooking);
+    const bookingMap = new Map(assignedBookings.map((booking) => [booking.id, booking]));
+    const tasks = listDesignerTasks(auth.user.id).map((task) => serializeDesignerTaskForApi(task, bookingMap));
+
+    return res.json({
+      user: serializePublicUser(auth.user),
+      profile,
+      bookings: assignedBookings,
+      tasks,
+    });
+  });
+
+  app.patch(
+    "/api/designer/tasks/:taskId",
+    rateLimit({ key: "designer-task-update", windowMs: 1000 * 60 * 5, limit: 80 }),
+    (req, res, next) => {
+      try {
+        const auth = requireUserRole(req, res, ["designer"]);
+        if (!auth) return;
+
+        const taskId = String(req.params.taskId || "").trim();
+        const task = listDesignerTasks(auth.user.id).find((item) => item.id === taskId);
+        if (!task) {
+          return res.status(404).json({ error: "Task not found." });
+        }
+
+        const status = req.body?.status;
+        if (status !== "todo" && status !== "in_progress" && status !== "done") {
+          return res.status(400).json({ error: "Valid task status is required." });
+        }
+
+        const updatedTask = updateDesignerTask({ taskId, status });
+        const bookingMap = new Map(listBookingsForDesigner(auth.user.id).map((booking) => [booking.id, serializeCustomerBooking(booking)]));
+        return res.json({
+          ok: true,
+          task: serializeDesignerTaskForApi(updatedTask, bookingMap),
+        });
+      } catch (error) {
+        return next(error);
+      }
+    }
+  );
+
   app.post("/api/visitor/track", rateLimit({ key: "visitor-track", windowMs: 1000 * 60, limit: 240 }), (req, res) => {
     const cookies = parseCookies(req.headers.cookie);
     const existingVisitorId = cookies[VISITOR_COOKIE_NAME];
@@ -900,7 +1034,7 @@ async function startServer() {
     });
 
     if (!existingVisitorId) {
-      setVisitorCookie(res, visitorId);
+      setVisitorCookie(req, res, visitorId);
     }
 
     return res.json({
@@ -1852,7 +1986,7 @@ async function startServer() {
     }
 
     const session = createSession(user.id, ONE_YEAR_MS);
-    setSessionCookie(res, session.id);
+    setSessionCookie(req, res, session.id);
     recordEvent({
       type: "login",
       userId: user.id,
@@ -1863,7 +1997,9 @@ async function startServer() {
     });
     return res.json({
       user: serializePublicUser(user),
-      isAdmin: isAdminEmail(user.email),
+      role: getUserRole(user),
+      isAdmin: getUserRole(user) === "admin",
+      isDesigner: getUserRole(user) === "designer",
     });
   });
 
@@ -1882,7 +2018,7 @@ async function startServer() {
       ip: getRequestIp(req),
       userAgent: req.get("user-agent") || null,
     });
-    clearSessionCookie(res);
+    clearSessionCookie(req, res);
     return res.json({ ok: true });
   });
 
@@ -1968,7 +2104,7 @@ async function startServer() {
 
     const user = markUserEmailVerified(tokenRecord.userId);
     const session = createSession(user.id, ONE_YEAR_MS);
-    setSessionCookie(res, session.id);
+    setSessionCookie(req, res, session.id);
     recordEvent({
       type: "email_verified",
       userId: user.id,
@@ -2009,6 +2145,278 @@ async function startServer() {
       },
     });
   });
+
+  app.get("/api/admin/designers", rateLimit({ key: "admin-designers", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const users = getAdminSnapshot().users;
+    const profiles = listDesignerProfiles();
+    const profileMap = new Map(profiles.map((profile) => [profile.userId, profile]));
+    const bookings = listBookings()
+      .filter((booking) => booking.status === "confirmed")
+      .map(serializeCustomerBooking);
+    const tasks = listDesignerTasks();
+    const bookingMap = new Map(bookings.map((booking) => [booking.id, booking]));
+
+    const designers = users
+      .filter((user) => user.role === "designer")
+      .map((user) => {
+        const profile = profileMap.get(user.id);
+        const designerBookings = bookings.filter((booking) => booking.designerUserId === user.id);
+        const designerTasks = tasks.filter((task) => task.designerUserId === user.id);
+        return {
+          user: {
+            ...user,
+            displayName: profile?.displayName || fallbackDisplayNameFromEmail(user.email),
+          },
+          profile:
+            profile ??
+            {
+              userId: user.id,
+              email: user.email,
+              displayName: fallbackDisplayNameFromEmail(user.email),
+              title: null,
+              notes: null,
+              active: true,
+              createdAt: user.createdAt,
+              updatedAt: user.updatedAt,
+            },
+          stats: {
+            assignedBookings: designerBookings.length,
+            upcomingBookings: designerBookings.filter(
+              (booking) => new Date(`${booking.date}T${String(booking.hour).padStart(2, "0")}:00:00`).getTime() >= Date.now()
+            ).length,
+            openTasks: designerTasks.filter((task) => task.status !== "done").length,
+            completedTasks: designerTasks.filter((task) => task.status === "done").length,
+          },
+        };
+      });
+
+    const candidateUsers = users
+      .filter((user) => user.role !== "admin")
+      .map((user) => ({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        emailVerifiedAt: user.emailVerifiedAt,
+      }));
+
+    return res.json({
+      designers,
+      candidateUsers,
+      bookings,
+      tasks: tasks.map((task) => ({
+        ...serializeDesignerTaskForApi(task, bookingMap),
+        designer: users.find((user) => user.id === task.designerUserId)
+          ? {
+              userId: task.designerUserId,
+              email: users.find((user) => user.id === task.designerUserId)?.email || "",
+              displayName:
+                profileMap.get(task.designerUserId)?.displayName ||
+                fallbackDisplayNameFromEmail(users.find((user) => user.id === task.designerUserId)?.email || ""),
+            }
+          : null,
+      })),
+    });
+  });
+
+  app.post(
+    "/api/admin/bookings/:bookingId/assign-designer",
+    rateLimit({ key: "admin-booking-assign-designer", windowMs: 1000 * 60 * 5, limit: 120 }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const bookingId = String(req.params.bookingId || "").trim();
+        const designerUserId = typeof req.body?.designerUserId === "string" ? req.body.designerUserId.trim() : "";
+
+        if (!bookingId) {
+          return res.status(400).json({ error: "Booking is required." });
+        }
+
+        if (designerUserId) {
+          const designerUser = getUserById(designerUserId);
+          if (!designerUser || getUserRole(designerUser) !== "designer") {
+            return res.status(400).json({ error: "Select a valid designer account." });
+          }
+          upsertDesignerProfile({
+            userId: designerUser.id,
+            email: designerUser.email,
+            displayName: getDesignerProfile(designerUser.id)?.displayName || fallbackDisplayNameFromEmail(designerUser.email),
+          });
+        }
+
+        const booking = assignBookingDesigner({
+          bookingId,
+          designerUserId: designerUserId || null,
+          assignedByUserId: auth.user.id,
+        });
+
+        recordEvent({
+          type: "admin_booking_designer_assigned",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:booking-assign:${booking.id}:${designerUserId || "none"}`,
+        });
+
+        return res.json({ ok: true, booking: serializeCustomerBooking(booking) });
+      } catch (error) {
+        return next(error);
+      }
+    }
+  );
+
+  app.post(
+    "/api/admin/designer-tasks",
+    rateLimit({ key: "admin-designer-task-create", windowMs: 1000 * 60 * 5, limit: 80 }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const designerUserId = String(req.body?.designerUserId || "").trim();
+        const title = String(req.body?.title || "").trim();
+        const description = typeof req.body?.description === "string" ? req.body.description : null;
+        const status = req.body?.status;
+        const priority = req.body?.priority;
+        const dueAt = typeof req.body?.dueAt === "string" ? req.body.dueAt : null;
+        const bookingId = typeof req.body?.bookingId === "string" ? req.body.bookingId : null;
+
+        const designerUser = getUserById(designerUserId);
+        if (!designerUser || getUserRole(designerUser) !== "designer") {
+          return res.status(400).json({ error: "Select a valid designer account." });
+        }
+        if (title.length < 3) {
+          return res.status(400).json({ error: "Task title is required." });
+        }
+        if (status && status !== "todo" && status !== "in_progress" && status !== "done") {
+          return res.status(400).json({ error: "Invalid task status." });
+        }
+        if (priority && priority !== "low" && priority !== "normal" && priority !== "high") {
+          return res.status(400).json({ error: "Invalid task priority." });
+        }
+
+        const task = createDesignerTask({
+          designerUserId,
+          title,
+          description,
+          status: status as DesignerTaskStatus | undefined,
+          priority: priority as DesignerTaskPriority | undefined,
+          dueAt,
+          bookingId,
+          createdByUserId: auth.user.id,
+        });
+
+        recordEvent({
+          type: "admin_designer_task_created",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:designer-task-create:${task.id}:${designerUserId}`,
+        });
+
+        const bookingMap = new Map(listBookings().map((booking) => [booking.id, serializeCustomerBooking(booking)]));
+        return res.json({ ok: true, task: serializeDesignerTaskForApi(task, bookingMap) });
+      } catch (error) {
+        return next(error);
+      }
+    }
+  );
+
+  app.patch(
+    "/api/admin/designer-tasks/:taskId",
+    rateLimit({ key: "admin-designer-task-update", windowMs: 1000 * 60 * 5, limit: 120 }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const taskId = String(req.params.taskId || "").trim();
+        const designerUserId = typeof req.body?.designerUserId === "string" ? req.body.designerUserId.trim() : undefined;
+        const title = typeof req.body?.title === "string" ? req.body.title : undefined;
+        const description =
+          typeof req.body?.description === "string" || req.body?.description === null ? req.body.description : undefined;
+        const dueAt = typeof req.body?.dueAt === "string" || req.body?.dueAt === null ? req.body.dueAt : undefined;
+        const bookingId =
+          typeof req.body?.bookingId === "string" || req.body?.bookingId === null ? req.body.bookingId : undefined;
+        const status = req.body?.status;
+        const priority = req.body?.priority;
+
+        if (designerUserId) {
+          const designerUser = getUserById(designerUserId);
+          if (!designerUser || getUserRole(designerUser) !== "designer") {
+            return res.status(400).json({ error: "Select a valid designer account." });
+          }
+        }
+        if (status && status !== "todo" && status !== "in_progress" && status !== "done") {
+          return res.status(400).json({ error: "Invalid task status." });
+        }
+        if (priority && priority !== "low" && priority !== "normal" && priority !== "high") {
+          return res.status(400).json({ error: "Invalid task priority." });
+        }
+
+        const task = updateDesignerTask({
+          taskId,
+          designerUserId,
+          title,
+          description,
+          dueAt,
+          bookingId,
+          status: status as DesignerTaskStatus | undefined,
+          priority: priority as DesignerTaskPriority | undefined,
+        });
+
+        recordEvent({
+          type: "admin_designer_task_updated",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:designer-task-update:${task.id}`,
+        });
+
+        const bookingMap = new Map(listBookings().map((booking) => [booking.id, serializeCustomerBooking(booking)]));
+        return res.json({ ok: true, task: serializeDesignerTaskForApi(task, bookingMap) });
+      } catch (error) {
+        return next(error);
+      }
+    }
+  );
+
+  app.delete(
+    "/api/admin/designer-tasks/:taskId",
+    rateLimit({ key: "admin-designer-task-delete", windowMs: 1000 * 60 * 5, limit: 80 }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const taskId = String(req.params.taskId || "").trim();
+        const deleted = deleteDesignerTask(taskId);
+        if (!deleted) {
+          return res.status(404).json({ error: "Task not found." });
+        }
+
+        recordEvent({
+          type: "admin_designer_task_deleted",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:designer-task-delete:${taskId}`,
+        });
+
+        return res.json({ ok: true });
+      } catch (error) {
+        return next(error);
+      }
+    }
+  );
 
   app.get("/api/admin/catalog", rateLimit({ key: "admin-catalog-get", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
     const auth = requireAdmin(req, res);
@@ -2214,13 +2622,40 @@ async function startServer() {
       const email = req.body?.email;
       const password = req.body?.password;
       const emailVerified = req.body?.emailVerified;
+      const role = req.body?.role;
+      const displayName = req.body?.displayName;
+      const title = req.body?.title;
+      const notes = req.body?.notes;
+      const active = req.body?.active;
+      const nextRole: AuthUserRole | undefined =
+        role === "admin" || role === "designer" || role === "customer" ? role : undefined;
+
+      if (userId === auth.user.id && nextRole && nextRole !== "admin") {
+        return res.status(400).json({ error: "You cannot remove your own admin role." });
+      }
 
       const user = updateAdminUser({
         userId,
         email: typeof email === "string" ? email : undefined,
         password: typeof password === "string" ? password : undefined,
         emailVerified: typeof emailVerified === "boolean" ? emailVerified : undefined,
+        role: nextRole,
       });
+
+      const resolvedRole = getUserRole(user);
+      if (resolvedRole === "designer") {
+        upsertDesignerProfile({
+          userId: user.id,
+          email: user.email,
+          displayName: typeof displayName === "string" ? displayName : undefined,
+          title: typeof title === "string" ? title : undefined,
+          notes: typeof notes === "string" ? notes : undefined,
+          active: typeof active === "boolean" ? active : undefined,
+        });
+      } else {
+        deleteDesignerProfile(user.id);
+        unassignDesignerFromBookings(user.id);
+      }
 
       recordEvent({
         type: "admin_user_updated",
@@ -2248,6 +2683,10 @@ async function startServer() {
       }
 
       const deletedUser = deleteUserById(userId);
+      if (getUserRole(deletedUser) === "designer") {
+        deleteDesignerProfile(deletedUser.id);
+        unassignDesignerFromBookings(deletedUser.id);
+      }
       recordEvent({
         type: "admin_user_deleted",
         userId: auth.user.id,

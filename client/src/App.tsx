@@ -9,6 +9,7 @@ import DotWaveBackground from "./components/DotWaveBackground";
 import { I18nProvider } from "@/i18n/i18n";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SEO_KNOWLEDGE_CANONICAL_PATHS, SEO_SERVICE_CANONICAL_PATHS } from "@shared/seoRoutePaths";
+import { isDesignerWorkspaceHost } from "@/lib/site";
 
 const Training = lazy(() => import("./pages/Training"));
 const Login = lazy(() => import("./pages/Login"));
@@ -16,6 +17,7 @@ const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 const DesignPricing = lazy(() => import("./pages/DesignPricing"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
+const DesignerDashboard = lazy(() => import("./pages/DesignerDashboard"));
 const Articles = lazy(() => import("./pages/Articles"));
 const ArticleDetailPage = lazy(() => import("./pages/ArticleDetail"));
 const Guides = lazy(() => import("./pages/Guides"));
@@ -107,11 +109,14 @@ function DeferredAnalytics() {
 }
 
 function Router() {
+  const designerWorkspace = isDesignerWorkspaceHost();
+  const homeComponent = designerWorkspace ? DesignerDashboard : Home;
+
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/fr"} component={Home} />
-      <Route path={"/ar"} component={Home} />
+      <Route path={"/"} component={homeComponent} />
+      <Route path={"/fr"} component={homeComponent} />
+      <Route path={"/ar"} component={homeComponent} />
       {/* Training */}
       <Route path={"/training"} component={Training} />
       <Route path={"/fr/training"} component={Training} />
@@ -125,6 +130,9 @@ function Router() {
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/fr/dashboard"} component={Dashboard} />
       <Route path={"/ar/dashboard"} component={Dashboard} />
+      <Route path={"/designer"} component={DesignerDashboard} />
+      <Route path={"/fr/designer"} component={DesignerDashboard} />
+      <Route path={"/ar/designer"} component={DesignerDashboard} />
       <Route path={"/articles"} component={Articles} />
       <Route path={"/fr/articles"} component={Articles} />
       <Route path={"/ar/articles"} component={Articles} />

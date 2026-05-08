@@ -31,6 +31,7 @@ import BookingsManager from "@/components/admin/BookingsManager";
 import CatalogManager from "@/components/admin/CatalogManager";
 import RequestsManager from "@/components/admin/RequestsManager";
 import TrainingPricingManager from "@/components/admin/TrainingPricingManager";
+import DesignersManager from "@/components/admin/DesignersManager";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -155,6 +156,7 @@ export default function AdminDashboard() {
         commercial: "Commercial",
         contentHub: "Contenu",
         customerOps: "Clients",
+        designersHub: "Designers",
         analyticsHub: "Analytics",
         users: "Utilisateurs",
         visitors: "Visiteurs",
@@ -250,6 +252,7 @@ export default function AdminDashboard() {
         commercial: "تجاري",
         contentHub: "المحتوى",
         customerOps: "العملاء",
+        designersHub: "المصممون",
         analyticsHub: "التحليلات",
         users: "المستخدمون",
         visitors: "الزوار",
@@ -344,6 +347,7 @@ export default function AdminDashboard() {
       commercial: "Commercial",
       contentHub: "Content",
       customerOps: "Customers",
+      designersHub: "Designers",
       analyticsHub: "Analytics",
       users: "Users",
       visitors: "Visitors",
@@ -1163,6 +1167,7 @@ export default function AdminDashboard() {
                   <TabsList className="grid w-full grid-cols-5">
                     <TabsTrigger value="overview">{copy.overview}</TabsTrigger>
                     <TabsTrigger value="customer-ops">{copy.customerOps}</TabsTrigger>
+                    <TabsTrigger value="designers">{copy.designersHub}</TabsTrigger>
                     <TabsTrigger value="commercial">{copy.commercial}</TabsTrigger>
                     <TabsTrigger value="training-prices">{trainingTabLabel}</TabsTrigger>
                     <TabsTrigger value="content">{copy.contentHub}</TabsTrigger>
@@ -1386,6 +1391,10 @@ export default function AdminDashboard() {
                         </Card>
                       </TabsContent>
                     </Tabs>
+                  </TabsContent>
+
+                  <TabsContent value="designers">
+                    <DesignersManager locale={locale} />
                   </TabsContent>
 
                   <TabsContent value="commercial">

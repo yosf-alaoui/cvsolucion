@@ -6,6 +6,7 @@ import { getAppDataDir } from "./dataDir";
 export type AuthUser = {
   id: string;
   email: string;
+  role: AuthUserRole;
   passwordSalt: string;
   passwordHash: string;
   emailVerifiedAt: string | null;
@@ -21,6 +22,8 @@ export type AuthSession = {
   createdAt: string;
   expiresAt: string;
 };
+
+export type AuthUserRole = "customer" | "designer" | "admin";
 
 export type AuthTokenType = "verify_email" | "magic_link" | "reset_password";
 
@@ -48,6 +51,11 @@ export type AuthEventType =
   | "admin_verification_sent"
   | "admin_session_revoked"
   | "admin_all_sessions_revoked"
+  | "admin_designer_profile_updated"
+  | "admin_designer_task_created"
+  | "admin_designer_task_updated"
+  | "admin_designer_task_deleted"
+  | "admin_booking_designer_assigned"
   | "admin_booking_schedule_updated"
   | "admin_booking_cancelled"
   | "admin_booking_refund_requested"
@@ -75,6 +83,7 @@ type AuthDb = {
 type AdminSnapshotUser = {
   id: string;
   email: string;
+  role: AuthUserRole;
   emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -103,7 +112,10 @@ function loadDb(): AuthDb {
   ensureDbFile();
   const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<AuthDb>;
   return {
-    users: parsed.users ?? [],
+    users: (parsed.users ?? []).map((user) => ({
+      ...user,
+      role: resolveStoredUserRole(user.role, user.email),
+    })),
     sessions: parsed.sessions ?? [],
     tokens: parsed.tokens ?? [],
     events: parsed.events ?? [],
@@ -135,6 +147,36 @@ function hashPassword(password: string, salt = randomToken(16)) {
   return { passwordSalt: salt, passwordHash };
 }
 
+function getConfiguredAdminEmails() {
+  const configured = (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+
+  return new Set(configured);
+}
+
+export function isAdminEmailAddress(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const configured = getConfiguredAdminEmails();
+  if (configured.size > 0) {
+    return configured.has(normalizedEmail);
+  }
+  return normalizedEmail.endsWith("@cvsolucion.com");
+}
+
+export function resolveStoredUserRole(role: unknown, email: string): AuthUserRole {
+  if (role === "admin" || role === "designer" || role === "customer") {
+    return role;
+  }
+  return isAdminEmailAddress(email) ? "admin" : "customer";
+}
+
+export function getUserRole(user: Pick<AuthUser, "email" | "role"> | null | undefined): AuthUserRole {
+  if (!user) return "customer";
+  return resolveStoredUserRole(user.role, user.email);
+}
+
 export function verifyPassword(password: string, user: AuthUser) {
   const calculated = crypto.scryptSync(password, user.passwordSalt, 64).toString("hex");
   return crypto.timingSafeEqual(Buffer.from(calculated, "hex"), Buffer.from(user.passwordHash, "hex"));
@@ -163,6 +205,7 @@ export function createUser(email: string, password: string, termsVersion: string
   const user: AuthUser = {
     id: randomToken(16),
     email: normalizedEmail,
+    role: "customer",
     passwordSalt,
     passwordHash,
     emailVerifiedAt: null,
@@ -279,6 +322,7 @@ export function serializePublicUser(user: AuthUser) {
   return {
     id: user.id,
     email: user.email,
+    role: getUserRole(user),
     emailVerifiedAt: user.emailVerifiedAt,
   };
 }
@@ -288,6 +332,7 @@ export function updateAdminUser(input: {
   email?: string;
   password?: string;
   emailVerified?: boolean;
+  role?: AuthUserRole;
 }) {
   const db = loadDb();
   const user = db.users.find((item) => item.id === input.userId);
@@ -318,6 +363,10 @@ export function updateAdminUser(input: {
 
   if (typeof input.emailVerified === "boolean") {
     user.emailVerifiedAt = input.emailVerified ? user.emailVerifiedAt ?? nowIso() : null;
+  }
+
+  if (input.role) {
+    user.role = resolveStoredUserRole(input.role, user.email);
   }
 
   user.updatedAt = nowIso();
@@ -380,6 +429,7 @@ export function getAdminSnapshot() {
       return {
         id: user.id,
         email: user.email,
+        role: getUserRole(user),
         emailVerifiedAt: user.emailVerifiedAt,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,

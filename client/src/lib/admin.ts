@@ -17,6 +17,7 @@ export type AdminDashboardStats = {
 export type AdminDashboardUser = {
   id: string;
   email: string;
+  role: "customer" | "designer" | "admin";
   emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -302,6 +303,68 @@ export type AdminBookingSlotsResponse = {
   slots: AdminBookingSlotView[];
 };
 
+export type AdminDesignerTaskStatus = "todo" | "in_progress" | "done";
+export type AdminDesignerTaskPriority = "low" | "normal" | "high";
+
+export type AdminDesignerProfile = {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  title: string | null;
+  notes: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminDesignerSummary = {
+  user: AdminDashboardUser & {
+    displayName: string;
+  };
+  profile: AdminDesignerProfile;
+  stats: {
+    assignedBookings: number;
+    upcomingBookings: number;
+    openTasks: number;
+    completedTasks: number;
+  };
+};
+
+export type AdminDesignerTask = {
+  id: string;
+  designerUserId: string;
+  title: string;
+  description: string | null;
+  status: AdminDesignerTaskStatus;
+  priority: AdminDesignerTaskPriority;
+  dueAt: string | null;
+  bookingId: string | null;
+  createdByUserId: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  booking: BookingRecord | null;
+  designer:
+    | {
+        userId: string;
+        email: string;
+        displayName: string;
+      }
+    | null;
+};
+
+export type AdminDesignersResponse = {
+  designers: AdminDesignerSummary[];
+  candidateUsers: Array<{
+    id: string;
+    email: string;
+    role: "customer" | "designer" | "admin";
+    emailVerifiedAt: string | null;
+  }>;
+  bookings: BookingRecord[];
+  tasks: AdminDesignerTask[];
+};
+
 async function adminRequest<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
@@ -369,11 +432,73 @@ export function deleteAdminCatalogPackage(packageId: string) {
 
 export function updateAdminUser(
   userId: string,
-  payload: { email: string; password?: string; emailVerified: boolean }
+  payload: {
+    email: string;
+    password?: string;
+    emailVerified: boolean;
+    role?: "customer" | "designer" | "admin";
+    displayName?: string;
+    title?: string;
+    notes?: string;
+    active?: boolean;
+  }
 ) {
   return adminRequest<{ ok: true }>(`/api/admin/users/${userId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
+  });
+}
+
+export function getAdminDesigners() {
+  return adminRequest<AdminDesignersResponse>("/api/admin/designers", { method: "GET" });
+}
+
+export function assignAdminBookingDesigner(bookingId: string, designerUserId: string | null) {
+  return adminRequest<{ ok: true; booking: BookingRecord }>(
+    `/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-designer`,
+    {
+      method: "POST",
+      body: JSON.stringify({ designerUserId }),
+    }
+  );
+}
+
+export function createAdminDesignerTask(payload: {
+  designerUserId: string;
+  title: string;
+  description?: string | null;
+  status?: AdminDesignerTaskStatus;
+  priority?: AdminDesignerTaskPriority;
+  dueAt?: string | null;
+  bookingId?: string | null;
+}) {
+  return adminRequest<{ ok: true; task: AdminDesignerTask }>("/api/admin/designer-tasks", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminDesignerTask(
+  taskId: string,
+  payload: {
+    designerUserId?: string;
+    title?: string;
+    description?: string | null;
+    status?: AdminDesignerTaskStatus;
+    priority?: AdminDesignerTaskPriority;
+    dueAt?: string | null;
+    bookingId?: string | null;
+  }
+) {
+  return adminRequest<{ ok: true; task: AdminDesignerTask }>(`/api/admin/designer-tasks/${encodeURIComponent(taskId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminDesignerTask(taskId: string) {
+  return adminRequest<{ ok: true }>(`/api/admin/designer-tasks/${encodeURIComponent(taskId)}`, {
+    method: "DELETE",
   });
 }
 

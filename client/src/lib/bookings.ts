@@ -69,6 +69,9 @@ export type BookingRecord = {
   refundReference: string | null;
   refundAmount: number;
   refundedAt: string | null;
+  designerUserId?: string | null;
+  designerAssignedAt?: string | null;
+  designerAssignedByUserId?: string | null;
   canReschedule?: boolean;
 };
 

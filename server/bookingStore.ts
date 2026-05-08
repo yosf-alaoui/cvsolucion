@@ -66,6 +66,9 @@ export type BookingRecord = {
   notes: string | null;
   locale: "en" | "fr" | "ar";
   status: BookingStatus;
+  designerUserId: string | null;
+  designerAssignedAt: string | null;
+  designerAssignedByUserId: string | null;
   createdAt: string;
   updatedAt: string;
   rescheduledFromBookingId: string | null;
@@ -113,6 +116,13 @@ function loadDb(): BookingDb {
       country: booking.country ?? null,
       countryCode: typeof booking.countryCode === "string" && booking.countryCode.trim() ? booking.countryCode.trim().toUpperCase() : null,
       status: booking.status ?? "confirmed",
+      designerUserId:
+        typeof booking.designerUserId === "string" && booking.designerUserId.trim() ? booking.designerUserId.trim() : null,
+      designerAssignedAt: booking.designerAssignedAt ?? null,
+      designerAssignedByUserId:
+        typeof booking.designerAssignedByUserId === "string" && booking.designerAssignedByUserId.trim()
+          ? booking.designerAssignedByUserId.trim()
+          : null,
       updatedAt: booking.updatedAt ?? booking.createdAt ?? nowIso(),
       rescheduledFromBookingId: booking.rescheduledFromBookingId ?? null,
       paymentStatus: booking.paymentStatus ?? "unpaid",
@@ -336,6 +346,11 @@ export function listBookingsByPaymentReference(paymentReference: string) {
   );
 }
 
+export function listBookingsForDesigner(designerUserId: string) {
+  const db = loadDb();
+  return sortBookings(db.bookings.filter((booking) => booking.designerUserId === designerUserId));
+}
+
 export function getBookingAvailability(priority: BookingPriority) {
   const db = loadDb();
   const quebecNow = getQuebecNow();
@@ -524,6 +539,9 @@ export function createBooking(input: {
     notes: input.notes?.trim() || null,
     locale: input.locale,
     status: "confirmed",
+    designerUserId: null,
+    designerAssignedAt: null,
+    designerAssignedByUserId: null,
     createdAt: nowIso(),
     updatedAt: nowIso(),
     rescheduledFromBookingId: null,
@@ -843,6 +861,44 @@ export function rescheduleBooking(input: {
   booking.updatedAt = nowIso();
   saveDb(db);
   return booking;
+}
+
+export function assignBookingDesigner(input: {
+  bookingId: string;
+  designerUserId?: string | null;
+  assignedByUserId?: string | null;
+}) {
+  const db = loadDb();
+  const booking = db.bookings.find((item) => item.id === input.bookingId);
+
+  if (!booking) {
+    throw new Error("Booking not found.");
+  }
+
+  booking.designerUserId = input.designerUserId?.trim() || null;
+  booking.designerAssignedAt = booking.designerUserId ? nowIso() : null;
+  booking.designerAssignedByUserId = booking.designerUserId ? input.assignedByUserId?.trim() || null : null;
+  booking.updatedAt = nowIso();
+  saveDb(db);
+  return booking;
+}
+
+export function unassignDesignerFromBookings(designerUserId: string) {
+  const db = loadDb();
+  let updatedCount = 0;
+  for (const booking of db.bookings) {
+    if (booking.designerUserId === designerUserId) {
+      booking.designerUserId = null;
+      booking.designerAssignedAt = null;
+      booking.designerAssignedByUserId = null;
+      booking.updatedAt = nowIso();
+      updatedCount += 1;
+    }
+  }
+  if (updatedCount > 0) {
+    saveDb(db);
+  }
+  return updatedCount;
 }
 
 export function serializeCustomerBooking(booking: BookingRecord) {

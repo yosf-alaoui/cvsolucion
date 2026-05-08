@@ -23,7 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
-import { getBookingHref } from "@/lib/site";
+import { getAccountDashboardHref, getBookingHref } from "@/lib/site";
 import { getBookingCheckoutCount, getBookingCheckoutEventName } from "@/lib/bookingCheckout";
 import { navigateToHomeSection } from "@/lib/sectionNavigation";
 import {
@@ -162,7 +162,7 @@ export default function Header() {
   const articlesHref = `${prefix}/articles`;
   const guidesHref = `${prefix}/guides`;
   const aboutHref = `${prefix}/about`;
-  const dashboardHref = `${prefix}/dashboard`;
+  const dashboardHref = getAccountDashboardHref(locale, user?.role ?? null);
   const loginHref = `${prefix}/login`;
   const bookingHref = getBookingHref(locale);
   const cartHref = locale === "en" ? "/book/cart" : `/${locale}/book/cart`;
