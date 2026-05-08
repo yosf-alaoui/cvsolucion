@@ -4,6 +4,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Seo from "@/components/Seo";
 import GlassCard from "@/components/GlassCard";
+import TrainingProgressPanel from "@/components/customer/TrainingProgressPanel";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
 import { getCustomerDashboard, updateCustomerProfile, type CustomerDashboardResponse, type CustomerInvoice } from "@/lib/customer";
@@ -207,6 +208,7 @@ export default function CustomerDashboard() {
 
   const countryOptions = useMemo(() => getBookingCountryOptions(locale), [locale]);
   const phoneCountryOptions = useMemo(() => getPhoneCountryOptions(locale), [locale]);
+  const trainingTabLabel = locale === "ar" ? "التدريب" : locale === "fr" ? "Formation" : "Training";
 
   async function loadDashboard() {
     const response = await getCustomerDashboard();
@@ -391,6 +393,9 @@ export default function CustomerDashboard() {
                 <TabsTrigger value="bookings" className="rounded-full px-5 py-2">
                   {copy.bookings}
                 </TabsTrigger>
+                <TabsTrigger value="training" className="rounded-full px-5 py-2">
+                  {trainingTabLabel}
+                </TabsTrigger>
                 <TabsTrigger value="profile" className="rounded-full px-5 py-2">
                   {copy.profile}
                 </TabsTrigger>
@@ -505,6 +510,10 @@ export default function CustomerDashboard() {
                     </div>
                   </GlassCard>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="training" className="mt-6">
+                <TrainingProgressPanel locale={locale as "en" | "fr" | "ar"} />
               </TabsContent>
 
               <TabsContent value="profile" className="mt-6">

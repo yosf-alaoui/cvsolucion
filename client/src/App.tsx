@@ -18,6 +18,7 @@ const Terms = lazy(() => import("./pages/Terms"));
 const DesignPricing = lazy(() => import("./pages/DesignPricing"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const DesignerDashboard = lazy(() => import("./pages/DesignerDashboard"));
+const TrainerDashboard = lazy(() => import("./pages/TrainerDashboard"));
 const Articles = lazy(() => import("./pages/Articles"));
 const ArticleDetailPage = lazy(() => import("./pages/ArticleDetail"));
 const Guides = lazy(() => import("./pages/Guides"));
@@ -133,6 +134,9 @@ function Router() {
       <Route path={"/designer"} component={DesignerDashboard} />
       <Route path={"/fr/designer"} component={DesignerDashboard} />
       <Route path={"/ar/designer"} component={DesignerDashboard} />
+      <Route path={"/trainer"} component={TrainerDashboard} />
+      <Route path={"/fr/trainer"} component={TrainerDashboard} />
+      <Route path={"/ar/trainer"} component={TrainerDashboard} />
       <Route path={"/articles"} component={Articles} />
       <Route path={"/fr/articles"} component={Articles} />
       <Route path={"/ar/articles"} component={Articles} />

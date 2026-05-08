@@ -30,8 +30,8 @@ import ArticlesManager from "@/components/admin/ArticlesManager";
 import BookingsManager from "@/components/admin/BookingsManager";
 import CatalogManager from "@/components/admin/CatalogManager";
 import RequestsManager from "@/components/admin/RequestsManager";
-import TrainingPricingManager from "@/components/admin/TrainingPricingManager";
 import DesignersManager from "@/components/admin/DesignersManager";
+import TrainingOperationsManager from "@/components/admin/TrainingOperationsManager";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1164,7 +1164,7 @@ export default function AdminDashboard() {
                 </Card>
 
                 <Tabs defaultValue="overview" className="space-y-6">
-                  <TabsList className="grid w-full grid-cols-5">
+                  <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
                     <TabsTrigger value="overview">{copy.overview}</TabsTrigger>
                     <TabsTrigger value="customer-ops">{copy.customerOps}</TabsTrigger>
                     <TabsTrigger value="designers">{copy.designersHub}</TabsTrigger>
@@ -1402,7 +1402,7 @@ export default function AdminDashboard() {
                   </TabsContent>
 
                   <TabsContent value="training-prices">
-                    <TrainingPricingManager locale={locale} />
+                    <TrainingOperationsManager locale={locale as "en" | "fr" | "ar"} />
                   </TabsContent>
 
                   <TabsContent value="content">

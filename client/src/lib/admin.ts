@@ -17,7 +17,7 @@ export type AdminDashboardStats = {
 export type AdminDashboardUser = {
   id: string;
   email: string;
-  role: "customer" | "designer" | "admin";
+  role: "customer" | "designer" | "trainer" | "admin";
   emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -358,7 +358,7 @@ export type AdminDesignersResponse = {
   candidateUsers: Array<{
     id: string;
     email: string;
-    role: "customer" | "designer" | "admin";
+    role: "customer" | "designer" | "trainer" | "admin";
     emailVerifiedAt: string | null;
   }>;
   bookings: BookingRecord[];
@@ -436,7 +436,7 @@ export function updateAdminUser(
     email: string;
     password?: string;
     emailVerified: boolean;
-    role?: "customer" | "designer" | "admin";
+    role?: "customer" | "designer" | "trainer" | "admin";
     displayName?: string;
     title?: string;
     notes?: string;

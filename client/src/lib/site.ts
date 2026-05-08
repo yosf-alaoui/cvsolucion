@@ -45,7 +45,7 @@ export function getDesignerDashboardHref(locale: "en" | "fr" | "ar" = "en") {
   return `https://designer.cvsolucion.com${path}`;
 }
 
-export function getAccountDashboardHref(locale: "en" | "fr" | "ar", role?: "customer" | "designer" | "admin" | null) {
+export function getAccountDashboardHref(locale: "en" | "fr" | "ar", role?: "customer" | "designer" | "trainer" | "admin" | null) {
   if (role === "designer") {
     return getDesignerDashboardHref(locale);
   }

@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import type Stripe from "stripe";
 import { getCountry as getTimezoneCountry } from "countries-and-timezones";
 import { COOKIE_NAME, ONE_YEAR_MS, VISITOR_COOKIE_NAME } from "../shared/const";
+import { TRAINING_BLUEPRINT } from "../shared/trainingBlueprint";
 import {
   consumeToken,
   createSession,
@@ -125,6 +126,24 @@ import {
   type DesignerTaskPriority,
   type DesignerTaskStatus,
 } from "./designerStore";
+import {
+  buildTrainingEnrollmentView,
+  createTrainingEnrollment,
+  deactivateTrainerProfile,
+  ensureTrainingEnrollmentFromPurchase,
+  getTrainingEnrollment,
+  getTrainerProfile,
+  listTrainerProfiles,
+  listTrainingEnrollments,
+  listTrainingEnrollmentsForTrainer,
+  listTrainingEnrollmentsForUser,
+  unassignTrainerFromEnrollments,
+  updateTrainingEnrollment,
+  updateTrainingSessionProgress,
+  upsertTrainerProfile,
+  type TrainingEnrollmentStatus,
+  type TrainingSessionProgressStatus,
+} from "./trainingStore";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -242,6 +261,16 @@ function parseTrainingLevel(value: unknown): TrainingPriceKey | null {
   return level ? level : null;
 }
 
+function parseTrainingEnrollmentStatus(value: unknown): TrainingEnrollmentStatus | undefined {
+  return value === "pending" || value === "active" || value === "completed" || value === "paused" || value === "cancelled"
+    ? value
+    : undefined;
+}
+
+function parseTrainingSessionStatus(value: unknown): TrainingSessionProgressStatus | undefined {
+  return value === "pending" || value === "completed" || value === "repeat_required" ? value : undefined;
+}
+
 function normalizeCountryCode(value: unknown) {
   const countryCode = String(value || "").trim().toUpperCase();
   return /^[A-Z]{2}$/.test(countryCode) ? countryCode : null;
@@ -326,6 +355,82 @@ function serializeDesignerTaskForApi(
   return {
     ...task,
     booking: task.bookingId ? bookingMap.get(task.bookingId) ?? null : null,
+  };
+}
+
+function localizeTrainingProgram(programKey: string, locale: "en" | "fr" | "ar") {
+  const program = getCatalogTrainingProgram(programKey);
+  const translated =
+    program?.translations?.[locale]?.title
+      ? program.translations[locale]
+      : program?.translations?.en || null;
+
+  return {
+    id: program?.id || null,
+    key: programKey,
+    title: translated?.title || programKey,
+    badge: translated?.badge || programKey,
+    hours: translated?.hours || null,
+    duration: translated?.duration || null,
+  };
+}
+
+function serializeTrainingEnrollmentForApi(
+  enrollmentId: string,
+  locale: "en" | "fr" | "ar",
+  usersById?: Map<string, ReturnType<typeof serializePublicUser>>,
+  trainerNamesById?: Map<string, string>
+) {
+  const view = buildTrainingEnrollmentView(enrollmentId);
+  if (!view) return null;
+
+  const trainer =
+    view.trainerUserId && usersById
+      ? usersById.get(view.trainerUserId)
+      : null;
+  const trainerProfile = view.trainerUserId ? getTrainerProfile(view.trainerUserId) : null;
+
+  return {
+    ...view,
+    program: localizeTrainingProgram(view.programKey, locale),
+    trainer:
+      view.trainerUserId && trainer
+        ? {
+            userId: view.trainerUserId,
+            email: trainer.email,
+            displayName:
+              trainerNamesById?.get(view.trainerUserId) ||
+              trainerProfile?.displayName ||
+              fallbackDisplayNameFromEmail(trainer.email),
+            title: trainerProfile?.title || null,
+            active: trainerProfile?.active ?? true,
+          }
+        : null,
+    customer: {
+      userId: view.userId,
+      email: view.userEmail,
+      name: view.customerName,
+      company: view.company,
+      country: view.country,
+      countryCode: view.countryCode,
+    },
+    sessions: view.sessions.map((session) => ({
+      id: session.id,
+      sessionCode: session.sessionCode,
+      levelKey: session.levelKey,
+      order: session.order,
+      status: session.status,
+      score: session.score,
+      passed: session.passed,
+      trainerNotes: session.trainerNotes,
+      traineeNotes: session.traineeNotes,
+      evidence: session.evidence,
+      confirmedByUserId: session.confirmedByUserId,
+      confirmedAt: session.confirmedAt,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      template: session.template,
+    })),
   };
 }
 
@@ -848,7 +953,13 @@ async function startServer() {
       return res.json({ user: null });
     }
     const role = getUserRole(auth.user);
-    return res.json({ user: serializePublicUser(auth.user), role, isAdmin: role === "admin", isDesigner: role === "designer" });
+    return res.json({
+      user: serializePublicUser(auth.user),
+      role,
+      isAdmin: role === "admin",
+      isDesigner: role === "designer",
+      isTrainer: role === "trainer",
+    });
   });
 
   app.get("/api/geo/country", rateLimit({ key: "geo-country", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
@@ -884,6 +995,31 @@ async function startServer() {
       profile,
       bookings,
       invoices,
+    });
+  });
+
+  app.get("/api/customer/training", rateLimit({ key: "customer-training", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    const auth = getCurrentUser(req);
+    if (!auth) {
+      return res.status(401).json({ error: "Authentication required." });
+    }
+
+    const locale = normalizeAuthLocale(String(req.query.locale || "en"));
+    const enrollments = listTrainingEnrollmentsForUser(auth.user.id)
+      .map((enrollment) => serializeTrainingEnrollmentForApi(enrollment.id, locale))
+      .filter(Boolean);
+
+    return res.json({
+      blueprint: {
+        key: TRAINING_BLUEPRINT.key,
+        title: TRAINING_BLUEPRINT.title,
+        totalHours: TRAINING_BLUEPRINT.totalHours,
+        totalSessions: TRAINING_BLUEPRINT.totalSessions,
+        passThreshold: TRAINING_BLUEPRINT.passThreshold,
+        levels: TRAINING_BLUEPRINT.levels,
+        rubric: TRAINING_BLUEPRINT.rubric,
+      },
+      enrollments,
     });
   });
 
@@ -977,6 +1113,119 @@ async function startServer() {
       tasks,
     });
   });
+
+  app.get("/api/trainer/dashboard", rateLimit({ key: "trainer-dashboard", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    const auth = requireUserRole(req, res, ["trainer"]);
+    if (!auth) return;
+
+    const locale = normalizeAuthLocale(String(req.query.locale || "en"));
+    const profile =
+      getTrainerProfile(auth.user.id) ??
+      upsertTrainerProfile({
+        userId: auth.user.id,
+        email: auth.user.email,
+        displayName: fallbackDisplayNameFromEmail(auth.user.email),
+      });
+
+    const adminSnapshot = getAdminSnapshot();
+    const usersById = new Map(
+      adminSnapshot.users.map((user) => [
+        user.id,
+        {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          emailVerifiedAt: user.emailVerifiedAt,
+        },
+      ])
+    );
+    const trainerNamesById = new Map(
+      listTrainerProfiles().map((trainer) => [trainer.userId, trainer.displayName || fallbackDisplayNameFromEmail(trainer.email)])
+    );
+
+    const enrollments = listTrainingEnrollmentsForTrainer(auth.user.id)
+      .map((enrollment) => serializeTrainingEnrollmentForApi(enrollment.id, locale, usersById, trainerNamesById))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+    return res.json({
+      user: serializePublicUser(auth.user),
+      profile,
+      enrollments,
+      stats: {
+        activeEnrollments: enrollments.filter((item) => item.status === "active").length,
+        completedEnrollments: enrollments.filter((item) => item.status === "completed").length,
+        pendingReviewSessions: enrollments.reduce(
+          (total, enrollment) => total + enrollment.sessions.filter((session) => session.status !== "completed").length,
+          0
+        ),
+      },
+    });
+  });
+
+  app.patch(
+    "/api/trainer/enrollments/:enrollmentId/sessions/:sessionCode",
+    rateLimit({ key: "trainer-session-update", windowMs: 1000 * 60 * 5, limit: 120 }),
+    (req, res, next) => {
+      try {
+        const auth = requireUserRole(req, res, ["trainer"]);
+        if (!auth) return;
+
+        const enrollmentId = String(req.params.enrollmentId || "").trim();
+        const sessionCode = String(req.params.sessionCode || "").trim();
+        const enrollment = getTrainingEnrollment(enrollmentId);
+        if (!enrollment || enrollment.trainerUserId !== auth.user.id) {
+          return res.status(404).json({ error: "Training enrollment not found." });
+        }
+
+        const status = parseTrainingSessionStatus(req.body?.status);
+        if (!status) {
+          return res.status(400).json({ error: "Select a valid session status." });
+        }
+
+        updateTrainingSessionProgress({
+          enrollmentId,
+          sessionCode,
+          updatedByUserId: auth.user.id,
+          status,
+          score: typeof req.body?.score === "number" || typeof req.body?.score === "string" ? Number(req.body.score) : null,
+          trainerNotes: typeof req.body?.trainerNotes === "string" ? req.body.trainerNotes : null,
+          traineeNotes: typeof req.body?.traineeNotes === "string" ? req.body.traineeNotes : null,
+          evidence: typeof req.body?.evidence === "string" ? req.body.evidence : null,
+        });
+
+        recordEvent({
+          type: "trainer_training_session_updated",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "trainer",
+          ip: getRequestIp(req),
+          userAgent: `trainer:session:${enrollmentId}:${sessionCode}:${status}`,
+        });
+
+        const adminSnapshot = getAdminSnapshot();
+        const usersById = new Map(
+          adminSnapshot.users.map((user) => [
+            user.id,
+            {
+              id: user.id,
+              email: user.email,
+              role: user.role,
+              emailVerifiedAt: user.emailVerifiedAt,
+            },
+          ])
+        );
+        const trainerNamesById = new Map(
+          listTrainerProfiles().map((trainer) => [trainer.userId, trainer.displayName || fallbackDisplayNameFromEmail(trainer.email)])
+        );
+        const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+        const serialized = serializeTrainingEnrollmentForApi(enrollmentId, locale, usersById, trainerNamesById);
+
+        return res.json({ ok: true, enrollment: serialized });
+      } catch (error) {
+        return next(error);
+      }
+    }
+  );
 
   app.patch(
     "/api/designer/tasks/:taskId",
@@ -1560,6 +1809,20 @@ async function startServer() {
       });
 
       const program = getCatalogTrainingProgram(level);
+      const customerProfile = getCustomerProfile(auth.user.id);
+      const enrollment = ensureTrainingEnrollmentFromPurchase({
+        userId: auth.user.id,
+        userEmail: auth.user.email,
+        customerName: customerProfile?.name,
+        company: customerProfile?.company,
+        country: customerProfile?.country,
+        countryCode: customerProfile?.countryCode,
+        programKey: level,
+        programId: program?.id || null,
+        paymentIntentId: payment.id,
+        purchaseAmount: payment.amount,
+        currency: payment.currency,
+      });
       const levelLabel = program?.translations?.en?.title || program?.key || level;
       const amountLabel = new Intl.NumberFormat("en-CA", {
         style: "currency",
@@ -1580,7 +1843,7 @@ async function startServer() {
       });
 
       const destination = (process.env.CONTACT_EMAIL || "contact@cvsolucion.com").trim();
-      res.status(201).json({ ok: true, lead });
+      res.status(201).json({ ok: true, lead, enrollmentId: enrollment.id });
 
       void Promise.allSettled([
         sendAuthEmail({
@@ -2000,6 +2263,7 @@ async function startServer() {
       role: getUserRole(user),
       isAdmin: getUserRole(user) === "admin",
       isDesigner: getUserRole(user) === "designer",
+      isTrainer: getUserRole(user) === "trainer",
     });
   });
 
@@ -2418,6 +2682,385 @@ async function startServer() {
     }
   );
 
+  app.get("/api/admin/training", rateLimit({ key: "admin-training", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const locale = normalizeAuthLocale(String(req.query.locale || "en"));
+    const adminSnapshot = getAdminSnapshot();
+    const usersById = new Map(
+      adminSnapshot.users.map((user) => [
+        user.id,
+        {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          emailVerifiedAt: user.emailVerifiedAt,
+        },
+      ])
+    );
+    const trainerProfiles = listTrainerProfiles();
+    const trainerNamesById = new Map(
+      trainerProfiles.map((trainer) => [trainer.userId, trainer.displayName || fallbackDisplayNameFromEmail(trainer.email)])
+    );
+
+    const trainers = adminSnapshot.users
+      .filter((user) => user.role === "trainer")
+      .map((user) => {
+        const profile =
+          trainerProfiles.find((trainer) => trainer.userId === user.id) ||
+          {
+            userId: user.id,
+            email: user.email,
+            displayName: fallbackDisplayNameFromEmail(user.email),
+            title: null,
+            notes: null,
+            active: true,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+          };
+
+        const enrollments = listTrainingEnrollmentsForTrainer(user.id);
+        const activeEnrollments = enrollments.filter((item) => item.status === "active").length;
+        const completedEnrollments = enrollments.filter((item) => item.status === "completed").length;
+
+        return {
+          user,
+          profile,
+          stats: {
+            assignedEnrollments: enrollments.length,
+            activeEnrollments,
+            completedEnrollments,
+          },
+        };
+      });
+
+    const enrollments = listTrainingEnrollments()
+      .map((enrollment) => serializeTrainingEnrollmentForApi(enrollment.id, locale, usersById, trainerNamesById))
+      .filter(Boolean);
+
+    const candidateUsers = adminSnapshot.users
+      .filter((user) => user.role !== "admin")
+      .map((user) => ({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        emailVerifiedAt: user.emailVerifiedAt,
+      }));
+
+    return res.json({
+      blueprint: {
+        key: TRAINING_BLUEPRINT.key,
+        title: TRAINING_BLUEPRINT.title,
+        totalHours: TRAINING_BLUEPRINT.totalHours,
+        totalSessions: TRAINING_BLUEPRINT.totalSessions,
+        passThreshold: TRAINING_BLUEPRINT.passThreshold,
+        levels: TRAINING_BLUEPRINT.levels,
+        rubric: TRAINING_BLUEPRINT.rubric,
+      },
+      programs: getCatalogSnapshot().trainingPrograms,
+      trainers,
+      candidateUsers,
+      enrollments,
+    });
+  });
+
+  app.post("/api/admin/trainers", rateLimit({ key: "admin-trainer-upsert", windowMs: 1000 * 60 * 5, limit: 60 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const userId = String(req.body?.userId || "").trim();
+      if (!userId) {
+        return res.status(400).json({ error: "Trainer account is required." });
+      }
+
+      const user = getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found." });
+      }
+      if (getUserRole(user) === "admin") {
+        return res.status(400).json({ error: "Admin accounts cannot be converted to trainers." });
+      }
+
+      const promotedUser = updateAdminUser({
+        userId: user.id,
+        role: "trainer",
+      });
+
+      if (getUserRole(user) === "designer") {
+        deleteDesignerProfile(user.id);
+        unassignDesignerFromBookings(user.id);
+      }
+
+      const profile = upsertTrainerProfile({
+        userId: promotedUser.id,
+        email: promotedUser.email,
+        displayName: typeof req.body?.displayName === "string" ? req.body.displayName : undefined,
+        title: typeof req.body?.title === "string" ? req.body.title : undefined,
+        notes: typeof req.body?.notes === "string" ? req.body.notes : undefined,
+        active: typeof req.body?.active === "boolean" ? req.body.active : undefined,
+      });
+
+      recordEvent({
+        type: "admin_trainer_profile_updated",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:trainer-upsert:${promotedUser.id}`,
+      });
+
+      return res.status(201).json({ ok: true, user: promotedUser, profile });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.patch("/api/admin/trainers/:userId", rateLimit({ key: "admin-trainer-patch", windowMs: 1000 * 60 * 5, limit: 60 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const userId = String(req.params.userId || "").trim();
+      const user = getUserById(userId);
+      if (!user || getUserRole(user) !== "trainer") {
+        return res.status(404).json({ error: "Trainer account not found." });
+      }
+
+      const profile = upsertTrainerProfile({
+        userId: user.id,
+        email: user.email,
+        displayName: typeof req.body?.displayName === "string" ? req.body.displayName : undefined,
+        title: typeof req.body?.title === "string" ? req.body.title : undefined,
+        notes: typeof req.body?.notes === "string" ? req.body.notes : undefined,
+        active: typeof req.body?.active === "boolean" ? req.body.active : undefined,
+      });
+
+      if (profile.active === false) {
+        deactivateTrainerProfile(user.id);
+        unassignTrainerFromEnrollments(user.id);
+      }
+
+      recordEvent({
+        type: "admin_trainer_profile_updated",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:trainer-patch:${user.id}`,
+      });
+
+      return res.json({ ok: true, profile });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post("/api/admin/training/enrollments", rateLimit({ key: "admin-training-enrollment-create", windowMs: 1000 * 60 * 5, limit: 60 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const userId = String(req.body?.userId || "").trim();
+      const programKey = String(req.body?.programKey || "").trim();
+      const trainerUserId = typeof req.body?.trainerUserId === "string" ? req.body.trainerUserId.trim() : "";
+      const status = parseTrainingEnrollmentStatus(req.body?.status);
+
+      if (!userId) {
+        return res.status(400).json({ error: "Customer account is required." });
+      }
+      if (!programKey) {
+        return res.status(400).json({ error: "Training program is required." });
+      }
+
+      const customer = getUserById(userId);
+      if (!customer || getUserRole(customer) === "admin") {
+        return res.status(400).json({ error: "Select a valid customer account." });
+      }
+
+      if (trainerUserId) {
+        const trainer = getUserById(trainerUserId);
+        if (!trainer || getUserRole(trainer) !== "trainer") {
+          return res.status(400).json({ error: "Select a valid trainer account." });
+        }
+      }
+
+      const profile = getCustomerProfile(customer.id);
+      const program = getCatalogTrainingProgram(programKey);
+      const enrollment = createTrainingEnrollment({
+        userId: customer.id,
+        userEmail: customer.email,
+        customerName: profile?.name,
+        company: profile?.company,
+        country: profile?.country,
+        countryCode: profile?.countryCode,
+        programKey,
+        programId: program?.id || null,
+        trainerUserId: trainerUserId || null,
+        trainerAssignedByUserId: trainerUserId ? auth.user.id : null,
+        status: status || "pending",
+        notes: typeof req.body?.notes === "string" ? req.body.notes : null,
+        internalNotes: typeof req.body?.internalNotes === "string" ? req.body.internalNotes : null,
+      });
+
+      recordEvent({
+        type: "admin_training_enrollment_created",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:training-enrollment-create:${enrollment.id}`,
+      });
+
+      const adminSnapshot = getAdminSnapshot();
+      const usersById = new Map(
+        adminSnapshot.users.map((user) => [
+          user.id,
+          {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            emailVerifiedAt: user.emailVerifiedAt,
+          },
+        ])
+      );
+      const trainerNamesById = new Map(
+        listTrainerProfiles().map((trainer) => [trainer.userId, trainer.displayName || fallbackDisplayNameFromEmail(trainer.email)])
+      );
+
+      return res.status(201).json({
+        ok: true,
+        enrollment: serializeTrainingEnrollmentForApi(enrollment.id, normalizeAuthLocale(String(req.body?.locale || "en")), usersById, trainerNamesById),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.patch("/api/admin/training/enrollments/:enrollmentId", rateLimit({ key: "admin-training-enrollment-patch", windowMs: 1000 * 60 * 5, limit: 80 }), (req, res, next) => {
+    try {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      const enrollmentId = String(req.params.enrollmentId || "").trim();
+      const trainerUserId =
+        typeof req.body?.trainerUserId === "string" || req.body?.trainerUserId === null ? req.body.trainerUserId : undefined;
+      const status = parseTrainingEnrollmentStatus(req.body?.status);
+
+      if (typeof trainerUserId === "string" && trainerUserId.trim()) {
+        const trainer = getUserById(trainerUserId.trim());
+        if (!trainer || getUserRole(trainer) !== "trainer") {
+          return res.status(400).json({ error: "Select a valid trainer account." });
+        }
+      }
+
+      const enrollment = updateTrainingEnrollment({
+        enrollmentId,
+        trainerUserId: typeof trainerUserId === "undefined" ? undefined : String(trainerUserId || "").trim() || null,
+        trainerAssignedByUserId:
+          typeof trainerUserId === "undefined" ? undefined : String(trainerUserId || "").trim() ? auth.user.id : null,
+        status,
+        notes: typeof req.body?.notes === "string" || req.body?.notes === null ? req.body.notes : undefined,
+        internalNotes:
+          typeof req.body?.internalNotes === "string" || req.body?.internalNotes === null ? req.body.internalNotes : undefined,
+      });
+
+      recordEvent({
+        type: "admin_training_enrollment_updated",
+        userId: auth.user.id,
+        email: auth.user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: `admin:training-enrollment-patch:${enrollment.id}`,
+      });
+
+      const adminSnapshot = getAdminSnapshot();
+      const usersById = new Map(
+        adminSnapshot.users.map((user) => [
+          user.id,
+          {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            emailVerifiedAt: user.emailVerifiedAt,
+          },
+        ])
+      );
+      const trainerNamesById = new Map(
+        listTrainerProfiles().map((trainer) => [trainer.userId, trainer.displayName || fallbackDisplayNameFromEmail(trainer.email)])
+      );
+
+      return res.json({
+        ok: true,
+        enrollment: serializeTrainingEnrollmentForApi(enrollment.id, normalizeAuthLocale(String(req.body?.locale || "en")), usersById, trainerNamesById),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.patch(
+    "/api/admin/training/enrollments/:enrollmentId/sessions/:sessionCode",
+    rateLimit({ key: "admin-training-session-patch", windowMs: 1000 * 60 * 5, limit: 120 }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const enrollmentId = String(req.params.enrollmentId || "").trim();
+        const sessionCode = String(req.params.sessionCode || "").trim();
+        const status = parseTrainingSessionStatus(req.body?.status);
+        if (!status) {
+          return res.status(400).json({ error: "Select a valid session status." });
+        }
+
+        updateTrainingSessionProgress({
+          enrollmentId,
+          sessionCode,
+          updatedByUserId: auth.user.id,
+          status,
+          score: typeof req.body?.score === "number" || typeof req.body?.score === "string" ? Number(req.body.score) : null,
+          trainerNotes: typeof req.body?.trainerNotes === "string" ? req.body.trainerNotes : null,
+          traineeNotes: typeof req.body?.traineeNotes === "string" ? req.body.traineeNotes : null,
+          evidence: typeof req.body?.evidence === "string" ? req.body.evidence : null,
+        });
+
+        recordEvent({
+          type: "admin_training_session_updated",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:training-session-patch:${enrollmentId}:${sessionCode}:${status}`,
+        });
+
+        const adminSnapshot = getAdminSnapshot();
+        const usersById = new Map(
+          adminSnapshot.users.map((user) => [
+            user.id,
+            {
+              id: user.id,
+              email: user.email,
+              role: user.role,
+              emailVerifiedAt: user.emailVerifiedAt,
+            },
+          ])
+        );
+        const trainerNamesById = new Map(
+          listTrainerProfiles().map((trainer) => [trainer.userId, trainer.displayName || fallbackDisplayNameFromEmail(trainer.email)])
+        );
+
+        return res.json({
+          ok: true,
+          enrollment: serializeTrainingEnrollmentForApi(enrollmentId, normalizeAuthLocale(String(req.body?.locale || "en")), usersById, trainerNamesById),
+        });
+      } catch (error) {
+        return next(error);
+      }
+    }
+  );
+
   app.get("/api/admin/catalog", rateLimit({ key: "admin-catalog-get", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
     const auth = requireAdmin(req, res);
     if (!auth) return;
@@ -2628,7 +3271,7 @@ async function startServer() {
       const notes = req.body?.notes;
       const active = req.body?.active;
       const nextRole: AuthUserRole | undefined =
-        role === "admin" || role === "designer" || role === "customer" ? role : undefined;
+        role === "admin" || role === "designer" || role === "trainer" || role === "customer" ? role : undefined;
 
       if (userId === auth.user.id && nextRole && nextRole !== "admin") {
         return res.status(400).json({ error: "You cannot remove your own admin role." });
@@ -2655,6 +3298,20 @@ async function startServer() {
       } else {
         deleteDesignerProfile(user.id);
         unassignDesignerFromBookings(user.id);
+      }
+
+      if (resolvedRole === "trainer") {
+        upsertTrainerProfile({
+          userId: user.id,
+          email: user.email,
+          displayName: typeof displayName === "string" ? displayName : undefined,
+          title: typeof title === "string" ? title : undefined,
+          notes: typeof notes === "string" ? notes : undefined,
+          active: typeof active === "boolean" ? active : undefined,
+        });
+      } else {
+        deactivateTrainerProfile(user.id);
+        unassignTrainerFromEnrollments(user.id);
       }
 
       recordEvent({
@@ -2686,6 +3343,10 @@ async function startServer() {
       if (getUserRole(deletedUser) === "designer") {
         deleteDesignerProfile(deletedUser.id);
         unassignDesignerFromBookings(deletedUser.id);
+      }
+      if (getUserRole(deletedUser) === "trainer") {
+        deactivateTrainerProfile(deletedUser.id);
+        unassignTrainerFromEnrollments(deletedUser.id);
       }
       recordEvent({
         type: "admin_user_deleted",

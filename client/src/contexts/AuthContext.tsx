@@ -15,6 +15,7 @@ type AuthContextValue = {
   role: AuthUser["role"] | null;
   isAdmin: boolean;
   isDesigner: boolean;
+  isTrainer: boolean;
   loading: boolean;
   refresh: () => Promise<AuthUser | null>;
   login: (email: string, password: string) => Promise<AuthUser>;
@@ -31,6 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<AuthUser["role"] | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isDesigner, setIsDesigner] = useState(false);
+  const [isTrainer, setIsTrainer] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refresh = async () => {
@@ -40,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRole(nextRole);
     setIsAdmin(Boolean(response.isAdmin ?? (nextRole === "admin")));
     setIsDesigner(Boolean(response.isDesigner ?? (nextRole === "designer")));
+    setIsTrainer(Boolean(response.isTrainer ?? (nextRole === "trainer")));
     return response.user;
   };
 
@@ -53,6 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role,
       isAdmin,
       isDesigner,
+      isTrainer,
       loading,
       refresh,
       login: async (email, password) => {
@@ -62,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRole(nextRole);
         setIsAdmin(Boolean(response.isAdmin ?? (nextRole === "admin")));
         setIsDesigner(Boolean(response.isDesigner ?? (nextRole === "designer")));
+        setIsTrainer(Boolean(response.isTrainer ?? (nextRole === "trainer")));
         return response.user;
       },
       signup: async (email, password, locale, termsAccepted, countryCode, country) => {
@@ -73,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRole(null);
         setIsAdmin(false);
         setIsDesigner(false);
+        setIsTrainer(false);
       },
       sendReset: async (email, locale) => {
         await sendPasswordReset(email, locale);
@@ -81,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await resetPasswordRequest(token, password);
       },
     }),
-    [user, role, isAdmin, isDesigner, loading]
+    [user, role, isAdmin, isDesigner, isTrainer, loading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,7 +1,7 @@
 export type AuthUser = {
   id: string;
   email: string;
-  role: "customer" | "designer" | "admin";
+  role: "customer" | "designer" | "trainer" | "admin";
   emailVerifiedAt: string | null;
 };
 
@@ -10,6 +10,7 @@ export type CurrentUserResponse = {
   role?: AuthUser["role"];
   isAdmin?: boolean;
   isDesigner?: boolean;
+  isTrainer?: boolean;
 };
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
@@ -34,7 +35,7 @@ export function getCurrentUser() {
 }
 
 export function loginWithPassword(email: string, password: string) {
-  return request<{ user: AuthUser; role?: AuthUser["role"]; isAdmin?: boolean; isDesigner?: boolean }>("/api/auth/login", {
+  return request<{ user: AuthUser; role?: AuthUser["role"]; isAdmin?: boolean; isDesigner?: boolean; isTrainer?: boolean }>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });

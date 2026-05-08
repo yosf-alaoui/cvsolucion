@@ -23,7 +23,7 @@ export type AuthSession = {
   expiresAt: string;
 };
 
-export type AuthUserRole = "customer" | "designer" | "admin";
+export type AuthUserRole = "customer" | "designer" | "trainer" | "admin";
 
 export type AuthTokenType = "verify_email" | "magic_link" | "reset_password";
 
@@ -56,6 +56,11 @@ export type AuthEventType =
   | "admin_designer_task_updated"
   | "admin_designer_task_deleted"
   | "admin_booking_designer_assigned"
+  | "admin_trainer_profile_updated"
+  | "admin_training_enrollment_created"
+  | "admin_training_enrollment_updated"
+  | "admin_training_session_updated"
+  | "trainer_training_session_updated"
   | "admin_booking_schedule_updated"
   | "admin_booking_cancelled"
   | "admin_booking_refund_requested"
@@ -166,7 +171,7 @@ export function isAdminEmailAddress(email: string) {
 }
 
 export function resolveStoredUserRole(role: unknown, email: string): AuthUserRole {
-  if (role === "admin" || role === "designer" || role === "customer") {
+  if (role === "admin" || role === "designer" || role === "trainer" || role === "customer") {
     return role;
   }
   return isAdminEmailAddress(email) ? "admin" : "customer";
