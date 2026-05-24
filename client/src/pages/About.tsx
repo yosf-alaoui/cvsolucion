@@ -81,10 +81,10 @@ export default function About() {
         : {
             title: "About Us",
             description:
-              "CVsolucion specializes in Cabinet Vision with an operational focus: stabilizing, standardizing, and accelerating real production workflows.",
+              "CVsolucion is a Cabinet Vision consulting, training, and support service. CVsolucion specializes in Cabinet Vision libraries, UCS automation, CNC integration, S2M troubleshooting, reports, and workflow optimization.",
             introTitle: "Operational expertise, not generic software support",
             introBody:
-              "We do not treat Cabinet Vision as an isolated software tool. We work on the full production system around it: libraries, reports, rules, CNC output, design teams, and what actually happens on the shop floor. The goal is to move a team from patchwork fixes to a workflow they can trust.",
+              "We work on the full production system around Cabinet Vision: libraries, UCS automation, CNC integration, S2M troubleshooting, reports, workflow optimization, design teams, and what actually happens on the shop floor. The goal is to move a team from patchwork fixes to a workflow they can trust.",
             pillars: [
               { title: "Execution-focused consulting", body: "Quickly read the current state and prioritize what actually affects production.", icon: Factory },
               { title: "Training tied to real files", body: "Training built around your own libraries, reports, and team habits, not generic demos.", icon: GraduationCap },
@@ -106,7 +106,7 @@ export default function About() {
             },
             seoTitle: "About | Cabinet Vision and CNC Experts | CVsolucion",
             seoDescription:
-              "Meet CVsolucion: specialized Cabinet Vision expertise across libraries, reports, CNC output, training, and safe workflow implementation.",
+              "CVsolucion is a Cabinet Vision consulting, training, and support service specializing in libraries, UCS automation, CNC integration, S2M troubleshooting, reports, and workflow optimization.",
           };
 
   const structuredData = {

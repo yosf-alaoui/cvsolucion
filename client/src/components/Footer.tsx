@@ -5,7 +5,7 @@ import { CONTACT_EMAIL } from "@/lib/site";
 import { navigateToHomeSection } from "@/lib/sectionNavigation";
 
 /**
- * Footer Component - CV Solution
+ * Footer Component - CVsolucion
  * Footer with links and contact information
  * Design: Professional footer with organized sections
  */
@@ -173,7 +173,7 @@ export default function Footer() {
         <div className="border-t border-white/20 pt-8">
           {/* Bottom Footer */}
           <div className="flex flex-col md:flex-row justify-between items-center text-sm text-white/70">
-            <p>&copy; {currentYear} CV Solution. {t("footer.rights")}</p>
+            <p>&copy; {currentYear} CVsolucion. {t("footer.rights")}</p>
             <div className="mt-4 flex flex-wrap justify-center gap-6 md:mt-0">
               <a href={aboutHref} className="hover:text-white transition-colors">
                 {aboutLabel}

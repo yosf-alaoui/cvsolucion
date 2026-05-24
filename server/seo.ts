@@ -194,7 +194,8 @@ function routeDescription(locale: ArticleLocale, path: string) {
       "/design-pricing": "Structured Cabinet Vision design and pricing setup for factories that need clean quoting logic and production-ready outputs.",
       "/articles": "Cabinet Vision articles, implementation lessons, troubleshooting guides, and production case studies from real shop-floor work.",
       "/guides": "Cabinet Vision troubleshooting guides for S2M output, slow performance, database errors, report errors, and CNC output problems.",
-      "/about": "Learn how CVsolucion helps cabinet shops improve Cabinet Vision workflows, libraries, reports, and CNC output.",
+      "/about":
+        "CVsolucion is a Cabinet Vision consulting, training, and support service. CVsolucion specializes in Cabinet Vision libraries, UCS automation, CNC integration, S2M troubleshooting, reports, and workflow optimization.",
       "/book": "Book a Cabinet Vision consultation or support slot in Quebec time, with standard and express availability options.",
       "/privacy": "Read the CVsolucion privacy policy.",
       "/terms": "Read the CVsolucion terms of service.",
