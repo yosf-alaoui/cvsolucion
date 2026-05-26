@@ -1,7 +1,7 @@
 import crypto from "crypto";
-import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 
 export type DesignerTaskStatus = "todo" | "in_progress" | "done";
 export type DesignerTaskPriority = "low" | "normal" | "high";
@@ -49,12 +49,7 @@ function randomId(size = 16) {
 }
 
 function ensureDbFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ profiles: [], tasks: [] }, null, 2), "utf8");
-  }
+  ensureJsonFile(DB_PATH, { profiles: [], tasks: [] });
 }
 
 function normalizeTaskStatus(status: unknown): DesignerTaskStatus {
@@ -67,7 +62,7 @@ function normalizeTaskPriority(priority: unknown): DesignerTaskPriority {
 
 function loadDb(): DesignerDb {
   ensureDbFile();
-  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<DesignerDb>;
+  const parsed = readJsonFile<Partial<DesignerDb>>(DB_PATH);
   return {
     profiles: (parsed.profiles ?? []).map((profile) => ({
       ...profile,
@@ -95,7 +90,7 @@ function loadDb(): DesignerDb {
 }
 
 function saveDb(db: DesignerDb) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(DB_PATH, db);
 }
 
 export function getDesignerProfile(userId: string) {

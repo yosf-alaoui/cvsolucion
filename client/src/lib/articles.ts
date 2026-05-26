@@ -1,3 +1,5 @@
+import { withCsrfHeaders } from "@/lib/csrf";
+
 export type ArticleSummary = {
   id: string;
   slug: string;
@@ -29,10 +31,10 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
       ...init,
       credentials: "include",
       signal: init?.signal ?? controller.signal,
-      headers: {
+      headers: withCsrfHeaders(init, {
         ...(init?.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
         ...(init?.headers || {}),
-      },
+      }),
     });
   } catch (error: any) {
     window.clearTimeout(timeoutId);

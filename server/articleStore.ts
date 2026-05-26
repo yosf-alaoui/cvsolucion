@@ -2,6 +2,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeBufferFileAtomic, writeJsonFileAtomic } from "./jsonFile";
 import { translateArticleContent } from "./articleTranslation";
 
 export const ARTICLE_LOCALES = ["en", "fr", "ar"] as const;
@@ -55,18 +56,14 @@ type LegacyArticleRecord = {
 const DATA_DIR = getAppDataDir();
 const ARTICLES_DB_PATH = path.join(DATA_DIR, "articles-db.json");
 const ARTICLE_UPLOADS_DIR = path.join(DATA_DIR, "uploads", "articles");
+const MAX_ARTICLE_IMAGE_BYTES = 8 * 1024 * 1024;
 
 function ensureStorage() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
   if (!fs.existsSync(ARTICLE_UPLOADS_DIR)) {
-    fs.mkdirSync(ARTICLE_UPLOADS_DIR, { recursive: true });
+    fs.mkdirSync(ARTICLE_UPLOADS_DIR, { recursive: true, mode: 0o700 });
   }
-  if (!fs.existsSync(ARTICLES_DB_PATH)) {
-    const initial: ArticlesDb = { articles: [] };
-    fs.writeFileSync(ARTICLES_DB_PATH, JSON.stringify(initial, null, 2), "utf8");
-  }
+  const initial: ArticlesDb = { articles: [] };
+  ensureJsonFile(ARTICLES_DB_PATH, initial);
 }
 
 function nowIso() {
@@ -163,9 +160,9 @@ function normalizeRecord(raw: LegacyArticleRecord, db: ArticlesDb): ArticleRecor
 
 function loadDb(): ArticlesDb {
   ensureStorage();
-  const parsed = JSON.parse(fs.readFileSync(ARTICLES_DB_PATH, "utf8")) as Partial<ArticlesDb> & {
+  const parsed = readJsonFile<Partial<ArticlesDb> & {
     articles?: LegacyArticleRecord[];
-  };
+  }>(ARTICLES_DB_PATH);
 
   const db: ArticlesDb = { articles: [] };
   let changed = false;
@@ -186,14 +183,14 @@ function loadDb(): ArticlesDb {
   }
 
   if (changed) {
-    fs.writeFileSync(ARTICLES_DB_PATH, JSON.stringify(db, null, 2), "utf8");
+    writeJsonFileAtomic(ARTICLES_DB_PATH, db);
   }
 
   return db;
 }
 
 function saveDb(db: ArticlesDb) {
-  fs.writeFileSync(ARTICLES_DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(ARTICLES_DB_PATH, db);
 }
 
 function localizeArticle(record: ArticleRecord, locale: ArticleLocale): LocalizedArticleRecord {
@@ -387,6 +384,43 @@ function extensionFromMime(mime: string) {
   throw new Error("Unsupported image type. Use JPG, PNG, or WebP.");
 }
 
+function detectImageMime(buffer: Buffer) {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+  if (buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP") {
+    return "image/webp";
+  }
+  return null;
+}
+
+function validateArticleImageBuffer(input: { contentType: string; buffer: Buffer }) {
+  extensionFromMime(input.contentType);
+  if (!input.buffer.length) {
+    throw new Error("Image content is required.");
+  }
+  if (input.buffer.length > MAX_ARTICLE_IMAGE_BYTES) {
+    throw new Error("Image is too large. Use an image smaller than 8 MB.");
+  }
+  const detectedType = detectImageMime(input.buffer);
+  if (!detectedType || detectedType !== input.contentType) {
+    throw new Error("Image content does not match the declared file type.");
+  }
+}
+
 function buildArticleImagePath(input: { filename?: string | null; contentType: string }) {
   ensureStorage();
   const extension = extensionFromMime(input.contentType);
@@ -409,8 +443,9 @@ export function saveArticleImage(input: {
 }) {
   const { fileName, filePath } = buildArticleImagePath(input);
   const buffer = Buffer.from(input.base64, "base64");
+  validateArticleImageBuffer({ contentType: input.contentType, buffer });
 
-  fs.writeFileSync(filePath, buffer);
+  writeBufferFileAtomic(filePath, buffer);
 
   return {
     url: `/uploads/articles/${fileName}`,
@@ -424,7 +459,8 @@ export function saveArticleImageBuffer(input: {
   buffer: Buffer;
 }) {
   const { fileName, filePath } = buildArticleImagePath(input);
-  fs.writeFileSync(filePath, input.buffer);
+  validateArticleImageBuffer({ contentType: input.contentType, buffer: input.buffer });
+  writeBufferFileAtomic(filePath, input.buffer);
 
   return {
     url: `/uploads/articles/${fileName}`,

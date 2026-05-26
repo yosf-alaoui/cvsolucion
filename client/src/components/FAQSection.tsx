@@ -4,7 +4,7 @@ import { ChevronDown } from 'lucide-react';
 import { useI18n } from "@/i18n/i18n";
 
 /**
- * FAQ Section - CV Solution
+ * FAQ Section - CVsolucion
  * Frequently asked questions with accordion
  * Design: Accordion cards with smooth transitions
  */

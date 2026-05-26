@@ -1,7 +1,7 @@
 import crypto from "crypto";
-import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 
 export type CatalogLocale = "en" | "fr" | "ar";
 
@@ -570,20 +570,15 @@ function createDefaultPackages(): CatalogPackageRecord[] {
 }
 
 function ensureDbFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_PATH)) {
-    const trainingPrices = defaultTrainingPrices();
-    const initial: CatalogDb = {
-      bookingPrices: defaultBookingPrices(),
-      trainingPrices,
-      trainingPrograms: createDefaultTrainingPrograms(trainingPrices),
-      servicePackages: createDefaultPackages(),
-      countryPriceOverrides: [],
-    };
-    fs.writeFileSync(DB_PATH, JSON.stringify(initial, null, 2), "utf8");
-  }
+  const trainingPrices = defaultTrainingPrices();
+  const initial: CatalogDb = {
+    bookingPrices: defaultBookingPrices(),
+    trainingPrices,
+    trainingPrograms: createDefaultTrainingPrograms(trainingPrices),
+    servicePackages: createDefaultPackages(),
+    countryPriceOverrides: [],
+  };
+  ensureJsonFile(DB_PATH, initial);
 }
 
 function normalizeTranslation(input?: Partial<CatalogPackageTranslation>) {
@@ -735,7 +730,7 @@ function applyCountryPriceOverride(db: CatalogDb, countryCode?: string | null) {
 
 function loadDb(): CatalogDb {
   ensureDbFile();
-  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<CatalogDb>;
+  const parsed = readJsonFile<Partial<CatalogDb>>(DB_PATH);
   const trainingPrices = {
     ...defaultTrainingPrices(),
     ...(parsed.trainingPrices || {}),
@@ -771,7 +766,7 @@ function loadDb(): CatalogDb {
 }
 
 function saveDb(db: CatalogDb) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(DB_PATH, db);
 }
 
 function sortPackages(packages: CatalogPackageRecord[]) {

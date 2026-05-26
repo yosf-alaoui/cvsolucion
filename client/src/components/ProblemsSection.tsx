@@ -3,7 +3,7 @@ import { Check, Cpu, FileText, Package, Wrench, Zap } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 
 /**
- * Problems Section - CV Solution
+ * Problems Section - CVsolucion
  * Displays common Cabinet Vision problems we solve
  * Design: Card-based layout with icons and categories
  */

@@ -1,6 +1,6 @@
-import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 
 type StripeEventRecord = {
   id: string;
@@ -17,24 +17,19 @@ const DB_PATH = path.join(DATA_DIR, "stripe-events-db.json");
 const MAX_STORED_EVENTS = 2000;
 
 function ensureDbFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ processed: [] }, null, 2), "utf8");
-  }
+  ensureJsonFile(DB_PATH, { processed: [] });
 }
 
 function loadDb(): StripeEventDb {
   ensureDbFile();
-  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<StripeEventDb>;
+  const parsed = readJsonFile<Partial<StripeEventDb>>(DB_PATH);
   return {
     processed: parsed.processed ?? [],
   };
 }
 
 function saveDb(db: StripeEventDb) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(DB_PATH, db);
 }
 
 function nowIso() {

@@ -1,3 +1,5 @@
+import { withCsrfHeaders } from "@/lib/csrf";
+
 export type CatalogLocale = "en" | "fr" | "ar";
 
 export type CatalogBookingPrices = {
@@ -96,10 +98,10 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
     credentials: "include",
-    headers: {
+    headers: withCsrfHeaders(init, {
       "Content-Type": "application/json",
       ...(init?.headers || {}),
-    },
+    }),
   });
 
   const data = (await response.json().catch(() => ({}))) as { error?: string } & T;

@@ -1,8 +1,10 @@
-import AdminDashboard from "@/pages/AdminDashboard";
-import CustomerDashboard from "@/pages/CustomerDashboard";
-import DesignerDashboard from "@/pages/DesignerDashboard";
-import TrainerDashboard from "@/pages/TrainerDashboard";
+import { lazy } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+
+const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
+const CustomerDashboard = lazy(() => import("@/pages/CustomerDashboard"));
+const DesignerDashboard = lazy(() => import("@/pages/DesignerDashboard"));
+const TrainerDashboard = lazy(() => import("@/pages/TrainerDashboard"));
 
 export default function Dashboard() {
   const { user, role, isAdmin, loading } = useAuth();

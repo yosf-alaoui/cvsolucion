@@ -12,6 +12,7 @@ import { useI18n } from "@/i18n/i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { getBookingCountryLabel, getBookingCountryOptions, guessBookingCountryCode } from "@/lib/bookingTime";
 import { getDetectedCountry } from "@/lib/geo";
+import { validatePasswordPolicy } from "@shared/passwordPolicy";
 
 type AuthMode = "login" | "signup";
 
@@ -33,13 +34,28 @@ export default function Login() {
   const [statusTone, setStatusTone] = useState<"success" | "error" | null>(null);
   const [busy, setBusy] = useState(false);
   const emailRef = useRef<HTMLInputElement | null>(null);
+  const signupPasswordMessage = mode === "signup" && password ? validatePasswordPolicy(password).message : null;
+  const resetPasswordMessage = recoveryMode && newPassword ? validatePasswordPolicy(newPassword).message : null;
 
   const disabled = useMemo(() => {
-    if (recoveryMode) return !resetToken || !newPassword || newPassword !== confirmPassword;
+    if (recoveryMode) return !resetToken || !newPassword || Boolean(resetPasswordMessage) || newPassword !== confirmPassword;
     if (resetMode) return !email;
-    if (mode === "signup") return !email || !password || !acceptTerms || !countryCode;
+    if (mode === "signup") return !email || !password || Boolean(signupPasswordMessage) || !acceptTerms || !countryCode;
     return !email || !password;
-  }, [email, password, resetMode, recoveryMode, newPassword, confirmPassword, resetToken, mode, acceptTerms, countryCode]);
+  }, [
+    email,
+    password,
+    resetMode,
+    recoveryMode,
+    newPassword,
+    confirmPassword,
+    resetToken,
+    mode,
+    acceptTerms,
+    countryCode,
+    signupPasswordMessage,
+    resetPasswordMessage,
+  ]);
 
   const countryOptions = useMemo(() => getBookingCountryOptions(locale), [locale]);
   const selectedCountryLabel = useMemo(() => getBookingCountryLabel(countryCode, locale), [countryCode, locale]);
@@ -141,6 +157,11 @@ export default function Login() {
           setStatusTone("error");
           return;
         }
+        if (resetPasswordMessage) {
+          setStatus(resetPasswordMessage);
+          setStatusTone("error");
+          return;
+        }
         await resetPassword(resetToken, newPassword);
         window.location.href = `${loginHref}?mode=login&reset=success`;
         return;
@@ -171,6 +192,11 @@ export default function Login() {
         }
         if (!countryCode) {
           setStatus(locale === "ar" ? "الدولة مطلوبة لإنشاء الحساب." : locale === "fr" ? "Le pays est obligatoire pour créer le compte." : "Country is required to create the account.");
+          setStatusTone("error");
+          return;
+        }
+        if (signupPasswordMessage) {
+          setStatus(signupPasswordMessage);
           setStatusTone("error");
           return;
         }
@@ -274,6 +300,7 @@ export default function Login() {
                         placeholder={t("auth.newPasswordPlaceholder")}
                         required
                       />
+                      {resetPasswordMessage ? <p className="text-xs text-destructive">{resetPasswordMessage}</p> : null}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="confirm-password">{t("auth.confirmPassword")}</Label>
@@ -329,6 +356,7 @@ export default function Login() {
                             {showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
                           </button>
                         </div>
+                        {signupPasswordMessage ? <p className="text-xs text-destructive">{signupPasswordMessage}</p> : null}
                         <button
                           type="button"
                           onClick={handleResetPassword}

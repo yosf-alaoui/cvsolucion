@@ -1,6 +1,6 @@
-import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 
 export type CustomerProfileRecord = {
   userId: string;
@@ -31,24 +31,19 @@ function normalizeCountryCode(value: string | null | undefined) {
 }
 
 function ensureDbFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ profiles: [] }, null, 2), "utf8");
-  }
+  ensureJsonFile(DB_PATH, { profiles: [] });
 }
 
 function loadDb(): CustomerProfileDb {
   ensureDbFile();
-  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<CustomerProfileDb>;
+  const parsed = readJsonFile<Partial<CustomerProfileDb>>(DB_PATH);
   return {
     profiles: parsed.profiles ?? [],
   };
 }
 
 function saveDb(db: CustomerProfileDb) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(DB_PATH, db);
 }
 
 export function getCustomerProfile(userId: string) {

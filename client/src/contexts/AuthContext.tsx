@@ -9,6 +9,7 @@ import {
   sendPasswordReset,
   signUp,
 } from "@/lib/auth";
+import { setCsrfToken } from "@/lib/csrf";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -37,6 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = async () => {
     const response: CurrentUserResponse = await getCurrentUser();
+    setCsrfToken(response.csrfToken);
     setUser(response.user);
     const nextRole = response.user?.role || response.role || null;
     setRole(nextRole);
@@ -61,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refresh,
       login: async (email, password) => {
         const response = await loginWithPassword(email, password);
+        setCsrfToken(response.csrfToken);
         setUser(response.user);
         const nextRole = response.user.role || response.role || null;
         setRole(nextRole);
@@ -74,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       logout: async () => {
         await logoutRequest();
+        setCsrfToken(null);
         setUser(null);
         setRole(null);
         setIsAdmin(false);

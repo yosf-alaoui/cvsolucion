@@ -1,8 +1,8 @@
 import crypto from "crypto";
-import fs from "fs";
 import path from "path";
 import { TRAINING_BLUEPRINT, TRAINING_LEVELS, type TrainingBlueprintLevelKey } from "../shared/trainingBlueprint";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 
 export type TrainerProfileRecord = {
   userId: string;
@@ -101,18 +101,13 @@ function normalizeSessionScore(value: unknown) {
 }
 
 function ensureDbFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_PATH)) {
-    const emptyDb: TrainingDb = { trainers: [], enrollments: [], sessionProgress: [] };
-    fs.writeFileSync(DB_PATH, JSON.stringify(emptyDb, null, 2), "utf8");
-  }
+  const emptyDb: TrainingDb = { trainers: [], enrollments: [], sessionProgress: [] };
+  ensureJsonFile(DB_PATH, emptyDb);
 }
 
 function loadDb(): TrainingDb {
   ensureDbFile();
-  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<TrainingDb>;
+  const parsed = readJsonFile<Partial<TrainingDb>>(DB_PATH);
   return {
     trainers: (parsed.trainers ?? []).map((trainer) => ({
       ...trainer,
@@ -171,7 +166,7 @@ function loadDb(): TrainingDb {
 }
 
 function saveDb(db: TrainingDb) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(DB_PATH, db);
 }
 
 function sortEnrollments(enrollments: TrainingEnrollmentRecord[]) {

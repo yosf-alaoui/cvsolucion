@@ -13,7 +13,7 @@ import { useI18n } from "@/i18n/i18n";
 import { HOME_SERVICE_SEO_TARGETS } from "@shared/seoServicePages";
 
 /**
- * Services Section - CV Solution (Upgraded)
+ * Services Section - CVsolucion (Upgraded)
  * - Keeps Model 2 structure (section component)
  * - Shows what is included for each service
  * - No "Learn more" clear and scannable

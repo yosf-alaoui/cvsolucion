@@ -13,7 +13,7 @@ function HomeSectionsFallback() {
 }
 
 /**
- * Home Page - CV Solution
+ * Home Page - CVsolucion
  * Main landing page with all sections
  * Design: Modern professional layout with smooth scrolling
  */

@@ -1,6 +1,6 @@
-import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 import type { BookingRecord } from "./bookingStore";
 import { getBookingInvoiceStatus } from "./bookingStore";
 
@@ -45,17 +45,12 @@ function nowIso() {
 }
 
 function ensureDbFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ lastSequence: 0, invoices: [] }, null, 2), "utf8");
-  }
+  ensureJsonFile(DB_PATH, { lastSequence: 0, invoices: [] });
 }
 
 function loadDb(): InvoiceDb {
   ensureDbFile();
-  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<InvoiceDb>;
+  const parsed = readJsonFile<Partial<InvoiceDb>>(DB_PATH);
   return {
     lastSequence: Number.isInteger(parsed.lastSequence) ? Number(parsed.lastSequence) : 0,
     invoices: (parsed.invoices ?? []).map((invoice) => ({
@@ -66,7 +61,7 @@ function loadDb(): InvoiceDb {
 }
 
 function saveDb(db: InvoiceDb) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(DB_PATH, db);
 }
 
 function randomId() {

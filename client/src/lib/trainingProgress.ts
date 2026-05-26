@@ -1,5 +1,6 @@
 import type { AuthUser } from "@/lib/auth";
 import type { CatalogTrainingProgramRecord } from "@/lib/catalog";
+import { withCsrfHeaders } from "@/lib/csrf";
 import type {
   TrainingBlueprintCriterion,
   TrainingBlueprintLevel,
@@ -167,10 +168,10 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
     credentials: "include",
-    headers: {
+    headers: withCsrfHeaders(init, {
       "Content-Type": "application/json",
       ...(init?.headers || {}),
-    },
+    }),
   });
 
   const data = (await response.json().catch(() => ({}))) as { error?: string } & T;

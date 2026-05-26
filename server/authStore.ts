@@ -1,7 +1,8 @@
 import crypto from "crypto";
-import fs from "fs";
 import path from "path";
+import { PASSWORD_POLICY_MESSAGE, validatePasswordPolicy } from "../shared/passwordPolicy";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 
 export type AuthUser = {
   id: string;
@@ -104,18 +105,13 @@ const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "auth-db.json");
 
 function ensureDbFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_PATH)) {
-    const emptyDb: AuthDb = { users: [], sessions: [], tokens: [], events: [] };
-    fs.writeFileSync(DB_PATH, JSON.stringify(emptyDb, null, 2), "utf8");
-  }
+  const emptyDb: AuthDb = { users: [], sessions: [], tokens: [], events: [] };
+  ensureJsonFile(DB_PATH, emptyDb);
 }
 
 function loadDb(): AuthDb {
   ensureDbFile();
-  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<AuthDb>;
+  const parsed = readJsonFile<Partial<AuthDb>>(DB_PATH);
   return {
     users: (parsed.users ?? []).map((user) => ({
       ...user,
@@ -128,7 +124,7 @@ function loadDb(): AuthDb {
 }
 
 function saveDb(db: AuthDb) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(DB_PATH, db);
 }
 
 function nowIso() {
@@ -358,8 +354,8 @@ export function updateAdminUser(input: {
   }
 
   if (typeof input.password === "string" && input.password.length > 0) {
-    if (input.password.length < 8) {
-      throw new Error("Password must be at least 8 characters.");
+    if (!validatePasswordPolicy(input.password).valid) {
+      throw new Error(PASSWORD_POLICY_MESSAGE);
     }
     const { passwordSalt, passwordHash } = hashPassword(input.password);
     user.passwordSalt = passwordSalt;

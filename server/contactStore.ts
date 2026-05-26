@@ -1,7 +1,7 @@
 import crypto from "crypto";
-import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 
 export type ContactLead = {
   id: string;
@@ -22,22 +22,17 @@ const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "contact-leads.json");
 
 function ensureDbFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ leads: [] }, null, 2), "utf8");
-  }
+  ensureJsonFile(DB_PATH, { leads: [] });
 }
 
 function loadDb(): ContactDb {
   ensureDbFile();
-  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<ContactDb>;
+  const parsed = readJsonFile<Partial<ContactDb>>(DB_PATH);
   return { leads: parsed.leads ?? [] };
 }
 
 function saveDb(db: ContactDb) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(DB_PATH, db);
 }
 
 export function storeContactLead(input: {

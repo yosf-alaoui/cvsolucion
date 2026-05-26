@@ -1,6 +1,6 @@
-import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 
 export type BookingScheduleSettings = {
   standardOpen: boolean;
@@ -28,17 +28,12 @@ function getDefaultSchedule(): BookingScheduleSettings {
 }
 
 function ensureDbFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ schedule: getDefaultSchedule() }, null, 2), "utf8");
-  }
+  ensureJsonFile(DB_PATH, { schedule: getDefaultSchedule() });
 }
 
 function loadDb(): BookingSettingsDb {
   ensureDbFile();
-  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<BookingSettingsDb>;
+  const parsed = readJsonFile<Partial<BookingSettingsDb>>(DB_PATH);
   const schedule = parsed.schedule;
   return {
     schedule: {
@@ -50,7 +45,7 @@ function loadDb(): BookingSettingsDb {
 }
 
 function saveDb(db: BookingSettingsDb) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(DB_PATH, db);
 }
 
 export function getBookingScheduleSettings() {

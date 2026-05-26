@@ -8,7 +8,7 @@ import { getPublicCatalog, type PublicCatalogPackage } from "@/lib/catalog";
 import { getBookingHref } from "@/lib/site";
 
 /**
- * Packages Section - CV Solution (Upgraded)
+ * Packages Section - CVsolucion (Upgraded)
  * Uses Model 1 package structure (Audit / Fix Day / Support Plan)
  */
 export default function PackagesSection() {

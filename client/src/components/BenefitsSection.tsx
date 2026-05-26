@@ -10,8 +10,8 @@ import {
 import { useI18n } from "@/i18n/i18n";
 
 /**
- * Benefits Section - CV Solution
- * Why choose CV Solution
+ * Benefits Section - CVsolucion
+ * Why choose CVsolucion
  * Design: Icon cards with benefits
  */
 export default function BenefitsSection() {

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import crypto from "crypto";
 import express from "express";
 import { createServer } from "http";
 import path from "path";
@@ -7,6 +8,7 @@ import { fileURLToPath } from "url";
 import type Stripe from "stripe";
 import { getCountry as getTimezoneCountry } from "countries-and-timezones";
 import { COOKIE_NAME, ONE_YEAR_MS, VISITOR_COOKIE_NAME } from "../shared/const";
+import { PASSWORD_POLICY_MESSAGE, validatePasswordPolicy } from "../shared/passwordPolicy";
 import { TRAINING_BLUEPRINT } from "../shared/trainingBlueprint";
 import {
   consumeToken,
@@ -608,6 +610,39 @@ function getCurrentUser(req: express.Request) {
   return { session, user };
 }
 
+function createCsrfToken(auth: NonNullable<ReturnType<typeof getCurrentUser>>) {
+  return crypto
+    .createHash("sha256")
+    .update(`${auth.session.id}:${auth.user.passwordHash}:${auth.user.updatedAt}`)
+    .digest("hex");
+}
+
+function timingSafeStringEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function requiresCsrf(req: express.Request) {
+  const method = req.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return false;
+
+  const protectedPrefixes = ["/api/admin", "/api/customer", "/api/designer", "/api/trainer"];
+  const protectedExactPaths = [
+    "/api/auth/logout",
+    "/api/bookings",
+    "/api/stripe/booking-payment-intent",
+    "/api/stripe/training-payment-intent",
+    "/api/training/purchases",
+  ];
+
+  return (
+    protectedExactPaths.includes(req.path) ||
+    protectedPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`)) ||
+    /^\/api\/bookings\/[^/]+\/reschedule$/.test(req.path)
+  );
+}
+
 function getRequestIp(req: express.Request) {
   const forwarded = req.headers["x-forwarded-for"];
   if (typeof forwarded === "string" && forwarded) {
@@ -696,6 +731,10 @@ function getChatFallback(locale: "en" | "fr" | "ar") {
     return "تعذر عليّ الرد بشكل صحيح الآن. حاول بعد قليل أو تواصل معنا عبر واتساب مع تفاصيل طلبك.";
   }
   return "I could not answer properly right now. Please try again in a moment or contact us on WhatsApp with your request.";
+}
+
+function isMissingStaticAssetRequest(pathname: string) {
+  return /\.[a-z0-9]{2,8}$/i.test(pathname);
 }
 
 async function sendLinkEmail(args: {
@@ -946,6 +985,22 @@ async function startServer() {
     return next();
   });
 
+  app.use((req, res, next) => {
+    if (!requiresCsrf(req)) return next();
+
+    const auth = getCurrentUser(req);
+    if (!auth) return next();
+
+    const expectedToken = createCsrfToken(auth);
+    const providedToken = String(req.get("x-csrf-token") || "").trim();
+
+    if (!providedToken || !timingSafeStringEqual(providedToken, expectedToken)) {
+      return res.status(403).json({ error: "Security token expired. Refresh the page and try again." });
+    }
+
+    return next();
+  });
+
   app.get("/api/auth/me", (req, res) => {
     const auth = getCurrentUser(req);
     if (!auth) {
@@ -959,6 +1014,7 @@ async function startServer() {
       isAdmin: role === "admin",
       isDesigner: role === "designer",
       isTrainer: role === "trainer",
+      csrfToken: createCsrfToken(auth),
     });
   });
 
@@ -2191,8 +2247,11 @@ async function startServer() {
       const country = countryRecord?.name || String(req.body?.country || "").trim();
       const termsVersion = "04/2026";
 
-      if (!EMAIL_REGEX.test(email) || !password || password.length < 8) {
-        return res.status(400).json({ error: "Email and a password of at least 8 characters are required." });
+      if (!EMAIL_REGEX.test(email) || !password) {
+        return res.status(400).json({ error: "Email and password are required." });
+      }
+      if (!validatePasswordPolicy(password).valid) {
+        return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
       }
       if (!termsAccepted) {
         return res.status(400).json({ error: "You must accept the Terms and Conditions before creating an account." });
@@ -2264,6 +2323,7 @@ async function startServer() {
       isAdmin: getUserRole(user) === "admin",
       isDesigner: getUserRole(user) === "designer",
       isTrainer: getUserRole(user) === "trainer",
+      csrfToken: createCsrfToken({ session, user }),
     });
   });
 
@@ -2334,8 +2394,11 @@ async function startServer() {
     const token = String(req.body?.token || "").trim();
     const password = String(req.body?.password || "");
 
-    if (!token || !password || password.length < 8) {
-      return res.status(400).json({ error: "A valid token and a password of at least 8 characters are required." });
+    if (!token || !password) {
+      return res.status(400).json({ error: "A valid token and password are required." });
+    }
+    if (!validatePasswordPolicy(password).valid) {
+      return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
     }
 
     const tokenRecord = consumeToken(token, "reset_password");
@@ -2344,6 +2407,7 @@ async function startServer() {
     }
 
     updateUserPassword(tokenRecord.userId, password);
+    deleteUserSessions(tokenRecord.userId);
     const user = getUserById(tokenRecord.userId);
     recordEvent({
       type: "password_reset_completed",
@@ -3270,6 +3334,7 @@ async function startServer() {
       const title = req.body?.title;
       const notes = req.body?.notes;
       const active = req.body?.active;
+      const passwordChanged = typeof password === "string" && password.length > 0;
       const nextRole: AuthUserRole | undefined =
         role === "admin" || role === "designer" || role === "trainer" || role === "customer" ? role : undefined;
 
@@ -3284,6 +3349,9 @@ async function startServer() {
         emailVerified: typeof emailVerified === "boolean" ? emailVerified : undefined,
         role: nextRole,
       });
+      if (passwordChanged) {
+        deleteUserSessions(user.id);
+      }
 
       const resolvedRole = getUserRole(user);
       if (resolvedRole === "designer") {
@@ -3862,6 +3930,11 @@ async function startServer() {
   app.use("/uploads", express.static(path.join(getAppDataDir(), "uploads"), { maxAge: "30d", etag: true, lastModified: true }));
 
   app.get("*", (req, res) => {
+    if (isMissingStaticAssetRequest(req.path)) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      return res.status(404).send("Not Found");
+    }
+
     try {
       const html = renderSeoHtml(indexTemplate, req.path, canonicalOrigin(req));
       res.setHeader("Content-Type", "text/html; charset=UTF-8");
@@ -3873,9 +3946,21 @@ async function startServer() {
     }
   });
 
-  app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error("Server Error:", err);
-    res.status(500).json({ error: err.message || "Internal Server Error" });
+  app.use((err: Error & { expose?: boolean; status?: number; statusCode?: number; type?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const status = Number(err.status || err.statusCode || 500);
+    const safeStatus = status >= 400 && status < 600 ? status : 500;
+    if (safeStatus >= 500) {
+      console.error("Server Error:", err);
+    } else {
+      console.warn("Client Error:", { status: safeStatus, type: err.type, message: err.message });
+    }
+    const message =
+      err.type === "entity.parse.failed"
+        ? "Invalid JSON payload."
+        : safeStatus < 500 && err.expose
+          ? err.message
+          : "Internal Server Error";
+    res.status(safeStatus).json({ error: message });
   });
 
   const port = process.env.PORT || (process.env.NODE_ENV === "production" ? 3000 : 3001);

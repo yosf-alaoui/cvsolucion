@@ -5,7 +5,7 @@ import { CONTACT_EMAIL, getBookingHref } from "@/lib/site";
 import { navigateToHomeSection } from "@/lib/sectionNavigation";
 
 /**
- * CTA Section - CV Solution
+ * CTA Section - CVsolucion
  * Final call-to-action section
  * Design: Large background image with overlay and CTAs
  */

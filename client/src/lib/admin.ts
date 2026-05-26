@@ -1,4 +1,5 @@
 import type { BookingPriority, BookingRecord, BookingStatus, BookingPaymentStatus } from "@/lib/bookings";
+import { withCsrfHeaders } from "@/lib/csrf";
 
 export type AdminDashboardStats = {
   totalUsers: number;
@@ -369,10 +370,10 @@ async function adminRequest<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
     credentials: "include",
-    headers: {
+    headers: withCsrfHeaders(init, {
       "Content-Type": "application/json",
       ...(init?.headers || {}),
-    },
+    }),
   });
 
   const data = (await response.json().catch(() => ({}))) as { error?: string } & T;

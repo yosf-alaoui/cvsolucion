@@ -11,6 +11,15 @@ Thumbs.db
 *.log
 *.tmp
 *.bak
+*.netlog.json
+ga-netlog*.json
+lighthouse*.json
+tmp-lh*.json
+chrome-dom*.txt
+tmp_seo_report.txt
+local-prod.log
+repo-artifacts/
+tmp-local-run/
 
 .vite/
 .cache/

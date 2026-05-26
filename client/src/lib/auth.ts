@@ -1,3 +1,5 @@
+import { withCsrfHeaders } from "@/lib/csrf";
+
 export type AuthUser = {
   id: string;
   email: string;
@@ -11,16 +13,17 @@ export type CurrentUserResponse = {
   isAdmin?: boolean;
   isDesigner?: boolean;
   isTrainer?: boolean;
+  csrfToken?: string | null;
 };
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
     credentials: "include",
-    headers: {
+    headers: withCsrfHeaders(init, {
       "Content-Type": "application/json",
       ...(init?.headers || {}),
-    },
+    }),
   });
 
   const data = (await response.json().catch(() => ({}))) as { error?: string } & T;
@@ -35,7 +38,14 @@ export function getCurrentUser() {
 }
 
 export function loginWithPassword(email: string, password: string) {
-  return request<{ user: AuthUser; role?: AuthUser["role"]; isAdmin?: boolean; isDesigner?: boolean; isTrainer?: boolean }>("/api/auth/login", {
+  return request<{
+    user: AuthUser;
+    role?: AuthUser["role"];
+    isAdmin?: boolean;
+    isDesigner?: boolean;
+    isTrainer?: boolean;
+    csrfToken?: string | null;
+  }>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });

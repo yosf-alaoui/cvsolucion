@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -25,13 +25,6 @@ import {
   type AdminDashboardUser,
   type AdminDashboardVisitor,
 } from "@/lib/admin";
-import ConversationsPanel from "@/components/admin/ConversationsPanel";
-import ArticlesManager from "@/components/admin/ArticlesManager";
-import BookingsManager from "@/components/admin/BookingsManager";
-import CatalogManager from "@/components/admin/CatalogManager";
-import RequestsManager from "@/components/admin/RequestsManager";
-import DesignersManager from "@/components/admin/DesignersManager";
-import TrainingOperationsManager from "@/components/admin/TrainingOperationsManager";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +33,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const ConversationsPanel = lazy(() => import("@/components/admin/ConversationsPanel"));
+const ArticlesManager = lazy(() => import("@/components/admin/ArticlesManager"));
+const BookingsManager = lazy(() => import("@/components/admin/BookingsManager"));
+const CatalogManager = lazy(() => import("@/components/admin/CatalogManager"));
+const RequestsManager = lazy(() => import("@/components/admin/RequestsManager"));
+const DesignersManager = lazy(() => import("@/components/admin/DesignersManager"));
+const TrainingOperationsManager = lazy(() => import("@/components/admin/TrainingOperationsManager"));
 
 function formatDate(value: string | null, locale: string) {
   if (!value) return "-";
@@ -115,6 +116,10 @@ function ProgressRow({ label, value, total }: { label: string; value: number; to
       </div>
     </div>
   );
+}
+
+function PanelFallback() {
+  return <div className="min-h-48 rounded-xl border border-slate-200 bg-white/70" />;
 }
 
 function StatPill({ label, value }: { label: string; value: string | number }) {
@@ -1280,37 +1285,43 @@ export default function AdminDashboard() {
                       </TabsContent>
 
                       <TabsContent value="conversations">
-                        <ConversationsPanel
-                          copy={{ ...copy, ...conversationCopy }}
-                          locale={locale}
-                          conversations={filteredConversations}
-                          selectedConversationId={selectedConversationId}
-                          onSelect={setSelectedConversationId}
-                        />
+                        <Suspense fallback={<PanelFallback />}>
+                          <ConversationsPanel
+                            copy={{ ...copy, ...conversationCopy }}
+                            locale={locale}
+                            conversations={filteredConversations}
+                            selectedConversationId={selectedConversationId}
+                            onSelect={setSelectedConversationId}
+                          />
+                        </Suspense>
                       </TabsContent>
 
                       <TabsContent value="bookings">
-                        <BookingsManager
-                          locale={locale}
-                          bookings={filteredBookings}
-                          schedule={
-                            data?.bookingSchedule ?? {
-                              standardOpen: true,
-                              expressOpen: true,
-                              updatedAt: new Date(0).toISOString(),
+                        <Suspense fallback={<PanelFallback />}>
+                          <BookingsManager
+                            locale={locale}
+                            bookings={filteredBookings}
+                            schedule={
+                              data?.bookingSchedule ?? {
+                                standardOpen: true,
+                                expressOpen: true,
+                                updatedAt: new Date(0).toISOString(),
+                              }
                             }
-                          }
-                          onCancelBooking={handleCancelBooking}
-                          onRefundBooking={handleRefundBooking}
-                          onUpdateSchedule={handleUpdateBookingSchedule}
-                          onLoadSlots={handleLoadBookingSlots}
-                          onBlockSlot={handleBlockBookingSlot}
-                          onUnblockSlot={handleUnblockBookingSlot}
-                        />
+                            onCancelBooking={handleCancelBooking}
+                            onRefundBooking={handleRefundBooking}
+                            onUpdateSchedule={handleUpdateBookingSchedule}
+                            onLoadSlots={handleLoadBookingSlots}
+                            onBlockSlot={handleBlockBookingSlot}
+                            onUnblockSlot={handleUnblockBookingSlot}
+                          />
+                        </Suspense>
                       </TabsContent>
 
                       <TabsContent value="requests">
-                        <RequestsManager locale={locale} leads={filteredLeads} />
+                        <Suspense fallback={<PanelFallback />}>
+                          <RequestsManager locale={locale} leads={filteredLeads} />
+                        </Suspense>
                       </TabsContent>
 
                       <TabsContent value="sessions">
@@ -1394,19 +1405,27 @@ export default function AdminDashboard() {
                   </TabsContent>
 
                   <TabsContent value="designers">
-                    <DesignersManager locale={locale} />
+                    <Suspense fallback={<PanelFallback />}>
+                      <DesignersManager locale={locale} />
+                    </Suspense>
                   </TabsContent>
 
                   <TabsContent value="commercial">
-                    <CatalogManager locale={locale} />
+                    <Suspense fallback={<PanelFallback />}>
+                      <CatalogManager locale={locale} />
+                    </Suspense>
                   </TabsContent>
 
                   <TabsContent value="training-prices">
-                    <TrainingOperationsManager locale={locale as "en" | "fr" | "ar"} />
+                    <Suspense fallback={<PanelFallback />}>
+                      <TrainingOperationsManager locale={locale as "en" | "fr" | "ar"} />
+                    </Suspense>
                   </TabsContent>
 
                   <TabsContent value="content">
-                    <ArticlesManager locale={locale} />
+                    <Suspense fallback={<PanelFallback />}>
+                      <ArticlesManager locale={locale} />
+                    </Suspense>
                   </TabsContent>
                 </Tabs>
               </>

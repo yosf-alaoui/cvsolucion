@@ -1,7 +1,7 @@
 import crypto from "crypto";
-import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 import type { VisitorRecord } from "./visitorStore";
 
 export type ChatMessageRole = "user" | "assistant";
@@ -95,22 +95,17 @@ const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "chat-db.json");
 
 function ensureDbFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ conversations: [] }, null, 2), "utf8");
-  }
+  ensureJsonFile(DB_PATH, { conversations: [] });
 }
 
 function loadDb(): ChatDb {
   ensureDbFile();
-  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<ChatDb>;
+  const parsed = readJsonFile<Partial<ChatDb>>(DB_PATH);
   return { conversations: parsed.conversations ?? [] };
 }
 
 function saveDb(db: ChatDb) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(DB_PATH, db);
 }
 
 function nowIso() {

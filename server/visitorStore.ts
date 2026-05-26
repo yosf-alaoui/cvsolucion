@@ -1,7 +1,7 @@
 import crypto from "crypto";
-import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 
 export type VisitorPageView = {
   path: string;
@@ -82,22 +82,17 @@ const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "visitors-db.json");
 
 function ensureDbFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ visitors: [] }, null, 2), "utf8");
-  }
+  ensureJsonFile(DB_PATH, { visitors: [] });
 }
 
 function loadDb(): VisitorDb {
   ensureDbFile();
-  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<VisitorDb>;
+  const parsed = readJsonFile<Partial<VisitorDb>>(DB_PATH);
   return { visitors: parsed.visitors ?? [] };
 }
 
 function saveDb(db: VisitorDb) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(DB_PATH, db);
 }
 
 function nowIso() {

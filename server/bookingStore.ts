@@ -1,7 +1,7 @@
 import crypto from "crypto";
-import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 import { getBookingScheduleSettings, isBookingScheduleOpen } from "./bookingSettingsStore";
 
 export type BookingPriority = "standard" | "express";
@@ -96,17 +96,12 @@ const STANDARD_HOURS = [8, 9, 10, 11, 13, 14, 15, 16, 17];
 const EXPRESS_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
 
 function ensureDbFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ bookings: [], blockedSlots: [] }, null, 2), "utf8");
-  }
+  ensureJsonFile(DB_PATH, { bookings: [], blockedSlots: [] });
 }
 
 function loadDb(): BookingDb {
   ensureDbFile();
-  const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Partial<BookingDb>;
+  const parsed = readJsonFile<Partial<BookingDb>>(DB_PATH);
   return {
     bookings: (parsed.bookings ?? []).map((booking) => ({
       ...booking,
@@ -148,7 +143,7 @@ function loadDb(): BookingDb {
 }
 
 function saveDb(db: BookingDb) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+  writeJsonFileAtomic(DB_PATH, db);
 }
 
 function nowIso() {
