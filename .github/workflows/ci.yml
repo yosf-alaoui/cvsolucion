@@ -28,6 +28,9 @@ jobs:
       - name: Type Check
         run: pnpm run check
 
+      - name: Test
+        run: pnpm test
+
       - name: Production Audit
         run: pnpm run audit:prod
 

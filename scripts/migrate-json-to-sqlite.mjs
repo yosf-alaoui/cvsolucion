@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import Database from "better-sqlite3";
 import dotenv from "dotenv";
+import { ensureStructuredSchema, syncStructuredDocument } from "../server/structuredDatabase.ts";
 
 dotenv.config({ quiet: true });
 
@@ -48,6 +49,7 @@ db.exec(`
     updated_at TEXT NOT NULL
   );
 `);
+ensureStructuredSchema(db);
 
 const insert = db.prepare(`
   INSERT INTO documents (key, value, created_at, updated_at)
@@ -83,6 +85,12 @@ const files = findJsonFiles(dataDir);
 const results = migrate(files);
 const scannedKeys = new Set(results.map((item) => item.key));
 let prunedCount = 0;
+
+for (const filePath of files) {
+  const raw = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
+  const key = path.relative(dataDir, filePath).split(path.sep).join("/");
+  syncStructuredDocument(db, key, JSON.parse(raw));
+}
 
 if (pruneUnscanned) {
   const rows = db.prepare("SELECT key FROM documents").all();

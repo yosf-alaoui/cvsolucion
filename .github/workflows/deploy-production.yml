@@ -1,0 +1,134 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DEPLOY_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+      DEPLOY_PORT: ${{ secrets.PRODUCTION_SSH_PORT }}
+      DEPLOY_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+      DEPLOY_APP_DIR: ${{ secrets.PRODUCTION_APP_DIR }}
+      DEPLOY_PM2_APP: ${{ secrets.PRODUCTION_PM2_APP }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
+
+      - name: Type Check
+        run: pnpm run check
+
+      - name: Production Audit
+        run: pnpm run audit:prod
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Create Release Archive
+        run: git archive --format=tar.gz -o "/tmp/cvsolucion-${GITHUB_SHA}.tar.gz" HEAD
+
+      - name: Configure SSH
+        run: |
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_APP_DIR"
+          test -n "$DEPLOY_PM2_APP"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload Release
+        run: |
+          PORT="${DEPLOY_PORT:-22}"
+          scp -P "$PORT" -i ~/.ssh/id_deploy "/tmp/cvsolucion-${GITHUB_SHA}.tar.gz" \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/cvsolucion-${GITHUB_SHA}.tar.gz"
+
+      - name: Deploy On Server
+        run: |
+          PORT="${DEPLOY_PORT:-22}"
+          ssh -p "$PORT" -i ~/.ssh/id_deploy "$DEPLOY_USER@$DEPLOY_HOST" \
+            "APP_DIR='$DEPLOY_APP_DIR' PM2_APP='$DEPLOY_PM2_APP' RELEASE_SHA='$GITHUB_SHA' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+
+          rollback() {
+            code=$?
+            if [ "${STOPPED:-0}" = "1" ]; then
+              cd "$APP_DIR" || true
+              if grep -q '^APP_STORAGE_DRIVER=' .env; then
+                sed -i 's|^APP_STORAGE_DRIVER=.*|APP_STORAGE_DRIVER=sqlite|' .env || true
+              fi
+              pm2 restart "$PM2_APP" --update-env || true
+            fi
+            exit "$code"
+          }
+          trap rollback ERR
+
+          STOPPED=0
+          ARCHIVE="/tmp/cvsolucion-${RELEASE_SHA}.tar.gz"
+          RELEASE="/tmp/cvsolucion-${RELEASE_SHA}"
+          cd "$APP_DIR"
+
+          DATA_DIR="$(grep -E '^APP_DATA_DIR=' .env | cut -d= -f2- || true)"
+          if [ -z "$DATA_DIR" ]; then DATA_DIR="$APP_DIR/data"; fi
+
+          mkdir -p /root/backups
+          tar -czf "/root/backups/cvsolucion-data-${RELEASE_SHA}.tar.gz" -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")"
+
+          rm -rf "$RELEASE"
+          mkdir -p "$RELEASE"
+          tar -xzf "$ARCHIVE" -C "$RELEASE"
+          rsync -a --delete \
+            --exclude='.env' \
+            --exclude='data/' \
+            --exclude='node_modules/' \
+            --exclude='dist/' \
+            --exclude='.git/' \
+            "$RELEASE"/ "$APP_DIR"/
+
+          chmod 600 .env 2>/dev/null || true
+          find "$DATA_DIR" -type d -exec chmod 700 {} +
+          find "$DATA_DIR" -type f \( -name '*.json' -o -name '*.sqlite' -o -name '*.sqlite-wal' -o -name '*.sqlite-shm' \) -exec chmod 600 {} +
+
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm run check
+          pnpm run audit:prod
+          pnpm run build
+
+          pm2 stop "$PM2_APP"
+          STOPPED=1
+          MIGRATE_SQLITE_OVERWRITE=1 MIGRATE_SQLITE_PRUNE_UNSCANNED=1 pnpm run storage:migrate
+          pnpm run storage:health
+          pm2 restart "$PM2_APP" --update-env
+          STOPPED=0
+          pm2 save
+
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS "http://127.0.0.1:${PORT:-3000}/api/auth/me" >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Production health check failed" >&2
+          exit 1
+          REMOTE

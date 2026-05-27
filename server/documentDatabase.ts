@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import { ensureStructuredSchema, syncStructuredDocument } from "./structuredDatabase";
 
 let database: Database.Database | null = null;
 let databasePath: string | null = null;
@@ -55,6 +56,7 @@ function openDocumentDatabase() {
       updated_at TEXT NOT NULL
     );
   `);
+  ensureStructuredSchema(db);
   chmodDatabaseFiles(filePath);
   return db;
 }
@@ -68,6 +70,12 @@ function getDocumentDatabase() {
   }
 
   return database;
+}
+
+export function closeDocumentDatabase() {
+  database?.close();
+  database = null;
+  databasePath = null;
 }
 
 export function ensureDocument<T>(key: string, initialValue: T, legacyLoader?: () => T) {
@@ -94,7 +102,7 @@ export function readDocument<T>(key: string) {
 export function writeDocument(key: string, data: unknown) {
   const db = getDocumentDatabase();
   const now = new Date().toISOString();
-  db.prepare(
+  const upsert = db.prepare(
     `
       INSERT INTO documents (key, value, created_at, updated_at)
       VALUES (@key, @value, @now, @now)
@@ -102,10 +110,14 @@ export function writeDocument(key: string, data: unknown) {
         value = excluded.value,
         updated_at = excluded.updated_at
     `
-  ).run({
-    key,
-    value: JSON.stringify(data),
-    now,
-  });
+  );
+  db.transaction(() => {
+    upsert.run({
+      key,
+      value: JSON.stringify(data),
+      now,
+    });
+    syncStructuredDocument(db, key, data);
+  })();
   chmodDatabaseFiles(getDocumentDatabasePath());
 }

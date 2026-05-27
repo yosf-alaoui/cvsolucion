@@ -2301,6 +2301,14 @@ async function startServer() {
     const user = getUserByEmail(email);
 
     if (!user || !verifyPassword(password, user)) {
+      recordEvent({
+        type: "login_failed",
+        userId: user?.id ?? null,
+        email: email.toLowerCase() || null,
+        locale: null,
+        ip: getRequestIp(req),
+        userAgent: req.get("user-agent") || null,
+      });
       return res.status(401).json({ error: "Invalid login credentials." });
     }
     if (!user.emailVerifiedAt) {

@@ -41,6 +41,7 @@ export type AuthTokenRecord = {
 export type AuthEventType =
   | "signup"
   | "login"
+  | "login_failed"
   | "logout"
   | "magic_link_requested"
   | "password_reset_requested"

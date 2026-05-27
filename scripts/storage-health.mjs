@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import Database from "better-sqlite3";
 import dotenv from "dotenv";
+import { ensureStructuredSchema, structuredTableNames } from "../server/structuredDatabase.ts";
 
 dotenv.config({ quiet: true });
 
@@ -18,7 +19,8 @@ if (!fs.existsSync(databasePath)) {
   process.exit(1);
 }
 
-const db = new Database(databasePath, { readonly: true, fileMustExist: true });
+const db = new Database(databasePath, { fileMustExist: true });
+ensureStructuredSchema(db);
 const rows = db
   .prepare("SELECT key, value, updated_at FROM documents ORDER BY key")
   .all();
@@ -31,6 +33,12 @@ console.log(`SQLite database: ${databasePath}`);
 console.log(`Documents: ${rows.length}`);
 for (const row of rows) {
   console.log(`${row.key} ${Buffer.byteLength(row.value, "utf8")} bytes ${row.updated_at}`);
+}
+
+console.log("Structured tables:");
+for (const tableName of structuredTableNames) {
+  const row = db.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get();
+  console.log(`${tableName} ${row.count} rows`);
 }
 
 db.close();
