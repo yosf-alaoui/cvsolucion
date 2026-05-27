@@ -20,27 +20,19 @@ function chmodSafe(filePath, mode) {
 
 function findJsonFiles(dir) {
   if (!fs.existsSync(dir)) return [];
-  const files = [];
-
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name === "uploads") continue;
-      files.push(...findJsonFiles(fullPath));
-      continue;
-    }
-
-    if (entry.isFile() && entry.name.endsWith(".json")) {
-      files.push(fullPath);
-    }
-  }
-
-  return files.sort();
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    .map((entry) => path.join(dir, entry.name))
+    .sort();
 }
 
 const dataDir = resolvePath(process.env.APP_DATA_DIR, path.join(process.cwd(), "data"));
 const databasePath = resolvePath(process.env.APP_DATABASE_PATH, path.join(dataDir, "cvsolucion.sqlite"));
 const overwrite = ["1", "true", "yes"].includes((process.env.MIGRATE_SQLITE_OVERWRITE || "").trim().toLowerCase());
+const pruneUnscanned = ["1", "true", "yes"].includes(
+  (process.env.MIGRATE_SQLITE_PRUNE_UNSCANNED || "").trim().toLowerCase()
+);
 
 fs.mkdirSync(path.dirname(databasePath), { recursive: true, mode: 0o700 });
 chmodSafe(path.dirname(databasePath), 0o700);
@@ -89,6 +81,21 @@ const migrate = db.transaction((files) => {
 
 const files = findJsonFiles(dataDir);
 const results = migrate(files);
+const scannedKeys = new Set(results.map((item) => item.key));
+let prunedCount = 0;
+
+if (pruneUnscanned) {
+  const rows = db.prepare("SELECT key FROM documents").all();
+  const remove = db.prepare("DELETE FROM documents WHERE key = ?");
+  const prune = db.transaction(() => {
+    for (const row of rows) {
+      if (!scannedKeys.has(row.key)) {
+        prunedCount += remove.run(row.key).changes;
+      }
+    }
+  });
+  prune();
+}
 
 chmodSafe(databasePath, 0o600);
 chmodSafe(`${databasePath}-wal`, 0o600);
@@ -97,6 +104,9 @@ chmodSafe(`${databasePath}-shm`, 0o600);
 console.log(`SQLite database: ${databasePath}`);
 console.log(`JSON files scanned: ${files.length}`);
 console.log(`Documents changed: ${results.filter((item) => item.changed).length}`);
+if (pruneUnscanned) {
+  console.log(`Documents pruned: ${prunedCount}`);
+}
 for (const item of results) {
   console.log(`${item.changed ? "migrated" : "kept"} ${item.key} ${item.bytes} bytes`);
 }
