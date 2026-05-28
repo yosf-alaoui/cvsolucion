@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import {
+  isSqliteStorageEnabled,
+  withDocumentDatabase,
+} from "./documentDatabase";
 import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 
 export type VisitorPageView = {
@@ -85,8 +89,236 @@ function ensureDbFile() {
   ensureJsonFile(DB_PATH, { visitors: [] });
 }
 
+function textOrNull(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function numberOrZero(value: unknown) {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : 0;
+}
+
+function numberOrNull(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const next = Number(value);
+  return Number.isFinite(next) ? next : null;
+}
+
+function normalizeDeviceType(value: unknown): VisitorRecord["deviceType"] {
+  return value === "desktop" ||
+    value === "mobile" ||
+    value === "tablet" ||
+    value === "bot" ||
+    value === "unknown"
+    ? value
+    : "unknown";
+}
+
+function normalizeInteractionType(value: unknown): VisitorInteractionType {
+  return value === "session_end" ||
+    value === "whatsapp_click" ||
+    value === "email_click" ||
+    value === "cta_click" ||
+    value === "chat_open" ||
+    value === "chat_message"
+    ? value
+    : "session_start";
+}
+
+function loadStructuredDb(): VisitorDb | null {
+  if (!isSqliteStorageEnabled()) return null;
+
+  return withDocumentDatabase((sqlite) => {
+    const pageViewsByVisitor = new Map<string, VisitorPageView[]>();
+    const interactionsByVisitor = new Map<string, VisitorInteraction[]>();
+
+    const pageViewRows = sqlite
+      .prepare(
+        `
+          SELECT
+            visitor_id AS visitorId,
+            path,
+            locale,
+            title,
+            referrer,
+            occurred_at AS occurredAt,
+            session_id AS sessionId
+          FROM visitor_page_views
+          ORDER BY visitor_id ASC, sort_index ASC
+        `,
+      )
+      .all() as Array<Record<string, unknown>>;
+
+    for (const row of pageViewRows) {
+      const visitorId = String(row.visitorId || "");
+      const pageViews = pageViewsByVisitor.get(visitorId) ?? [];
+      pageViews.push({
+        path: String(row.path || ""),
+        locale: String(row.locale || "en"),
+        title: textOrNull(row.title),
+        referrer: textOrNull(row.referrer),
+        occurredAt: String(row.occurredAt || nowIso()),
+        sessionId: textOrNull(row.sessionId),
+      });
+      pageViewsByVisitor.set(visitorId, pageViews);
+    }
+
+    const interactionRows = sqlite
+      .prepare(
+        `
+          SELECT
+            visitor_id AS visitorId,
+            type,
+            path,
+            label,
+            href,
+            session_id AS sessionId,
+            duration_ms AS durationMs,
+            page_count AS pageCount,
+            occurred_at AS occurredAt
+          FROM visitor_interactions
+          ORDER BY visitor_id ASC, sort_index ASC
+        `,
+      )
+      .all() as Array<Record<string, unknown>>;
+
+    for (const row of interactionRows) {
+      const visitorId = String(row.visitorId || "");
+      const interactions = interactionsByVisitor.get(visitorId) ?? [];
+      interactions.push({
+        type: normalizeInteractionType(row.type),
+        path: String(row.path || ""),
+        label: textOrNull(row.label),
+        href: textOrNull(row.href),
+        sessionId: textOrNull(row.sessionId),
+        durationMs: numberOrNull(row.durationMs),
+        pageCount: numberOrNull(row.pageCount),
+        occurredAt: String(row.occurredAt || nowIso()),
+      });
+      interactionsByVisitor.set(visitorId, interactions);
+    }
+
+    const visitorRows = sqlite
+      .prepare(
+        `
+            SELECT
+              id,
+              first_seen_at AS firstSeenAt,
+              last_seen_at AS lastSeenAt,
+              visit_count AS visitCount,
+              landing_path AS landingPath,
+              last_path AS lastPath,
+              locale,
+              referrer,
+              ip,
+              user_agent AS userAgent,
+              browser_language AS browserLanguage,
+              timezone,
+              screen,
+              device_type AS deviceType,
+              is_registered AS isRegistered,
+              user_id AS userId,
+              email,
+              utm_source AS utmSource,
+              utm_medium AS utmMedium,
+              utm_campaign AS utmCampaign,
+              utm_term AS utmTerm,
+              utm_content AS utmContent,
+              gclid,
+              fbclid,
+              total_sessions AS totalSessions,
+              total_page_views AS totalPageViews,
+              total_duration_ms AS totalDurationMs,
+              last_session_duration_ms AS lastSessionDurationMs,
+              last_session_page_count AS lastSessionPageCount,
+              whatsapp_clicks AS whatsappClicks,
+              email_clicks AS emailClicks,
+              cta_clicks AS ctaClicks,
+              chat_opens AS chatOpens,
+              chat_messages AS chatMessages,
+              last_whatsapp_click_at AS lastWhatsappClickAt,
+              last_email_click_at AS lastEmailClickAt,
+              last_chat_at AS lastChatAt
+            FROM visitors
+            ORDER BY last_seen_at DESC
+            LIMIT 2000
+          `,
+      )
+      .all() as Array<Record<string, unknown>>;
+
+    if (!visitorRows.length) {
+      const document = sqlite
+        .prepare("SELECT value FROM documents WHERE key = ?")
+        .get("visitors-db.json") as { value: string } | undefined;
+      if (document) {
+        const parsed = JSON.parse(document.value) as Partial<VisitorDb>;
+        if ((parsed.visitors?.length ?? 0) > 0) {
+          return null;
+        }
+      }
+    }
+
+    const visitors = visitorRows.map((visitor): VisitorRecord => {
+      const id = String(visitor.id || "");
+      const userAgent = textOrNull(visitor.userAgent);
+      const deviceType = normalizeDeviceType(visitor.deviceType);
+      return {
+        id,
+        firstSeenAt: String(visitor.firstSeenAt || nowIso()),
+        lastSeenAt: String(
+          visitor.lastSeenAt || visitor.firstSeenAt || nowIso(),
+        ),
+        visitCount: numberOrZero(visitor.visitCount),
+        landingPath: String(visitor.landingPath || ""),
+        lastPath: String(visitor.lastPath || ""),
+        locale: String(visitor.locale || "en"),
+        referrer: textOrNull(visitor.referrer),
+        ip: textOrNull(visitor.ip),
+        userAgent,
+        browserLanguage: textOrNull(visitor.browserLanguage),
+        timezone: textOrNull(visitor.timezone),
+        screen: textOrNull(visitor.screen),
+        deviceType:
+          deviceType === "unknown" && userAgent
+            ? inferDeviceType(userAgent)
+            : deviceType,
+        isRegistered: Boolean(visitor.isRegistered),
+        userId: textOrNull(visitor.userId),
+        email: textOrNull(visitor.email),
+        utmSource: textOrNull(visitor.utmSource),
+        utmMedium: textOrNull(visitor.utmMedium),
+        utmCampaign: textOrNull(visitor.utmCampaign),
+        utmTerm: textOrNull(visitor.utmTerm),
+        utmContent: textOrNull(visitor.utmContent),
+        gclid: textOrNull(visitor.gclid),
+        fbclid: textOrNull(visitor.fbclid),
+        totalSessions: numberOrZero(visitor.totalSessions),
+        totalPageViews: numberOrZero(visitor.totalPageViews),
+        totalDurationMs: numberOrZero(visitor.totalDurationMs),
+        lastSessionDurationMs: numberOrNull(visitor.lastSessionDurationMs),
+        lastSessionPageCount: numberOrNull(visitor.lastSessionPageCount),
+        whatsappClicks: numberOrZero(visitor.whatsappClicks),
+        emailClicks: numberOrZero(visitor.emailClicks),
+        ctaClicks: numberOrZero(visitor.ctaClicks),
+        chatOpens: numberOrZero(visitor.chatOpens),
+        chatMessages: numberOrZero(visitor.chatMessages),
+        lastWhatsappClickAt: textOrNull(visitor.lastWhatsappClickAt),
+        lastEmailClickAt: textOrNull(visitor.lastEmailClickAt),
+        lastChatAt: textOrNull(visitor.lastChatAt),
+        pageViews: pageViewsByVisitor.get(id) ?? [],
+        interactions: interactionsByVisitor.get(id) ?? [],
+      };
+    });
+
+    return { visitors };
+  });
+}
+
 function loadDb(): VisitorDb {
   ensureDbFile();
+  const structured = loadStructuredDb();
+  if (structured) return structured;
+
   const parsed = readJsonFile<Partial<VisitorDb>>(DB_PATH);
   return { visitors: parsed.visitors ?? [] };
 }
@@ -103,10 +335,13 @@ export function createVisitorId() {
   return crypto.randomBytes(18).toString("hex");
 }
 
-function inferDeviceType(userAgent: string | null): VisitorRecord["deviceType"] {
+function inferDeviceType(
+  userAgent: string | null,
+): VisitorRecord["deviceType"] {
   const ua = (userAgent || "").toLowerCase();
   if (!ua) return "unknown";
-  if (/bot|crawl|spider|slurp|facebookexternalhit|whatsapp/.test(ua)) return "bot";
+  if (/bot|crawl|spider|slurp|facebookexternalhit|whatsapp/.test(ua))
+    return "bot";
   if (/ipad|tablet/.test(ua)) return "tablet";
   if (/mobile|android|iphone/.test(ua)) return "mobile";
   return "desktop";
@@ -130,7 +365,9 @@ export function trackVisitor(input: {
 }) {
   const db = loadDb();
   const timestamp = nowIso();
-  const params = new URLSearchParams(String(input.search || "").replace(/^\?/, ""));
+  const params = new URLSearchParams(
+    String(input.search || "").replace(/^\?/, ""),
+  );
   const utmSource = params.get("utm_source");
   const utmMedium = params.get("utm_medium");
   const utmCampaign = params.get("utm_campaign");
@@ -221,7 +458,10 @@ export function trackVisitor(input: {
   visitor.pageViews = visitor.pageViews.slice(-50);
 
   db.visitors = db.visitors
-    .sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime())
+    .sort(
+      (a, b) =>
+        new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime(),
+    )
     .slice(0, 2000);
   saveDb(db);
   return visitor;
@@ -300,16 +540,25 @@ export function getVisitorsSnapshot() {
   const db = loadDb();
   return db.visitors
     .slice()
-    .sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime())
+    .sort(
+      (a, b) =>
+        new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime(),
+    )
     .map((visitor) => ({
       ...visitor,
       pageViews: visitor.pageViews
         .slice()
-        .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+        .sort(
+          (a, b) =>
+            new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
+        )
         .slice(0, 20),
       interactions: visitor.interactions
         .slice()
-        .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+        .sort(
+          (a, b) =>
+            new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
+        )
         .slice(0, 30),
     }));
 }

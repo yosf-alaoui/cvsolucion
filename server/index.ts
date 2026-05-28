@@ -8,7 +8,10 @@ import { fileURLToPath } from "url";
 import type Stripe from "stripe";
 import { getCountry as getTimezoneCountry } from "countries-and-timezones";
 import { COOKIE_NAME, ONE_YEAR_MS, VISITOR_COOKIE_NAME } from "../shared/const";
-import { PASSWORD_POLICY_MESSAGE, validatePasswordPolicy } from "../shared/passwordPolicy";
+import {
+  PASSWORD_POLICY_MESSAGE,
+  validatePasswordPolicy,
+} from "../shared/passwordPolicy";
 import { TRAINING_BLUEPRINT } from "../shared/trainingBlueprint";
 import {
   consumeToken,
@@ -33,8 +36,16 @@ import {
   verifyPassword,
 } from "./authStore";
 import { RecipientEmailRejectedError, sendAuthEmail } from "./authMailer";
-import { normalizeAuthLocale, renderAuthEmailTemplate } from "./authEmailTemplates";
-import { createVisitorId, getVisitorsSnapshot, trackVisitor, trackVisitorInteraction } from "./visitorStore";
+import {
+  normalizeAuthLocale,
+  renderAuthEmailTemplate,
+} from "./authEmailTemplates";
+import {
+  createVisitorId,
+  getVisitorsSnapshot,
+  trackVisitor,
+  trackVisitorInteraction,
+} from "./visitorStore";
 import { getGa4DashboardSnapshot } from "./ga4Reporting";
 import { generateAssistantReply, isChatEnabled } from "./chatAssistant";
 import {
@@ -80,12 +91,25 @@ import {
   unassignDesignerFromBookings,
   type BookingPriority,
 } from "./bookingStore";
-import { getBookingScheduleSettings, isBookingScheduleOpen, updateBookingScheduleSettings } from "./bookingSettingsStore";
+import {
+  getBookingScheduleSettings,
+  isBookingScheduleOpen,
+  updateBookingScheduleSettings,
+} from "./bookingSettingsStore";
 import { listContactLeads, storeContactLead } from "./contactStore";
 import { buildRobotsTxt, buildSitemapXml, renderSeoHtml } from "./seo";
-import { getCustomerProfile, updateCustomerProfile, upsertCustomerProfile } from "./customerProfileStore";
+import {
+  getCustomerProfile,
+  updateCustomerProfile,
+  upsertCustomerProfile,
+} from "./customerProfileStore";
 import { buildInvoiceFilename, renderInvoicePdf } from "./invoicePdf";
-import { getInvoiceById, issueInvoicesForBookings, listInvoicesForUser, type InvoiceRecord } from "./invoiceStore";
+import {
+  getInvoiceById,
+  issueInvoicesForBookings,
+  listInvoicesForUser,
+  type InvoiceRecord,
+} from "./invoiceStore";
 import {
   constructStripeEvent,
   createBookingPaymentIntent,
@@ -98,7 +122,10 @@ import {
   verifyBookingPayment,
   verifyTrainingPayment,
 } from "./stripeBooking";
-import { hasProcessedStripeEvent, markStripeEventProcessed } from "./stripeEventStore";
+import {
+  hasProcessedStripeEvent,
+  markStripeEventProcessed,
+} from "./stripeEventStore";
 import {
   createCatalogPackage,
   createCatalogTrainingProgram,
@@ -155,6 +182,7 @@ const VERIFY_LINK_MS = 1000 * 60 * 60 * 24;
 const RESET_LINK_MS = 1000 * 60 * 30;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_MAX_BUCKETS = 10000;
 const QUEBEC_TIMEZONE = "America/Toronto";
 
 function parseCookies(cookieHeader?: string) {
@@ -167,13 +195,18 @@ function parseCookies(cookieHeader?: string) {
     entries.map((entry) => {
       const separatorIndex = entry.indexOf("=");
       if (separatorIndex === -1) return [entry, ""];
-      return [entry.slice(0, separatorIndex), decodeURIComponent(entry.slice(separatorIndex + 1))];
-    })
+      return [
+        entry.slice(0, separatorIndex),
+        decodeURIComponent(entry.slice(separatorIndex + 1)),
+      ];
+    }),
   ) as Record<string, string>;
 }
 
 function appOrigin(req: express.Request) {
-  return (process.env.APP_ORIGIN || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+  return (
+    process.env.APP_ORIGIN || `${req.protocol}://${req.get("host")}`
+  ).replace(/\/+$/, "");
 }
 
 function canonicalOrigin(req: express.Request) {
@@ -190,7 +223,9 @@ function canonicalOrigin(req: express.Request) {
   }
 
   const host = String(req.get("host") || "").trim();
-  const forwardedProto = String(req.get("x-forwarded-proto") || req.protocol || "https")
+  const forwardedProto = String(
+    req.get("x-forwarded-proto") || req.protocol || "https",
+  )
     .split(",")[0]
     .trim();
 
@@ -226,7 +261,8 @@ function getCookieDomain(req: express.Request) {
 
 function localePrefix(locale?: string | null) {
   const resolvedLocale = normalizeAuthLocale(locale);
-  if (resolvedLocale === "fr" || resolvedLocale === "ar") return `/${resolvedLocale}`;
+  if (resolvedLocale === "fr" || resolvedLocale === "ar")
+    return `/${resolvedLocale}`;
   return "";
 }
 
@@ -249,7 +285,10 @@ function parseRequestedBookingSlots(value: unknown) {
         hour: Number(slot?.hour),
       };
     })
-    .filter((slot) => /^\d{4}-\d{2}-\d{2}$/.test(slot.date) && Number.isInteger(slot.hour));
+    .filter(
+      (slot) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(slot.date) && Number.isInteger(slot.hour),
+    );
 
   const unique = new Map<string, { date: string; hour: number }>();
   for (const slot of normalized) {
@@ -263,18 +302,32 @@ function parseTrainingLevel(value: unknown): TrainingPriceKey | null {
   return level ? level : null;
 }
 
-function parseTrainingEnrollmentStatus(value: unknown): TrainingEnrollmentStatus | undefined {
-  return value === "pending" || value === "active" || value === "completed" || value === "paused" || value === "cancelled"
+function parseTrainingEnrollmentStatus(
+  value: unknown,
+): TrainingEnrollmentStatus | undefined {
+  return value === "pending" ||
+    value === "active" ||
+    value === "completed" ||
+    value === "paused" ||
+    value === "cancelled"
     ? value
     : undefined;
 }
 
-function parseTrainingSessionStatus(value: unknown): TrainingSessionProgressStatus | undefined {
-  return value === "pending" || value === "completed" || value === "repeat_required" ? value : undefined;
+function parseTrainingSessionStatus(
+  value: unknown,
+): TrainingSessionProgressStatus | undefined {
+  return value === "pending" ||
+    value === "completed" ||
+    value === "repeat_required"
+    ? value
+    : undefined;
 }
 
 function normalizeCountryCode(value: unknown) {
-  const countryCode = String(value || "").trim().toUpperCase();
+  const countryCode = String(value || "")
+    .trim()
+    .toUpperCase();
   return /^[A-Z]{2}$/.test(countryCode) ? countryCode : null;
 }
 
@@ -297,11 +350,17 @@ function getRequestCountryCode(req: express.Request) {
 
 function getProfileCountryCode(userId: string) {
   const profile = getCustomerProfile(userId);
-  return normalizeCountryCode(profile?.countryCode) || normalizeCountryCode(profile?.country) || null;
+  return (
+    normalizeCountryCode(profile?.countryCode) ||
+    normalizeCountryCode(profile?.country) ||
+    null
+  );
 }
 
 function getPricingCountryCode(req: express.Request) {
-  const explicit = normalizeCountryCode(req.query?.countryCode ?? req.body?.countryCode);
+  const explicit = normalizeCountryCode(
+    req.query?.countryCode ?? req.body?.countryCode,
+  );
   if (explicit) return explicit;
 
   const auth = getCurrentUser(req);
@@ -352,20 +411,22 @@ function fallbackDisplayNameFromEmail(email: string) {
 
 function serializeDesignerTaskForApi(
   task: ReturnType<typeof listDesignerTasks>[number],
-  bookingMap: Map<string, ReturnType<typeof serializeCustomerBooking>>
+  bookingMap: Map<string, ReturnType<typeof serializeCustomerBooking>>,
 ) {
   return {
     ...task,
-    booking: task.bookingId ? bookingMap.get(task.bookingId) ?? null : null,
+    booking: task.bookingId ? (bookingMap.get(task.bookingId) ?? null) : null,
   };
 }
 
-function localizeTrainingProgram(programKey: string, locale: "en" | "fr" | "ar") {
+function localizeTrainingProgram(
+  programKey: string,
+  locale: "en" | "fr" | "ar",
+) {
   const program = getCatalogTrainingProgram(programKey);
-  const translated =
-    program?.translations?.[locale]?.title
-      ? program.translations[locale]
-      : program?.translations?.en || null;
+  const translated = program?.translations?.[locale]?.title
+    ? program.translations[locale]
+    : program?.translations?.en || null;
 
   return {
     id: program?.id || null,
@@ -381,16 +442,16 @@ function serializeTrainingEnrollmentForApi(
   enrollmentId: string,
   locale: "en" | "fr" | "ar",
   usersById?: Map<string, ReturnType<typeof serializePublicUser>>,
-  trainerNamesById?: Map<string, string>
+  trainerNamesById?: Map<string, string>,
 ) {
   const view = buildTrainingEnrollmentView(enrollmentId);
   if (!view) return null;
 
   const trainer =
-    view.trainerUserId && usersById
-      ? usersById.get(view.trainerUserId)
-      : null;
-  const trainerProfile = view.trainerUserId ? getTrainerProfile(view.trainerUserId) : null;
+    view.trainerUserId && usersById ? usersById.get(view.trainerUserId) : null;
+  const trainerProfile = view.trainerUserId
+    ? getTrainerProfile(view.trainerUserId)
+    : null;
 
   return {
     ...view,
@@ -443,16 +504,26 @@ function normalizeStripeRefundStatus(status: string | null | undefined) {
   return "pending" as const;
 }
 
-function formatMoney(amount: number, currency: string | null | undefined, locale: "en" | "fr" | "ar") {
-  const normalizedLocale = locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA";
+function formatMoney(
+  amount: number,
+  currency: string | null | undefined,
+  locale: "en" | "fr" | "ar",
+) {
+  const normalizedLocale =
+    locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA";
   return new Intl.NumberFormat(normalizedLocale, {
     style: "currency",
     currency: (currency || "usd").toUpperCase(),
   }).format(amount / 100);
 }
 
-function formatBookingSlotForEmail(date: string, hour: number, locale: "en" | "fr" | "ar") {
-  const normalizedLocale = locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA";
+function formatBookingSlotForEmail(
+  date: string,
+  hour: number,
+  locale: "en" | "fr" | "ar",
+) {
+  const normalizedLocale =
+    locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA";
   const dt = new Date(`${date}T${String(hour).padStart(2, "0")}:00:00`);
   return new Intl.DateTimeFormat(normalizedLocale, {
     dateStyle: "full",
@@ -557,7 +628,11 @@ function renderRefundEmailTemplate(args: {
   };
 }
 
-function setSessionCookie(req: express.Request, res: express.Response, sessionId: string) {
+function setSessionCookie(
+  req: express.Request,
+  res: express.Response,
+  sessionId: string,
+) {
   const domain = getCookieDomain(req);
   res.cookie(COOKIE_NAME, sessionId, {
     httpOnly: true,
@@ -580,7 +655,11 @@ function clearSessionCookie(req: express.Request, res: express.Response) {
   });
 }
 
-function setVisitorCookie(req: express.Request, res: express.Response, visitorId: string) {
+function setVisitorCookie(
+  req: express.Request,
+  res: express.Response,
+  visitorId: string,
+) {
   const domain = getCookieDomain(req);
   res.cookie(VISITOR_COOKIE_NAME, visitorId, {
     httpOnly: true,
@@ -613,21 +692,32 @@ function getCurrentUser(req: express.Request) {
 function createCsrfToken(auth: NonNullable<ReturnType<typeof getCurrentUser>>) {
   return crypto
     .createHash("sha256")
-    .update(`${auth.session.id}:${auth.user.passwordHash}:${auth.user.updatedAt}`)
+    .update(
+      `${auth.session.id}:${auth.user.passwordHash}:${auth.user.updatedAt}`,
+    )
     .digest("hex");
 }
 
 function timingSafeStringEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
-  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+  return (
+    leftBuffer.length === rightBuffer.length &&
+    crypto.timingSafeEqual(leftBuffer, rightBuffer)
+  );
 }
 
 function requiresCsrf(req: express.Request) {
   const method = req.method.toUpperCase();
-  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return false;
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS")
+    return false;
 
-  const protectedPrefixes = ["/api/admin", "/api/customer", "/api/designer", "/api/trainer"];
+  const protectedPrefixes = [
+    "/api/admin",
+    "/api/customer",
+    "/api/designer",
+    "/api/trainer",
+  ];
   const protectedExactPaths = [
     "/api/auth/logout",
     "/api/bookings",
@@ -638,7 +728,9 @@ function requiresCsrf(req: express.Request) {
 
   return (
     protectedExactPaths.includes(req.path) ||
-    protectedPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`)) ||
+    protectedPrefixes.some(
+      (prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`),
+    ) ||
     /^\/api\/bookings\/[^/]+\/reschedule$/.test(req.path)
   );
 }
@@ -664,21 +756,62 @@ function requireAuthenticatedUser(req: express.Request, res: express.Response) {
   return auth;
 }
 
-function rateLimit(options: { key: string; windowMs: number; limit: number }) {
-  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+function pruneRateLimitStore(now = Date.now()) {
+  if (rateLimitStore.size < RATE_LIMIT_MAX_BUCKETS) return;
+  rateLimitStore.forEach((value, key) => {
+    if (value.resetAt <= now) {
+      rateLimitStore.delete(key);
+    }
+  });
+}
+
+function hashRateLimitScope(value: string) {
+  return crypto.createHash("sha256").update(value).digest("hex").slice(0, 24);
+}
+
+function requestBodyFieldScope(field: string) {
+  return (req: express.Request) => {
+    const value = String(req.body?.[field] || "")
+      .trim()
+      .toLowerCase();
+    return value ? hashRateLimitScope(value) : null;
+  };
+}
+
+function rateLimit(options: {
+  key: string;
+  windowMs: number;
+  limit: number;
+  scope?: (req: express.Request) => string | null;
+}) {
+  return (
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => {
     const ip = getRequestIp(req) || "unknown";
-    const bucketKey = `${options.key}:${ip}`;
+    const scope = options.scope?.(req);
+    const bucketKey = `${options.key}:${scope || ip}`;
     const now = Date.now();
+    pruneRateLimitStore(now);
     const current = rateLimitStore.get(bucketKey);
 
     if (!current || current.resetAt <= now) {
-      rateLimitStore.set(bucketKey, { count: 1, resetAt: now + options.windowMs });
+      rateLimitStore.set(bucketKey, {
+        count: 1,
+        resetAt: now + options.windowMs,
+      });
       return next();
     }
 
     if (current.count >= options.limit) {
-      res.setHeader("Retry-After", String(Math.ceil((current.resetAt - now) / 1000)));
-      return res.status(429).json({ error: "Too many requests. Please try again shortly." });
+      res.setHeader(
+        "Retry-After",
+        String(Math.ceil((current.resetAt - now) / 1000)),
+      );
+      return res
+        .status(429)
+        .json({ error: "Too many requests. Please try again shortly." });
     }
 
     current.count += 1;
@@ -700,7 +833,11 @@ function requireAdmin(req: express.Request, res: express.Response) {
   return auth;
 }
 
-function requireUserRole(req: express.Request, res: express.Response, allowed: AuthUserRole[]) {
+function requireUserRole(
+  req: express.Request,
+  res: express.Response,
+  allowed: AuthUserRole[],
+) {
   const auth = requireAuthenticatedUser(req, res);
   if (!auth) return null;
 
@@ -713,7 +850,10 @@ function requireUserRole(req: express.Request, res: express.Response, allowed: A
   return { ...auth, role };
 }
 
-function getOrCreateRequestVisitor(req: express.Request, res: express.Response) {
+function getOrCreateRequestVisitor(
+  req: express.Request,
+  res: express.Response,
+) {
   const cookies = parseCookies(req.headers.cookie);
   const existingVisitorId = cookies[VISITOR_COOKIE_NAME];
   const visitorId = existingVisitorId || createVisitorId();
@@ -760,7 +900,7 @@ async function sendLinkEmail(args: {
 
 function authEmailDeliveryMessage(
   locale: string,
-  kind: "recipient_rejected" | "delivery_failed"
+  kind: "recipient_rejected" | "delivery_failed",
 ) {
   if (locale === "ar") {
     return kind === "recipient_rejected"
@@ -786,77 +926,97 @@ async function startServer() {
   app.set("trust proxy", true);
   app.disable("x-powered-by");
 
-  app.post("/api/webhook", express.raw({ type: "application/json" }), async (req, res) => {
-    const signature = String(req.get("stripe-signature") || "").trim();
-    if (!signature) {
-      return res.status(400).send("Missing Stripe signature.");
-    }
-
-    try {
-      const event = constructStripeEvent(req.body as Buffer, signature);
-      if (hasProcessedStripeEvent(event.id)) {
-        return res.json({ received: true, duplicate: true });
+  app.post(
+    "/api/webhook",
+    express.raw({ type: "application/json" }),
+    async (req, res) => {
+      const signature = String(req.get("stripe-signature") || "").trim();
+      if (!signature) {
+        return res.status(400).send("Missing Stripe signature.");
       }
 
-      if (event.type === "payment_intent.succeeded") {
-        console.log("[stripe:webhook] payment_intent.succeeded", event.data.object?.id || null);
-      }
+      try {
+        const event = constructStripeEvent(req.body as Buffer, signature);
+        if (hasProcessedStripeEvent(event.id)) {
+          return res.json({ received: true, duplicate: true });
+        }
 
-      if (event.type === "refund.created" || event.type === "refund.updated") {
-        const refund = event.data.object as Stripe.Refund;
-        const paymentReference =
-          typeof refund.payment_intent === "string"
-            ? refund.payment_intent
-            : refund.payment_intent?.id || null;
+        if (event.type === "payment_intent.succeeded") {
+          console.log(
+            "[stripe:webhook] payment_intent.succeeded",
+            event.data.object?.id || null,
+          );
+        }
 
-        if (paymentReference) {
-          const refundStatus = normalizeStripeRefundStatus(refund.status);
-          const syncResult = applyStripeRefundUpdate({
-            paymentReference,
-            refundId: refund.id,
-            refundAmount: refund.amount || 0,
-            currency: refund.currency || null,
-            refundStatus,
-            bookingIds: String(refund.metadata?.bookingIds || "")
-              .split(",")
-              .map((item) => item.trim())
-              .filter(Boolean),
-          });
+        if (
+          event.type === "refund.created" ||
+          event.type === "refund.updated"
+        ) {
+          const refund = event.data.object as Stripe.Refund;
+          const paymentReference =
+            typeof refund.payment_intent === "string"
+              ? refund.payment_intent
+              : refund.payment_intent?.id || null;
 
-          if (syncResult) {
-            console.log("[stripe:webhook] refund.sync", {
-              eventId: event.id,
-              refundId: refund.id,
+          if (paymentReference) {
+            const refundStatus = normalizeStripeRefundStatus(refund.status);
+            const syncResult = applyStripeRefundUpdate({
               paymentReference,
+              refundId: refund.id,
+              refundAmount: refund.amount || 0,
+              currency: refund.currency || null,
               refundStatus,
-              scope: syncResult.scope,
-              matchedBookings: syncResult.groupBookings.length,
-              affectedBookings: syncResult.affectedBookings.length,
+              bookingIds: String(refund.metadata?.bookingIds || "")
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean),
             });
 
-            if (
-              syncResult.customer?.email &&
-              (refundStatus === "succeeded" || refundStatus === "failed" || refundStatus === "canceled")
-            ) {
-              const locale = syncResult.customer.locale;
-              const amountLabel = formatMoney(syncResult.refundAmount, syncResult.currency, locale);
-              const slots = (syncResult.affectedBookings.length ? syncResult.affectedBookings : syncResult.groupBookings)
-                .map((booking) => formatBookingSlotForEmail(booking.date, booking.hour, locale));
-              const template = renderRefundEmailTemplate({
-                locale,
-                name: syncResult.customer.name || syncResult.customer.email,
-                slots,
-                amountLabel,
-                status: refundStatus,
+            if (syncResult) {
+              console.log("[stripe:webhook] refund.sync", {
+                eventId: event.id,
+                refundId: refund.id,
+                paymentReference,
+                refundStatus,
                 scope: syncResult.scope,
+                matchedBookings: syncResult.groupBookings.length,
+                affectedBookings: syncResult.affectedBookings.length,
               });
 
-              try {
-                await sendAuthEmail({
-                  to: syncResult.customer.email,
-                  subject: template.subject,
-                  text: template.text,
-                  html: `
+              if (
+                syncResult.customer?.email &&
+                (refundStatus === "succeeded" ||
+                  refundStatus === "failed" ||
+                  refundStatus === "canceled")
+              ) {
+                const locale = syncResult.customer.locale;
+                const amountLabel = formatMoney(
+                  syncResult.refundAmount,
+                  syncResult.currency,
+                  locale,
+                );
+                const slots = (
+                  syncResult.affectedBookings.length
+                    ? syncResult.affectedBookings
+                    : syncResult.groupBookings
+                ).map((booking) =>
+                  formatBookingSlotForEmail(booking.date, booking.hour, locale),
+                );
+                const template = renderRefundEmailTemplate({
+                  locale,
+                  name: syncResult.customer.name || syncResult.customer.email,
+                  slots,
+                  amountLabel,
+                  status: refundStatus,
+                  scope: syncResult.scope,
+                });
+
+                try {
+                  await sendAuthEmail({
+                    to: syncResult.customer.email,
+                    subject: template.subject,
+                    text: template.text,
+                    html: `
                     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
                       ${template.text
                         .split("\n")
@@ -865,31 +1025,39 @@ async function startServer() {
                         .join("")}
                     </div>
                   `,
-                });
-              } catch (mailError) {
-                console.error("[stripe:webhook:refund-email:error]", {
-                  eventId: event.id,
-                  refundId: refund.id,
-                  error: mailError instanceof Error ? mailError.stack || mailError.message : String(mailError),
-                });
+                  });
+                } catch (mailError) {
+                  console.error("[stripe:webhook:refund-email:error]", {
+                    eventId: event.id,
+                    refundId: refund.id,
+                    error:
+                      mailError instanceof Error
+                        ? mailError.stack || mailError.message
+                        : String(mailError),
+                  });
+                }
               }
             }
           }
         }
-      }
 
-      markStripeEventProcessed(event.id, event.type);
-      return res.json({ received: true });
-    } catch (error: any) {
-      return res.status(400).send(error?.message || "Webhook verification failed.");
-    }
-  });
+        markStripeEventProcessed(event.id, event.type);
+        return res.json({ received: true });
+      } catch (error: any) {
+        return res
+          .status(400)
+          .send(error?.message || "Webhook verification failed.");
+      }
+    },
+  );
 
   app.use(express.json({ limit: "15mb" }));
 
   app.use((_req, res, next) => {
     const host = String(_req.get("host") || "").trim();
-    const forwardedProto = String(_req.get("x-forwarded-proto") || _req.protocol || "https")
+    const forwardedProto = String(
+      _req.get("x-forwarded-proto") || _req.protocol || "https",
+    )
       .split(",")[0]
       .trim();
     const origin = host ? `${forwardedProto}://${host}` : "";
@@ -911,9 +1079,15 @@ async function startServer() {
 
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-XSS-Protection", "1; mode=block");
-    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+    res.setHeader(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains; preload",
+    );
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-    res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(self)");
+    res.setHeader(
+      "Permissions-Policy",
+      "geolocation=(), microphone=(), camera=(), payment=(self)",
+    );
     res.setHeader("Cache-Control", "no-transform");
     res.setHeader("Content-Security-Policy", contentSecurityPolicy);
     next();
@@ -951,21 +1125,27 @@ async function startServer() {
     const hostHeader = String(req.get("host") || "").trim();
     if (!hostHeader) return next();
 
-    const forwardedProto = String(req.get("x-forwarded-proto") || req.protocol || "https")
+    const forwardedProto = String(
+      req.get("x-forwarded-proto") || req.protocol || "https",
+    )
       .split(",")[0]
       .trim();
 
     let requestUrl: URL;
     let canonicalUrl: URL;
     try {
-      requestUrl = new URL(`${forwardedProto}://${hostHeader}${req.originalUrl}`);
+      requestUrl = new URL(
+        `${forwardedProto}://${hostHeader}${req.originalUrl}`,
+      );
       canonicalUrl = new URL(canonicalOrigin(req));
     } catch {
       return next();
     }
 
     const requestHost = requestUrl.hostname.toLowerCase();
-    const targetHost = canonicalUrl.hostname.replace(/^www\./i, "").toLowerCase();
+    const targetHost = canonicalUrl.hostname
+      .replace(/^www\./i, "")
+      .toLowerCase();
     const targetProtocol = canonicalUrl.protocol;
     const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(requestHost);
 
@@ -977,7 +1157,11 @@ async function startServer() {
       return res.redirect(301, requestUrl.toString());
     }
 
-    if (requestHost === targetHost && targetProtocol === "https:" && requestUrl.protocol !== "https:") {
+    if (
+      requestHost === targetHost &&
+      targetProtocol === "https:" &&
+      requestUrl.protocol !== "https:"
+    ) {
       requestUrl.protocol = "https:";
       return res.redirect(301, requestUrl.toString());
     }
@@ -994,8 +1178,15 @@ async function startServer() {
     const expectedToken = createCsrfToken(auth);
     const providedToken = String(req.get("x-csrf-token") || "").trim();
 
-    if (!providedToken || !timingSafeStringEqual(providedToken, expectedToken)) {
-      return res.status(403).json({ error: "Security token expired. Refresh the page and try again." });
+    if (
+      !providedToken ||
+      !timingSafeStringEqual(providedToken, expectedToken)
+    ) {
+      return res
+        .status(403)
+        .json({
+          error: "Security token expired. Refresh the page and try again.",
+        });
     }
 
     return next();
@@ -1018,70 +1209,96 @@ async function startServer() {
     });
   });
 
-  app.get("/api/geo/country", rateLimit({ key: "geo-country", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
-    const auth = getCurrentUser(req);
-    const profileCountryCode = auth ? getProfileCountryCode(auth.user.id) : null;
-    const requestCountryCode = getRequestCountryCode(req);
-    return res.json({
-      countryCode: profileCountryCode || requestCountryCode || null,
-      source: profileCountryCode ? "profile" : requestCountryCode ? "request" : "unknown",
-    });
-  });
-
-  app.get("/api/customer/dashboard", rateLimit({ key: "customer-dashboard", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
-    const auth = getCurrentUser(req);
-    if (!auth) {
-      return res.status(401).json({ error: "Authentication required." });
-    }
-
-    const profile =
-      getCustomerProfile(auth.user.id) ??
-      upsertCustomerProfile({
-        userId: auth.user.id,
-        email: auth.user.email,
+  app.get(
+    "/api/geo/country",
+    rateLimit({ key: "geo-country", windowMs: 1000 * 60, limit: 120 }),
+    (req, res) => {
+      const auth = getCurrentUser(req);
+      const profileCountryCode = auth
+        ? getProfileCountryCode(auth.user.id)
+        : null;
+      const requestCountryCode = getRequestCountryCode(req);
+      return res.json({
+        countryCode: profileCountryCode || requestCountryCode || null,
+        source: profileCountryCode
+          ? "profile"
+          : requestCountryCode
+            ? "request"
+            : "unknown",
       });
+    },
+  );
 
-    const userBookings = listBookingsForUser(auth.user.id, auth.user.email);
-    issueInvoicesForBookings(userBookings);
-    const bookings = userBookings.map(serializeCustomerBooking);
-    const invoices = listInvoicesForUser(auth.user.id, auth.user.email).map(serializeCustomerInvoice);
+  app.get(
+    "/api/customer/dashboard",
+    rateLimit({ key: "customer-dashboard", windowMs: 1000 * 60, limit: 120 }),
+    (req, res) => {
+      const auth = getCurrentUser(req);
+      if (!auth) {
+        return res.status(401).json({ error: "Authentication required." });
+      }
 
-    return res.json({
-      user: serializePublicUser(auth.user),
-      profile,
-      bookings,
-      invoices,
-    });
-  });
+      const profile =
+        getCustomerProfile(auth.user.id) ??
+        upsertCustomerProfile({
+          userId: auth.user.id,
+          email: auth.user.email,
+        });
 
-  app.get("/api/customer/training", rateLimit({ key: "customer-training", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
-    const auth = getCurrentUser(req);
-    if (!auth) {
-      return res.status(401).json({ error: "Authentication required." });
-    }
+      const userBookings = listBookingsForUser(auth.user.id, auth.user.email);
+      issueInvoicesForBookings(userBookings);
+      const bookings = userBookings.map(serializeCustomerBooking);
+      const invoices = listInvoicesForUser(auth.user.id, auth.user.email).map(
+        serializeCustomerInvoice,
+      );
 
-    const locale = normalizeAuthLocale(String(req.query.locale || "en"));
-    const enrollments = listTrainingEnrollmentsForUser(auth.user.id)
-      .map((enrollment) => serializeTrainingEnrollmentForApi(enrollment.id, locale))
-      .filter(Boolean);
+      return res.json({
+        user: serializePublicUser(auth.user),
+        profile,
+        bookings,
+        invoices,
+      });
+    },
+  );
 
-    return res.json({
-      blueprint: {
-        key: TRAINING_BLUEPRINT.key,
-        title: TRAINING_BLUEPRINT.title,
-        totalHours: TRAINING_BLUEPRINT.totalHours,
-        totalSessions: TRAINING_BLUEPRINT.totalSessions,
-        passThreshold: TRAINING_BLUEPRINT.passThreshold,
-        levels: TRAINING_BLUEPRINT.levels,
-        rubric: TRAINING_BLUEPRINT.rubric,
-      },
-      enrollments,
-    });
-  });
+  app.get(
+    "/api/customer/training",
+    rateLimit({ key: "customer-training", windowMs: 1000 * 60, limit: 120 }),
+    (req, res) => {
+      const auth = getCurrentUser(req);
+      if (!auth) {
+        return res.status(401).json({ error: "Authentication required." });
+      }
+
+      const locale = normalizeAuthLocale(String(req.query.locale || "en"));
+      const enrollments = listTrainingEnrollmentsForUser(auth.user.id)
+        .map((enrollment) =>
+          serializeTrainingEnrollmentForApi(enrollment.id, locale),
+        )
+        .filter(Boolean);
+
+      return res.json({
+        blueprint: {
+          key: TRAINING_BLUEPRINT.key,
+          title: TRAINING_BLUEPRINT.title,
+          totalHours: TRAINING_BLUEPRINT.totalHours,
+          totalSessions: TRAINING_BLUEPRINT.totalSessions,
+          passThreshold: TRAINING_BLUEPRINT.passThreshold,
+          levels: TRAINING_BLUEPRINT.levels,
+          rubric: TRAINING_BLUEPRINT.rubric,
+        },
+        enrollments,
+      });
+    },
+  );
 
   app.get(
     "/api/customer/invoices/:invoiceId/download",
-    rateLimit({ key: "customer-invoice-download", windowMs: 1000 * 60, limit: 120 }),
+    rateLimit({
+      key: "customer-invoice-download",
+      windowMs: 1000 * 60,
+      limit: 120,
+    }),
     async (req, res, next) => {
       try {
         const auth = getCurrentUser(req);
@@ -1096,131 +1313,186 @@ async function startServer() {
           return res.status(404).json({ error: "Invoice not found." });
         }
 
-        if (invoice.userId !== auth.user.id && invoice.email !== auth.user.email) {
-          return res.status(403).json({ error: "You do not have access to this invoice." });
+        if (
+          invoice.userId !== auth.user.id &&
+          invoice.email !== auth.user.email
+        ) {
+          return res
+            .status(403)
+            .json({ error: "You do not have access to this invoice." });
         }
 
         const pdf = await renderInvoicePdf(invoice);
         res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `attachment; filename="${buildInvoiceFilename(invoice)}"`);
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${buildInvoiceFilename(invoice)}"`,
+        );
         return res.send(pdf);
       } catch (error) {
         return next(error);
       }
-    }
+    },
   );
 
-  app.patch("/api/customer/profile", rateLimit({ key: "customer-profile", windowMs: 1000 * 60 * 10, limit: 40 }), (req, res) => {
-    const auth = getCurrentUser(req);
-    if (!auth) {
-      return res.status(401).json({ error: "Authentication required." });
-    }
+  app.patch(
+    "/api/customer/profile",
+    rateLimit({ key: "customer-profile", windowMs: 1000 * 60 * 10, limit: 40 }),
+    (req, res) => {
+      const auth = getCurrentUser(req);
+      if (!auth) {
+        return res.status(401).json({ error: "Authentication required." });
+      }
 
-    const name = String(req.body?.name || "").trim();
-    const countryCode = normalizeCountryCode(req.body?.countryCode);
-    const countryRecord = countryCode ? getTimezoneCountry(countryCode) : null;
-    const country = countryRecord?.name || String(req.body?.country || "").trim();
-    const phone = String(req.body?.phone || "").trim();
-    const company = String(req.body?.company || "").trim();
+      const name = String(req.body?.name || "").trim();
+      const countryCode = normalizeCountryCode(req.body?.countryCode);
+      const countryRecord = countryCode
+        ? getTimezoneCountry(countryCode)
+        : null;
+      const country =
+        countryRecord?.name || String(req.body?.country || "").trim();
+      const phone = String(req.body?.phone || "").trim();
+      const company = String(req.body?.company || "").trim();
 
-    if (name.length < 2) {
-      return res.status(400).json({ error: "Name is required." });
-    }
-    if (!countryCode || !countryRecord) {
-      return res.status(400).json({ error: "Select a valid country from the list." });
-    }
-    if (phone.length < 6) {
-      return res.status(400).json({ error: "A valid phone number is required." });
-    }
+      if (name.length < 2) {
+        return res.status(400).json({ error: "Name is required." });
+      }
+      if (!countryCode || !countryRecord) {
+        return res
+          .status(400)
+          .json({ error: "Select a valid country from the list." });
+      }
+      if (phone.length < 6) {
+        return res
+          .status(400)
+          .json({ error: "A valid phone number is required." });
+      }
 
-    const profile = updateCustomerProfile({
-      userId: auth.user.id,
-      email: auth.user.email,
-      name,
-      country,
-      countryCode,
-      phone,
-      company,
-    });
-
-    return res.json({ ok: true, profile });
-  });
-
-  app.get("/api/designer/dashboard", rateLimit({ key: "designer-dashboard", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
-    const auth = requireUserRole(req, res, ["designer"]);
-    if (!auth) return;
-
-    const profile =
-      getDesignerProfile(auth.user.id) ??
-      upsertDesignerProfile({
+      const profile = updateCustomerProfile({
         userId: auth.user.id,
         email: auth.user.email,
-        displayName: fallbackDisplayNameFromEmail(auth.user.email),
+        name,
+        country,
+        countryCode,
+        phone,
+        company,
       });
 
-    const assignedBookings = listBookingsForDesigner(auth.user.id).map(serializeCustomerBooking);
-    const bookingMap = new Map(assignedBookings.map((booking) => [booking.id, booking]));
-    const tasks = listDesignerTasks(auth.user.id).map((task) => serializeDesignerTaskForApi(task, bookingMap));
+      return res.json({ ok: true, profile });
+    },
+  );
 
-    return res.json({
-      user: serializePublicUser(auth.user),
-      profile,
-      bookings: assignedBookings,
-      tasks,
-    });
-  });
+  app.get(
+    "/api/designer/dashboard",
+    rateLimit({ key: "designer-dashboard", windowMs: 1000 * 60, limit: 120 }),
+    (req, res) => {
+      const auth = requireUserRole(req, res, ["designer"]);
+      if (!auth) return;
 
-  app.get("/api/trainer/dashboard", rateLimit({ key: "trainer-dashboard", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
-    const auth = requireUserRole(req, res, ["trainer"]);
-    if (!auth) return;
+      const profile =
+        getDesignerProfile(auth.user.id) ??
+        upsertDesignerProfile({
+          userId: auth.user.id,
+          email: auth.user.email,
+          displayName: fallbackDisplayNameFromEmail(auth.user.email),
+        });
 
-    const locale = normalizeAuthLocale(String(req.query.locale || "en"));
-    const profile =
-      getTrainerProfile(auth.user.id) ??
-      upsertTrainerProfile({
-        userId: auth.user.id,
-        email: auth.user.email,
-        displayName: fallbackDisplayNameFromEmail(auth.user.email),
+      const assignedBookings = listBookingsForDesigner(auth.user.id).map(
+        serializeCustomerBooking,
+      );
+      const bookingMap = new Map(
+        assignedBookings.map((booking) => [booking.id, booking]),
+      );
+      const tasks = listDesignerTasks(auth.user.id).map((task) =>
+        serializeDesignerTaskForApi(task, bookingMap),
+      );
+
+      return res.json({
+        user: serializePublicUser(auth.user),
+        profile,
+        bookings: assignedBookings,
+        tasks,
       });
+    },
+  );
 
-    const adminSnapshot = getAdminSnapshot();
-    const usersById = new Map(
-      adminSnapshot.users.map((user) => [
-        user.id,
-        {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          emailVerifiedAt: user.emailVerifiedAt,
+  app.get(
+    "/api/trainer/dashboard",
+    rateLimit({ key: "trainer-dashboard", windowMs: 1000 * 60, limit: 120 }),
+    (req, res) => {
+      const auth = requireUserRole(req, res, ["trainer"]);
+      if (!auth) return;
+
+      const locale = normalizeAuthLocale(String(req.query.locale || "en"));
+      const profile =
+        getTrainerProfile(auth.user.id) ??
+        upsertTrainerProfile({
+          userId: auth.user.id,
+          email: auth.user.email,
+          displayName: fallbackDisplayNameFromEmail(auth.user.email),
+        });
+
+      const adminSnapshot = getAdminSnapshot();
+      const usersById = new Map(
+        adminSnapshot.users.map((user) => [
+          user.id,
+          {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            emailVerifiedAt: user.emailVerifiedAt,
+          },
+        ]),
+      );
+      const trainerNamesById = new Map(
+        listTrainerProfiles().map((trainer) => [
+          trainer.userId,
+          trainer.displayName || fallbackDisplayNameFromEmail(trainer.email),
+        ]),
+      );
+
+      const enrollments = listTrainingEnrollmentsForTrainer(auth.user.id)
+        .map((enrollment) =>
+          serializeTrainingEnrollmentForApi(
+            enrollment.id,
+            locale,
+            usersById,
+            trainerNamesById,
+          ),
+        )
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+      return res.json({
+        user: serializePublicUser(auth.user),
+        profile,
+        enrollments,
+        stats: {
+          activeEnrollments: enrollments.filter(
+            (item) => item.status === "active",
+          ).length,
+          completedEnrollments: enrollments.filter(
+            (item) => item.status === "completed",
+          ).length,
+          pendingReviewSessions: enrollments.reduce(
+            (total, enrollment) =>
+              total +
+              enrollment.sessions.filter(
+                (session) => session.status !== "completed",
+              ).length,
+            0,
+          ),
         },
-      ])
-    );
-    const trainerNamesById = new Map(
-      listTrainerProfiles().map((trainer) => [trainer.userId, trainer.displayName || fallbackDisplayNameFromEmail(trainer.email)])
-    );
-
-    const enrollments = listTrainingEnrollmentsForTrainer(auth.user.id)
-      .map((enrollment) => serializeTrainingEnrollmentForApi(enrollment.id, locale, usersById, trainerNamesById))
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-
-    return res.json({
-      user: serializePublicUser(auth.user),
-      profile,
-      enrollments,
-      stats: {
-        activeEnrollments: enrollments.filter((item) => item.status === "active").length,
-        completedEnrollments: enrollments.filter((item) => item.status === "completed").length,
-        pendingReviewSessions: enrollments.reduce(
-          (total, enrollment) => total + enrollment.sessions.filter((session) => session.status !== "completed").length,
-          0
-        ),
-      },
-    });
-  });
+      });
+    },
+  );
 
   app.patch(
     "/api/trainer/enrollments/:enrollmentId/sessions/:sessionCode",
-    rateLimit({ key: "trainer-session-update", windowMs: 1000 * 60 * 5, limit: 120 }),
+    rateLimit({
+      key: "trainer-session-update",
+      windowMs: 1000 * 60 * 5,
+      limit: 120,
+    }),
     (req, res, next) => {
       try {
         const auth = requireUserRole(req, res, ["trainer"]);
@@ -1230,12 +1502,16 @@ async function startServer() {
         const sessionCode = String(req.params.sessionCode || "").trim();
         const enrollment = getTrainingEnrollment(enrollmentId);
         if (!enrollment || enrollment.trainerUserId !== auth.user.id) {
-          return res.status(404).json({ error: "Training enrollment not found." });
+          return res
+            .status(404)
+            .json({ error: "Training enrollment not found." });
         }
 
         const status = parseTrainingSessionStatus(req.body?.status);
         if (!status) {
-          return res.status(400).json({ error: "Select a valid session status." });
+          return res
+            .status(400)
+            .json({ error: "Select a valid session status." });
         }
 
         updateTrainingSessionProgress({
@@ -1243,10 +1519,21 @@ async function startServer() {
           sessionCode,
           updatedByUserId: auth.user.id,
           status,
-          score: typeof req.body?.score === "number" || typeof req.body?.score === "string" ? Number(req.body.score) : null,
-          trainerNotes: typeof req.body?.trainerNotes === "string" ? req.body.trainerNotes : null,
-          traineeNotes: typeof req.body?.traineeNotes === "string" ? req.body.traineeNotes : null,
-          evidence: typeof req.body?.evidence === "string" ? req.body.evidence : null,
+          score:
+            typeof req.body?.score === "number" ||
+            typeof req.body?.score === "string"
+              ? Number(req.body.score)
+              : null,
+          trainerNotes:
+            typeof req.body?.trainerNotes === "string"
+              ? req.body.trainerNotes
+              : null,
+          traineeNotes:
+            typeof req.body?.traineeNotes === "string"
+              ? req.body.traineeNotes
+              : null,
+          evidence:
+            typeof req.body?.evidence === "string" ? req.body.evidence : null,
         });
 
         recordEvent({
@@ -1268,42 +1555,67 @@ async function startServer() {
               role: user.role,
               emailVerifiedAt: user.emailVerifiedAt,
             },
-          ])
+          ]),
         );
         const trainerNamesById = new Map(
-          listTrainerProfiles().map((trainer) => [trainer.userId, trainer.displayName || fallbackDisplayNameFromEmail(trainer.email)])
+          listTrainerProfiles().map((trainer) => [
+            trainer.userId,
+            trainer.displayName || fallbackDisplayNameFromEmail(trainer.email),
+          ]),
         );
         const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-        const serialized = serializeTrainingEnrollmentForApi(enrollmentId, locale, usersById, trainerNamesById);
+        const serialized = serializeTrainingEnrollmentForApi(
+          enrollmentId,
+          locale,
+          usersById,
+          trainerNamesById,
+        );
 
         return res.json({ ok: true, enrollment: serialized });
       } catch (error) {
         return next(error);
       }
-    }
+    },
   );
 
   app.patch(
     "/api/designer/tasks/:taskId",
-    rateLimit({ key: "designer-task-update", windowMs: 1000 * 60 * 5, limit: 80 }),
+    rateLimit({
+      key: "designer-task-update",
+      windowMs: 1000 * 60 * 5,
+      limit: 80,
+    }),
     (req, res, next) => {
       try {
         const auth = requireUserRole(req, res, ["designer"]);
         if (!auth) return;
 
         const taskId = String(req.params.taskId || "").trim();
-        const task = listDesignerTasks(auth.user.id).find((item) => item.id === taskId);
+        const task = listDesignerTasks(auth.user.id).find(
+          (item) => item.id === taskId,
+        );
         if (!task) {
           return res.status(404).json({ error: "Task not found." });
         }
 
         const status = req.body?.status;
-        if (status !== "todo" && status !== "in_progress" && status !== "done") {
-          return res.status(400).json({ error: "Valid task status is required." });
+        if (
+          status !== "todo" &&
+          status !== "in_progress" &&
+          status !== "done"
+        ) {
+          return res
+            .status(400)
+            .json({ error: "Valid task status is required." });
         }
 
         const updatedTask = updateDesignerTask({ taskId, status });
-        const bookingMap = new Map(listBookingsForDesigner(auth.user.id).map((booking) => [booking.id, serializeCustomerBooking(booking)]));
+        const bookingMap = new Map(
+          listBookingsForDesigner(auth.user.id).map((booking) => [
+            booking.id,
+            serializeCustomerBooking(booking),
+          ]),
+        );
         return res.json({
           ok: true,
           task: serializeDesignerTaskForApi(updatedTask, bookingMap),
@@ -1311,447 +1623,532 @@ async function startServer() {
       } catch (error) {
         return next(error);
       }
-    }
+    },
   );
 
-  app.post("/api/visitor/track", rateLimit({ key: "visitor-track", windowMs: 1000 * 60, limit: 240 }), (req, res) => {
-    const cookies = parseCookies(req.headers.cookie);
-    const existingVisitorId = cookies[VISITOR_COOKIE_NAME];
-    const visitorId = existingVisitorId || createVisitorId();
-    const auth = getCurrentUser(req);
-    const payload = req.body || {};
+  app.post(
+    "/api/visitor/track",
+    rateLimit({ key: "visitor-track", windowMs: 1000 * 60, limit: 240 }),
+    (req, res) => {
+      const cookies = parseCookies(req.headers.cookie);
+      const existingVisitorId = cookies[VISITOR_COOKIE_NAME];
+      const visitorId = existingVisitorId || createVisitorId();
+      const auth = getCurrentUser(req);
+      const payload = req.body || {};
 
-    const visitor = trackVisitor({
-      visitorId,
-      path: String(payload.path || "/"),
-      search: typeof payload.search === "string" ? payload.search : "",
-      sessionId: typeof payload.sessionId === "string" ? payload.sessionId : null,
-      locale: normalizeAuthLocale(String(payload.locale || "en")),
-      title: typeof payload.title === "string" ? payload.title : null,
-      referrer: typeof payload.referrer === "string" ? payload.referrer : null,
-      ip: getRequestIp(req),
-      userAgent: req.get("user-agent") || null,
-      browserLanguage: typeof payload.browserLanguage === "string" ? payload.browserLanguage : null,
-      timezone: typeof payload.timezone === "string" ? payload.timezone : null,
-      screen: typeof payload.screen === "string" ? payload.screen : null,
-      userId: auth?.user?.id ?? null,
-      email: auth?.user?.email ?? null,
-    });
-
-    if (!existingVisitorId) {
-      setVisitorCookie(req, res, visitorId);
-    }
-
-    return res.json({
-      ok: true,
-      visitor: {
-        id: visitor.id,
-        isRegistered: visitor.isRegistered,
-      },
-    });
-  });
-
-  app.post("/api/visitor/event", rateLimit({ key: "visitor-event", windowMs: 1000 * 60, limit: 300 }), (req, res) => {
-    const cookies = parseCookies(req.headers.cookie);
-    const visitorId = cookies[VISITOR_COOKIE_NAME];
-    if (!visitorId) {
-      return res.json({ ok: true });
-    }
-
-    const payload = req.body || {};
-    const eventType = String(payload.type || "");
-    if (!["session_start", "session_end", "whatsapp_click", "email_click", "cta_click", "chat_open", "chat_message"].includes(eventType)) {
-      return res.status(400).json({ error: "Unsupported visitor event." });
-    }
-
-    const visitor = trackVisitorInteraction({
-      visitorId,
-      type: eventType as any,
-      path: String(payload.path || "/"),
-      label: typeof payload.label === "string" ? payload.label : null,
-      href: typeof payload.href === "string" ? payload.href : null,
-      sessionId: typeof payload.sessionId === "string" ? payload.sessionId : null,
-      durationMs: typeof payload.durationMs === "number" ? payload.durationMs : null,
-      pageCount: typeof payload.pageCount === "number" ? payload.pageCount : null,
-    });
-
-    return res.json({ ok: true, tracked: Boolean(visitor) });
-  });
-
-  app.post("/api/chat/session", rateLimit({ key: "chat-session", windowMs: 1000 * 60 * 10, limit: 80 }), (req, res) => {
-    const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-    const pathValue = typeof req.body?.path === "string" ? req.body.path : req.path;
-    const auth = getCurrentUser(req);
-    const visitorId = getOrCreateRequestVisitor(req, res);
-    const visitor =
-      getVisitorById(visitorId) ??
-      trackVisitor({
+      const visitor = trackVisitor({
         visitorId,
-        path: pathValue,
-        search: "",
-        sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
-        locale,
-        title: null,
-        referrer: req.get("referer") || null,
+        path: String(payload.path || "/"),
+        search: typeof payload.search === "string" ? payload.search : "",
+        sessionId:
+          typeof payload.sessionId === "string" ? payload.sessionId : null,
+        locale: normalizeAuthLocale(String(payload.locale || "en")),
+        title: typeof payload.title === "string" ? payload.title : null,
+        referrer:
+          typeof payload.referrer === "string" ? payload.referrer : null,
         ip: getRequestIp(req),
         userAgent: req.get("user-agent") || null,
-        browserLanguage: null,
-        timezone: null,
-        screen: null,
+        browserLanguage:
+          typeof payload.browserLanguage === "string"
+            ? payload.browserLanguage
+            : null,
+        timezone:
+          typeof payload.timezone === "string" ? payload.timezone : null,
+        screen: typeof payload.screen === "string" ? payload.screen : null,
         userId: auth?.user?.id ?? null,
         email: auth?.user?.email ?? null,
       });
 
-    const { conversation, isNew } = upsertConversationForVisitor({
-      visitorId,
-      userId: auth?.user?.id ?? null,
-      email: auth?.user?.email ?? null,
-      locale,
-      path: pathValue,
-      visitor,
-    });
+      if (!existingVisitorId) {
+        setVisitorCookie(req, res, visitorId);
+      }
 
-    trackVisitorInteraction({
-      visitorId,
-      type: "chat_open",
-      path: pathValue,
-      label: "chat_widget",
-      href: null,
-      sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
-    });
+      return res.json({
+        ok: true,
+        visitor: {
+          id: visitor.id,
+          isRegistered: visitor.isRegistered,
+        },
+      });
+    },
+  );
 
-    return res.json({
-      ok: true,
-      enabled: isChatEnabled(),
-      isNew,
-      conversation: {
-        id: conversation.id,
-        email: conversation.email,
-        locale: conversation.locale,
-        assistantName: conversation.assistantName,
-        status: conversation.status,
-        title: conversation.title,
-        messages: conversation.messages,
-        leadScore: conversation.leadScore,
-        supportFormRequired: conversation.supportFormRequired,
-        supportIntake: conversation.supportIntake,
-      },
-    });
-  });
+  app.post(
+    "/api/visitor/event",
+    rateLimit({ key: "visitor-event", windowMs: 1000 * 60, limit: 300 }),
+    (req, res) => {
+      const cookies = parseCookies(req.headers.cookie);
+      const visitorId = cookies[VISITOR_COOKIE_NAME];
+      if (!visitorId) {
+        return res.json({ ok: true });
+      }
 
-  app.post("/api/chat/new-session", rateLimit({ key: "chat-new-session", windowMs: 1000 * 60 * 10, limit: 40 }), (req, res) => {
-    const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-    const pathValue = typeof req.body?.path === "string" ? req.body.path : req.path;
-    const auth = getCurrentUser(req);
-    const visitorId = getOrCreateRequestVisitor(req, res);
-    const visitor =
-      getVisitorById(visitorId) ??
-      trackVisitor({
+      const payload = req.body || {};
+      const eventType = String(payload.type || "");
+      if (
+        ![
+          "session_start",
+          "session_end",
+          "whatsapp_click",
+          "email_click",
+          "cta_click",
+          "chat_open",
+          "chat_message",
+        ].includes(eventType)
+      ) {
+        return res.status(400).json({ error: "Unsupported visitor event." });
+      }
+
+      const visitor = trackVisitorInteraction({
         visitorId,
-        path: pathValue,
-        search: "",
-        sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
-        locale,
-        title: null,
-        referrer: req.get("referer") || null,
-        ip: getRequestIp(req),
-        userAgent: req.get("user-agent") || null,
-        browserLanguage: null,
-        timezone: null,
-        screen: null,
-        userId: auth?.user?.id ?? null,
-        email: auth?.user?.email ?? null,
+        type: eventType as any,
+        path: String(payload.path || "/"),
+        label: typeof payload.label === "string" ? payload.label : null,
+        href: typeof payload.href === "string" ? payload.href : null,
+        sessionId:
+          typeof payload.sessionId === "string" ? payload.sessionId : null,
+        durationMs:
+          typeof payload.durationMs === "number" ? payload.durationMs : null,
+        pageCount:
+          typeof payload.pageCount === "number" ? payload.pageCount : null,
       });
 
-    const conversation = createConversation({
-      visitorId,
-      userId: auth?.user?.id ?? null,
-      email: auth?.user?.email ?? null,
-      locale,
-      path: pathValue,
-      visitor,
-    });
+      return res.json({ ok: true, tracked: Boolean(visitor) });
+    },
+  );
 
-    trackVisitorInteraction({
-      visitorId,
-      type: "chat_open",
-      path: pathValue,
-      label: "chat_widget_new_session",
-      href: null,
-      sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
-    });
+  app.post(
+    "/api/chat/session",
+    rateLimit({ key: "chat-session", windowMs: 1000 * 60 * 10, limit: 80 }),
+    (req, res) => {
+      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+      const pathValue =
+        typeof req.body?.path === "string" ? req.body.path : req.path;
+      const auth = getCurrentUser(req);
+      const visitorId = getOrCreateRequestVisitor(req, res);
+      const visitor =
+        getVisitorById(visitorId) ??
+        trackVisitor({
+          visitorId,
+          path: pathValue,
+          search: "",
+          sessionId:
+            typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
+          locale,
+          title: null,
+          referrer: req.get("referer") || null,
+          ip: getRequestIp(req),
+          userAgent: req.get("user-agent") || null,
+          browserLanguage: null,
+          timezone: null,
+          screen: null,
+          userId: auth?.user?.id ?? null,
+          email: auth?.user?.email ?? null,
+        });
 
-    return res.json({
-      ok: true,
-      enabled: isChatEnabled(),
-      isNew: true,
-      conversation: {
-        id: conversation.id,
-        email: conversation.email,
-        locale: conversation.locale,
-        assistantName: conversation.assistantName,
-        status: conversation.status,
-        title: conversation.title,
-        messages: conversation.messages,
-        leadScore: conversation.leadScore,
-        supportFormRequired: conversation.supportFormRequired,
-        supportIntake: conversation.supportIntake,
-      },
-    });
-  });
-
-  app.post("/api/chat/message", rateLimit({ key: "chat-message", windowMs: 1000 * 60 * 10, limit: 120 }), async (req, res) => {
-    const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-    const pathValue = typeof req.body?.path === "string" ? req.body.path : "/";
-    const rawMessage = String(req.body?.message || "").trim();
-    const conversationId = String(req.body?.conversationId || "").trim();
-
-    if (!rawMessage) {
-      return res.status(400).json({ error: "Message is required." });
-    }
-    if (rawMessage.length > 2000) {
-      return res.status(400).json({ error: "Message is too long." });
-    }
-
-    const auth = getCurrentUser(req);
-    const visitorId = getOrCreateRequestVisitor(req, res);
-    const visitor =
-      getVisitorById(visitorId) ??
-      trackVisitor({
-        visitorId,
-        path: pathValue,
-        search: "",
-        sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
-        locale,
-        title: null,
-        referrer: req.get("referer") || null,
-        ip: getRequestIp(req),
-        userAgent: req.get("user-agent") || null,
-        browserLanguage: null,
-        timezone: null,
-        screen: null,
-        userId: auth?.user?.id ?? null,
-        email: auth?.user?.email ?? null,
-      });
-
-    let conversation =
-      (conversationId ? getConversationById(conversationId) : null) ??
-      upsertConversationForVisitor({
+      const { conversation, isNew } = upsertConversationForVisitor({
         visitorId,
         userId: auth?.user?.id ?? null,
         email: auth?.user?.email ?? null,
         locale,
         path: pathValue,
         visitor,
-      }).conversation;
+      });
 
-    if (conversation.visitorId !== visitorId) {
-      return res.status(403).json({ error: "Conversation access denied." });
-    }
-    if (auth?.user?.id && conversation.userId && conversation.userId !== auth.user.id) {
-      return res.status(403).json({ error: "Conversation access denied." });
-    }
+      trackVisitorInteraction({
+        visitorId,
+        type: "chat_open",
+        path: pathValue,
+        label: "chat_widget",
+        href: null,
+        sessionId:
+          typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
+      });
 
-    appendConversationMessage({
-      conversationId: conversation.id,
-      role: "user",
-      content: rawMessage,
-      path: pathValue,
-      visitor,
-    });
-    trackVisitorInteraction({
-      visitorId,
-      type: "chat_message",
-      path: pathValue,
-      label: "user_message",
-      href: null,
-      sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
-    });
+      return res.json({
+        ok: true,
+        enabled: isChatEnabled(),
+        isNew,
+        conversation: {
+          id: conversation.id,
+          email: conversation.email,
+          locale: conversation.locale,
+          assistantName: conversation.assistantName,
+          status: conversation.status,
+          title: conversation.title,
+          messages: conversation.messages,
+          leadScore: conversation.leadScore,
+          supportFormRequired: conversation.supportFormRequired,
+          supportIntake: conversation.supportIntake,
+        },
+      });
+    },
+  );
 
-    conversation = getConversationById(conversation.id)!;
-    const messages = getConversationMessages(conversation.id);
-
-    let assistantText = getChatFallback(locale);
-    let responseId: string | null = null;
-    let status: "open" | "waiting_client" | "needs_human" = "open";
-    let supportFormRequired = conversation.supportFormRequired;
-
-    if (isChatEnabled()) {
-      try {
-        const reply = await generateAssistantReply({
-          locale,
-          conversation,
-          messages,
-          visitor,
-          latestUserMessage: rawMessage,
-        });
-        assistantText = reply.text;
-        responseId = reply.responseId;
-        status = reply.status;
-        supportFormRequired = reply.supportFormRequired;
-      } catch (error) {
-        console.error("[chat-assistant]", error);
-        status = "needs_human";
-      }
-    }
-
-    appendConversationMessage({
-      conversationId: conversation.id,
-      role: "assistant",
-      content: assistantText,
-      path: pathValue,
-      visitor,
-    });
-
-    const updatedConversation = updateConversationMeta({
-      conversationId: conversation.id,
-      latestResponseId: responseId,
-      status,
-      path: pathValue,
-      visitor,
-      supportFormRequired,
-    });
-
-    return res.json({
-      ok: true,
-      enabled: isChatEnabled(),
-      isNew: false,
-      conversation: {
-        id: updatedConversation.id,
-        email: updatedConversation.email,
-        locale: updatedConversation.locale,
-        assistantName: updatedConversation.assistantName,
-        status: updatedConversation.status,
-        title: updatedConversation.title,
-        leadScore: updatedConversation.leadScore,
-        messages: updatedConversation.messages,
-        supportFormRequired: updatedConversation.supportFormRequired,
-        supportIntake: updatedConversation.supportIntake,
-      },
-    });
-  });
-
-  app.post("/api/chat/support-intake", rateLimit({ key: "chat-support-intake", windowMs: 1000 * 60 * 10, limit: 40 }), (req, res) => {
-    const conversationId = String(req.body?.conversationId || "").trim();
-    const name = String(req.body?.name || "").trim();
-    const country = String(req.body?.country || "").trim();
-    const phone = String(req.body?.phone || "").trim();
-    const email = String(req.body?.email || "").trim();
-    const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-    const pathValue = typeof req.body?.path === "string" ? req.body.path : "/";
-
-    if (!conversationId) {
-      return res.status(400).json({ error: "Conversation is required." });
-    }
-    if (!name || !country || !phone || !email) {
-      return res.status(400).json({ error: "Name, country, phone, and email are required." });
-    }
-    if (!EMAIL_REGEX.test(email)) {
-      return res.status(400).json({ error: "Valid email is required." });
-    }
-    if (phone.length < 6) {
-      return res.status(400).json({ error: "Valid phone number is required." });
-    }
-
-    const auth = getCurrentUser(req);
-    const visitorId = getOrCreateRequestVisitor(req, res);
-    const visitor = getVisitorById(visitorId);
-    const conversation = getConversationById(conversationId);
-
-    if (!conversation || conversation.visitorId !== visitorId) {
-      return res.status(403).json({ error: "Conversation access denied." });
-    }
-    if (auth?.user?.id && conversation.userId && conversation.userId !== auth.user.id) {
-      return res.status(403).json({ error: "Conversation access denied." });
-    }
-
-    const updatedConversation = saveConversationSupportIntake({
-      conversationId,
-      name,
-      country,
-      phone,
-      email,
-      visitor,
-    });
-
-    const confirmation =
-      locale === "fr"
-        ? "Merci. Les informations sont recues. Un membre de l'equipe reviendra vers vous."
-        : locale === "ar"
-          ? "شكرًا. تم استلام المعلومات، وسيتواصل معك أحد أفراد الفريق."
-          : "Thanks. Your details are received, and a team member will follow up.";
-
-    appendConversationMessage({
-      conversationId,
-      role: "assistant",
-      content: confirmation,
-      path: pathValue,
-      visitor,
-    });
-
-    const finalConversation = getConversationById(conversationId)!;
-
-    return res.json({
-      ok: true,
-      enabled: isChatEnabled(),
-      isNew: false,
-      conversation: {
-        id: finalConversation.id,
-        email: finalConversation.email,
-        locale: finalConversation.locale,
-        assistantName: finalConversation.assistantName,
-        status: finalConversation.status,
-        title: finalConversation.title,
-        leadScore: finalConversation.leadScore,
-        messages: finalConversation.messages,
-        supportFormRequired: finalConversation.supportFormRequired,
-        supportIntake: finalConversation.supportIntake,
-      },
-    });
-  });
-
-  app.post("/api/contact", rateLimit({ key: "contact", windowMs: 1000 * 60 * 10, limit: 20 }), async (req, res, next) => {
-    try {
-      const name = String(req.body?.name || "").trim();
-      const email = String(req.body?.email || "").trim();
-      const company = String(req.body?.company || "").trim();
-      const phone = String(req.body?.phone || "").trim();
-      const interest = String(req.body?.interest || "").trim();
-      const message = String(req.body?.message || "").trim();
+  app.post(
+    "/api/chat/new-session",
+    rateLimit({ key: "chat-new-session", windowMs: 1000 * 60 * 10, limit: 40 }),
+    (req, res) => {
       const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+      const pathValue =
+        typeof req.body?.path === "string" ? req.body.path : req.path;
+      const auth = getCurrentUser(req);
+      const visitorId = getOrCreateRequestVisitor(req, res);
+      const visitor =
+        getVisitorById(visitorId) ??
+        trackVisitor({
+          visitorId,
+          path: pathValue,
+          search: "",
+          sessionId:
+            typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
+          locale,
+          title: null,
+          referrer: req.get("referer") || null,
+          ip: getRequestIp(req),
+          userAgent: req.get("user-agent") || null,
+          browserLanguage: null,
+          timezone: null,
+          screen: null,
+          userId: auth?.user?.id ?? null,
+          email: auth?.user?.email ?? null,
+        });
 
-      if (name.length < 2) {
-        return res.status(400).json({ error: "Name is required." });
+      const conversation = createConversation({
+        visitorId,
+        userId: auth?.user?.id ?? null,
+        email: auth?.user?.email ?? null,
+        locale,
+        path: pathValue,
+        visitor,
+      });
+
+      trackVisitorInteraction({
+        visitorId,
+        type: "chat_open",
+        path: pathValue,
+        label: "chat_widget_new_session",
+        href: null,
+        sessionId:
+          typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
+      });
+
+      return res.json({
+        ok: true,
+        enabled: isChatEnabled(),
+        isNew: true,
+        conversation: {
+          id: conversation.id,
+          email: conversation.email,
+          locale: conversation.locale,
+          assistantName: conversation.assistantName,
+          status: conversation.status,
+          title: conversation.title,
+          messages: conversation.messages,
+          leadScore: conversation.leadScore,
+          supportFormRequired: conversation.supportFormRequired,
+          supportIntake: conversation.supportIntake,
+        },
+      });
+    },
+  );
+
+  app.post(
+    "/api/chat/message",
+    rateLimit({ key: "chat-message", windowMs: 1000 * 60 * 10, limit: 120 }),
+    async (req, res) => {
+      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+      const pathValue =
+        typeof req.body?.path === "string" ? req.body.path : "/";
+      const rawMessage = String(req.body?.message || "").trim();
+      const conversationId = String(req.body?.conversationId || "").trim();
+
+      if (!rawMessage) {
+        return res.status(400).json({ error: "Message is required." });
+      }
+      if (rawMessage.length > 2000) {
+        return res.status(400).json({ error: "Message is too long." });
+      }
+
+      const auth = getCurrentUser(req);
+      const visitorId = getOrCreateRequestVisitor(req, res);
+      const visitor =
+        getVisitorById(visitorId) ??
+        trackVisitor({
+          visitorId,
+          path: pathValue,
+          search: "",
+          sessionId:
+            typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
+          locale,
+          title: null,
+          referrer: req.get("referer") || null,
+          ip: getRequestIp(req),
+          userAgent: req.get("user-agent") || null,
+          browserLanguage: null,
+          timezone: null,
+          screen: null,
+          userId: auth?.user?.id ?? null,
+          email: auth?.user?.email ?? null,
+        });
+
+      let conversation =
+        (conversationId ? getConversationById(conversationId) : null) ??
+        upsertConversationForVisitor({
+          visitorId,
+          userId: auth?.user?.id ?? null,
+          email: auth?.user?.email ?? null,
+          locale,
+          path: pathValue,
+          visitor,
+        }).conversation;
+
+      if (conversation.visitorId !== visitorId) {
+        return res.status(403).json({ error: "Conversation access denied." });
+      }
+      if (
+        auth?.user?.id &&
+        conversation.userId &&
+        conversation.userId !== auth.user.id
+      ) {
+        return res.status(403).json({ error: "Conversation access denied." });
+      }
+
+      appendConversationMessage({
+        conversationId: conversation.id,
+        role: "user",
+        content: rawMessage,
+        path: pathValue,
+        visitor,
+      });
+      trackVisitorInteraction({
+        visitorId,
+        type: "chat_message",
+        path: pathValue,
+        label: "user_message",
+        href: null,
+        sessionId:
+          typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
+      });
+
+      conversation = getConversationById(conversation.id)!;
+      const messages = getConversationMessages(conversation.id);
+
+      let assistantText = getChatFallback(locale);
+      let responseId: string | null = null;
+      let status: "open" | "waiting_client" | "needs_human" = "open";
+      let supportFormRequired = conversation.supportFormRequired;
+
+      if (isChatEnabled()) {
+        try {
+          const reply = await generateAssistantReply({
+            locale,
+            conversation,
+            messages,
+            visitor,
+            latestUserMessage: rawMessage,
+          });
+          assistantText = reply.text;
+          responseId = reply.responseId;
+          status = reply.status;
+          supportFormRequired = reply.supportFormRequired;
+        } catch (error) {
+          console.error("[chat-assistant]", error);
+          status = "needs_human";
+        }
+      }
+
+      appendConversationMessage({
+        conversationId: conversation.id,
+        role: "assistant",
+        content: assistantText,
+        path: pathValue,
+        visitor,
+      });
+
+      const updatedConversation = updateConversationMeta({
+        conversationId: conversation.id,
+        latestResponseId: responseId,
+        status,
+        path: pathValue,
+        visitor,
+        supportFormRequired,
+      });
+
+      return res.json({
+        ok: true,
+        enabled: isChatEnabled(),
+        isNew: false,
+        conversation: {
+          id: updatedConversation.id,
+          email: updatedConversation.email,
+          locale: updatedConversation.locale,
+          assistantName: updatedConversation.assistantName,
+          status: updatedConversation.status,
+          title: updatedConversation.title,
+          leadScore: updatedConversation.leadScore,
+          messages: updatedConversation.messages,
+          supportFormRequired: updatedConversation.supportFormRequired,
+          supportIntake: updatedConversation.supportIntake,
+        },
+      });
+    },
+  );
+
+  app.post(
+    "/api/chat/support-intake",
+    rateLimit({
+      key: "chat-support-intake",
+      windowMs: 1000 * 60 * 10,
+      limit: 40,
+    }),
+    (req, res) => {
+      const conversationId = String(req.body?.conversationId || "").trim();
+      const name = String(req.body?.name || "").trim();
+      const country = String(req.body?.country || "").trim();
+      const phone = String(req.body?.phone || "").trim();
+      const email = String(req.body?.email || "").trim();
+      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+      const pathValue =
+        typeof req.body?.path === "string" ? req.body.path : "/";
+
+      if (!conversationId) {
+        return res.status(400).json({ error: "Conversation is required." });
+      }
+      if (!name || !country || !phone || !email) {
+        return res
+          .status(400)
+          .json({ error: "Name, country, phone, and email are required." });
       }
       if (!EMAIL_REGEX.test(email)) {
-        return res.status(400).json({ error: "A valid email is required." });
+        return res.status(400).json({ error: "Valid email is required." });
       }
-      if (message.length < 10) {
-        return res.status(400).json({ error: "Please provide a little more context in your message." });
+      if (phone.length < 6) {
+        return res
+          .status(400)
+          .json({ error: "Valid phone number is required." });
       }
 
-      const lead = storeContactLead({ name, email, company, phone, interest, message });
-      const destination = (process.env.CONTACT_EMAIL || "contact@cvsolucion.com").trim();
-      const source = req.get("referer") || appOrigin(req);
+      const auth = getCurrentUser(req);
+      const visitorId = getOrCreateRequestVisitor(req, res);
+      const visitor = getVisitorById(visitorId);
+      const conversation = getConversationById(conversationId);
 
-      const lines = [
-        `Lead ID: ${lead.id}`,
-        `Name: ${lead.name}`,
-        `Email: ${lead.email}`,
-        lead.company ? `Company: ${lead.company}` : null,
-        lead.phone ? `Phone: ${lead.phone}` : null,
-        lead.interest ? `Interest: ${lead.interest}` : null,
-        `Locale: ${locale}`,
-        `Source: ${source}`,
-        "",
-        lead.message,
-      ].filter(Boolean);
+      if (!conversation || conversation.visitorId !== visitorId) {
+        return res.status(403).json({ error: "Conversation access denied." });
+      }
+      if (
+        auth?.user?.id &&
+        conversation.userId &&
+        conversation.userId !== auth.user.id
+      ) {
+        return res.status(403).json({ error: "Conversation access denied." });
+      }
 
-      await sendAuthEmail({
-        to: destination,
-        subject: `New CVsolucion contact request - ${lead.name}`,
-        text: lines.join("\n"),
-        html: `
+      const updatedConversation = saveConversationSupportIntake({
+        conversationId,
+        name,
+        country,
+        phone,
+        email,
+        visitor,
+      });
+
+      const confirmation =
+        locale === "fr"
+          ? "Merci. Les informations sont recues. Un membre de l'equipe reviendra vers vous."
+          : locale === "ar"
+            ? "شكرًا. تم استلام المعلومات، وسيتواصل معك أحد أفراد الفريق."
+            : "Thanks. Your details are received, and a team member will follow up.";
+
+      appendConversationMessage({
+        conversationId,
+        role: "assistant",
+        content: confirmation,
+        path: pathValue,
+        visitor,
+      });
+
+      const finalConversation = getConversationById(conversationId)!;
+
+      return res.json({
+        ok: true,
+        enabled: isChatEnabled(),
+        isNew: false,
+        conversation: {
+          id: finalConversation.id,
+          email: finalConversation.email,
+          locale: finalConversation.locale,
+          assistantName: finalConversation.assistantName,
+          status: finalConversation.status,
+          title: finalConversation.title,
+          leadScore: finalConversation.leadScore,
+          messages: finalConversation.messages,
+          supportFormRequired: finalConversation.supportFormRequired,
+          supportIntake: finalConversation.supportIntake,
+        },
+      });
+    },
+  );
+
+  app.post(
+    "/api/contact",
+    rateLimit({ key: "contact", windowMs: 1000 * 60 * 10, limit: 20 }),
+    async (req, res, next) => {
+      try {
+        const name = String(req.body?.name || "").trim();
+        const email = String(req.body?.email || "").trim();
+        const company = String(req.body?.company || "").trim();
+        const phone = String(req.body?.phone || "").trim();
+        const interest = String(req.body?.interest || "").trim();
+        const message = String(req.body?.message || "").trim();
+        const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+
+        if (name.length < 2) {
+          return res.status(400).json({ error: "Name is required." });
+        }
+        if (!EMAIL_REGEX.test(email)) {
+          return res.status(400).json({ error: "A valid email is required." });
+        }
+        if (message.length < 10) {
+          return res
+            .status(400)
+            .json({
+              error: "Please provide a little more context in your message.",
+            });
+        }
+
+        const lead = storeContactLead({
+          name,
+          email,
+          company,
+          phone,
+          interest,
+          message,
+        });
+        const destination = (
+          process.env.CONTACT_EMAIL || "contact@cvsolucion.com"
+        ).trim();
+        const source = req.get("referer") || appOrigin(req);
+
+        const lines = [
+          `Lead ID: ${lead.id}`,
+          `Name: ${lead.name}`,
+          `Email: ${lead.email}`,
+          lead.company ? `Company: ${lead.company}` : null,
+          lead.phone ? `Phone: ${lead.phone}` : null,
+          lead.interest ? `Interest: ${lead.interest}` : null,
+          `Locale: ${locale}`,
+          `Source: ${source}`,
+          "",
+          lead.message,
+        ].filter(Boolean);
+
+        await sendAuthEmail({
+          to: destination,
+          subject: `New CVsolucion contact request - ${lead.name}`,
+          text: lines.join("\n"),
+          html: `
           <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
             <h2 style="margin:0 0 16px">New CVsolucion contact request</h2>
             <p><strong>Lead ID:</strong> ${escapeHtml(lead.id)}</p>
@@ -1766,152 +2163,212 @@ async function startServer() {
             <p style="white-space:pre-wrap">${escapeHtml(lead.message)}</p>
           </div>
         `,
-      });
+        });
 
-      return res.status(201).json({ ok: true, leadId: lead.id });
-    } catch (error) {
-      return next(error);
-    }
-  });
+        return res.status(201).json({ ok: true, leadId: lead.id });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
 
-  app.get("/api/catalog/public", rateLimit({ key: "catalog-public", windowMs: 1000 * 60, limit: 180 }), (req, res) => {
-    const locale = normalizeAuthLocale(String(req.query.locale || "en"));
-    const countryCode = getPricingCountryCode(req);
-    return res.json(getPublicCatalog(locale, countryCode));
-  });
+  app.get(
+    "/api/catalog/public",
+    rateLimit({ key: "catalog-public", windowMs: 1000 * 60, limit: 180 }),
+    (req, res) => {
+      const locale = normalizeAuthLocale(String(req.query.locale || "en"));
+      const countryCode = getPricingCountryCode(req);
+      return res.json(getPublicCatalog(locale, countryCode));
+    },
+  );
 
-  app.get("/api/bookings/availability", rateLimit({ key: "booking-availability", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
-    const auth = getCurrentUser(req);
-    if (!auth) {
-      return res.status(401).json({ error: "Please sign in before viewing appointment times." });
-    }
-    const priority = String(req.query.priority || "standard").trim() === "express" ? "express" : "standard";
-    return res.json(getBookingAvailability(priority));
-  });
-
-  app.get("/api/stripe/config", rateLimit({ key: "stripe-config", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
-    return res.json(getStripePricingSnapshot(getPricingCountryCode(req)));
-  });
-
-  app.get("/api/training/programs", rateLimit({ key: "training-programs", windowMs: 1000 * 60, limit: 180 }), (_req, res) => {
-    return res.json({ programs: getPublicTrainingPrograms() });
-  });
-
-  app.get("/api/training/pricing", rateLimit({ key: "training-pricing", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
-    const auth = getCurrentUser(req);
-    if (!auth) {
-      return res.status(401).json({ error: "Please sign in to view training prices." });
-    }
-    return res.json(getTrainingPricingSnapshot(getPricingCountryCode(req)));
-  });
-
-  app.post("/api/stripe/training-payment-intent", rateLimit({ key: "stripe-training-payment-intent", windowMs: 1000 * 60 * 10, limit: 30 }), async (req, res, next) => {
-    try {
+  app.get(
+    "/api/bookings/availability",
+    rateLimit({ key: "booking-availability", windowMs: 1000 * 60, limit: 120 }),
+    (req, res) => {
       const auth = getCurrentUser(req);
       if (!auth) {
-        return res.status(401).json({ error: "Please sign in before starting payment." });
+        return res
+          .status(401)
+          .json({ error: "Please sign in before viewing appointment times." });
       }
+      const priority =
+        String(req.query.priority || "standard").trim() === "express"
+          ? "express"
+          : "standard";
+      return res.json(getBookingAvailability(priority));
+    },
+  );
 
-      const level = parseTrainingLevel(req.body?.programId ?? req.body?.level);
-      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-      const countryCode = getPricingCountryCode(req);
+  app.get(
+    "/api/stripe/config",
+    rateLimit({ key: "stripe-config", windowMs: 1000 * 60, limit: 120 }),
+    (req, res) => {
+      return res.json(getStripePricingSnapshot(getPricingCountryCode(req)));
+    },
+  );
 
-      if (!level) {
-        return res.status(400).json({ error: "Please choose a valid training program." });
-      }
+  app.get(
+    "/api/training/programs",
+    rateLimit({ key: "training-programs", windowMs: 1000 * 60, limit: 180 }),
+    (_req, res) => {
+      return res.json({ programs: getPublicTrainingPrograms() });
+    },
+  );
 
-      const intent = await createTrainingPaymentIntent({
-        userId: auth.user.id,
-        email: auth.user.email,
-        level,
-        countryCode,
-        locale,
-      });
-
-      return res.json({
-        ok: true,
-        clientSecret: intent.client_secret,
-        paymentIntentId: intent.id,
-      });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.post("/api/training/purchases", rateLimit({ key: "training-purchase", windowMs: 1000 * 60 * 10, limit: 30 }), async (req, res, next) => {
-    try {
+  app.get(
+    "/api/training/pricing",
+    rateLimit({ key: "training-pricing", windowMs: 1000 * 60, limit: 120 }),
+    (req, res) => {
       const auth = getCurrentUser(req);
       if (!auth) {
-        return res.status(401).json({ error: "Please sign in before confirming training." });
+        return res
+          .status(401)
+          .json({ error: "Please sign in to view training prices." });
       }
+      return res.json(getTrainingPricingSnapshot(getPricingCountryCode(req)));
+    },
+  );
 
-      const level = parseTrainingLevel(req.body?.programId ?? req.body?.level);
-      const paymentIntentId = String(req.body?.paymentIntentId || "").trim();
-      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-      const countryCode = getPricingCountryCode(req);
+  app.post(
+    "/api/stripe/training-payment-intent",
+    rateLimit({
+      key: "stripe-training-payment-intent",
+      windowMs: 1000 * 60 * 10,
+      limit: 30,
+    }),
+    async (req, res, next) => {
+      try {
+        const auth = getCurrentUser(req);
+        if (!auth) {
+          return res
+            .status(401)
+            .json({ error: "Please sign in before starting payment." });
+        }
 
-      if (!level) {
-        return res.status(400).json({ error: "Please choose a valid training program." });
+        const level = parseTrainingLevel(
+          req.body?.programId ?? req.body?.level,
+        );
+        const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+        const countryCode = getPricingCountryCode(req);
+
+        if (!level) {
+          return res
+            .status(400)
+            .json({ error: "Please choose a valid training program." });
+        }
+
+        const intent = await createTrainingPaymentIntent({
+          userId: auth.user.id,
+          email: auth.user.email,
+          level,
+          countryCode,
+          locale,
+        });
+
+        return res.json({
+          ok: true,
+          clientSecret: intent.client_secret,
+          paymentIntentId: intent.id,
+        });
+      } catch (error) {
+        return next(error);
       }
-      if (!paymentIntentId) {
-        return res.status(400).json({ error: "Payment reference is required." });
-      }
+    },
+  );
 
-      const payment = await verifyTrainingPayment({
-        paymentIntentId,
-        userId: auth.user.id,
-        level,
-        countryCode,
-      });
+  app.post(
+    "/api/training/purchases",
+    rateLimit({
+      key: "training-purchase",
+      windowMs: 1000 * 60 * 10,
+      limit: 30,
+    }),
+    async (req, res, next) => {
+      try {
+        const auth = getCurrentUser(req);
+        if (!auth) {
+          return res
+            .status(401)
+            .json({ error: "Please sign in before confirming training." });
+        }
 
-      const program = getCatalogTrainingProgram(level);
-      const customerProfile = getCustomerProfile(auth.user.id);
-      const enrollment = ensureTrainingEnrollmentFromPurchase({
-        userId: auth.user.id,
-        userEmail: auth.user.email,
-        customerName: customerProfile?.name,
-        company: customerProfile?.company,
-        country: customerProfile?.country,
-        countryCode: customerProfile?.countryCode,
-        programKey: level,
-        programId: program?.id || null,
-        paymentIntentId: payment.id,
-        purchaseAmount: payment.amount,
-        currency: payment.currency,
-      });
-      const levelLabel = program?.translations?.en?.title || program?.key || level;
-      const amountLabel = new Intl.NumberFormat("en-CA", {
-        style: "currency",
-        currency: payment.currency.toUpperCase(),
-      }).format(payment.amount / 100);
+        const level = parseTrainingLevel(
+          req.body?.programId ?? req.body?.level,
+        );
+        const paymentIntentId = String(req.body?.paymentIntentId || "").trim();
+        const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+        const countryCode = getPricingCountryCode(req);
 
-      const lead = storeContactLead({
-        name: auth.user.email,
-        email: auth.user.email,
-        interest: `Training purchase - ${levelLabel}`,
-        message: [
-          `Paid training purchase.`,
-          `Training: ${levelLabel}`,
-          `Amount: ${amountLabel}`,
-          `Payment intent: ${payment.id}`,
-          `Locale: ${locale}`,
-        ].join("\n"),
-      });
+        if (!level) {
+          return res
+            .status(400)
+            .json({ error: "Please choose a valid training program." });
+        }
+        if (!paymentIntentId) {
+          return res
+            .status(400)
+            .json({ error: "Payment reference is required." });
+        }
 
-      const destination = (process.env.CONTACT_EMAIL || "contact@cvsolucion.com").trim();
-      res.status(201).json({ ok: true, lead, enrollmentId: enrollment.id });
+        const payment = await verifyTrainingPayment({
+          paymentIntentId,
+          userId: auth.user.id,
+          level,
+          countryCode,
+        });
 
-      void Promise.allSettled([
-        sendAuthEmail({
-          to: destination,
-          subject: `New training purchase - ${levelLabel}`,
-          text: [
+        const program = getCatalogTrainingProgram(level);
+        const customerProfile = getCustomerProfile(auth.user.id);
+        const enrollment = ensureTrainingEnrollmentFromPurchase({
+          userId: auth.user.id,
+          userEmail: auth.user.email,
+          customerName: customerProfile?.name,
+          company: customerProfile?.company,
+          country: customerProfile?.country,
+          countryCode: customerProfile?.countryCode,
+          programKey: level,
+          programId: program?.id || null,
+          paymentIntentId: payment.id,
+          purchaseAmount: payment.amount,
+          currency: payment.currency,
+        });
+        const levelLabel =
+          program?.translations?.en?.title || program?.key || level;
+        const amountLabel = new Intl.NumberFormat("en-CA", {
+          style: "currency",
+          currency: payment.currency.toUpperCase(),
+        }).format(payment.amount / 100);
+
+        const lead = storeContactLead({
+          name: auth.user.email,
+          email: auth.user.email,
+          interest: `Training purchase - ${levelLabel}`,
+          message: [
+            `Paid training purchase.`,
             `Training: ${levelLabel}`,
             `Amount: ${amountLabel}`,
             `Payment intent: ${payment.id}`,
-            `Customer: ${auth.user.email}`,
+            `Locale: ${locale}`,
           ].join("\n"),
-          html: `
+        });
+
+        const destination = (
+          process.env.CONTACT_EMAIL || "contact@cvsolucion.com"
+        ).trim();
+        res.status(201).json({ ok: true, lead, enrollmentId: enrollment.id });
+
+        void Promise.allSettled([
+          sendAuthEmail({
+            to: destination,
+            subject: `New training purchase - ${levelLabel}`,
+            text: [
+              `Training: ${levelLabel}`,
+              `Amount: ${amountLabel}`,
+              `Payment intent: ${payment.id}`,
+              `Customer: ${auth.user.email}`,
+            ].join("\n"),
+            html: `
             <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
               <h2 style="margin:0 0 16px">New training purchase</h2>
               <p><strong>Training:</strong> ${escapeHtml(levelLabel)}</p>
@@ -1920,18 +2377,18 @@ async function startServer() {
               <p><strong>Customer:</strong> ${escapeHtml(auth.user.email)}</p>
             </div>
           `,
-        }),
-        sendAuthEmail({
-          to: auth.user.email,
-          subject: "Your CVsolucion training payment is confirmed",
-          text: [
-            "Your training payment has been confirmed.",
-            `Training: ${levelLabel}`,
-            `Amount: ${amountLabel}`,
-            "",
-            "We will contact you with the next steps.",
-          ].join("\n"),
-          html: `
+          }),
+          sendAuthEmail({
+            to: auth.user.email,
+            subject: "Your CVsolucion training payment is confirmed",
+            text: [
+              "Your training payment has been confirmed.",
+              `Training: ${levelLabel}`,
+              `Amount: ${amountLabel}`,
+              "",
+              "We will contact you with the next steps.",
+            ].join("\n"),
+            html: `
             <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
               <p>Your training payment has been confirmed.</p>
               <p><strong>Training:</strong> ${escapeHtml(levelLabel)}</p>
@@ -1939,216 +2396,296 @@ async function startServer() {
               <p>We will contact you with the next steps.</p>
             </div>
           `,
-        }),
-      ]).then((results) => {
-        results.forEach((result, index) => {
-          if (result.status === "rejected") {
-            console.error("[training:email:failed]", {
-              target: index === 0 ? "admin" : "customer",
-              paymentIntentId: payment.id,
-              error: result.reason instanceof Error ? result.reason.stack || result.reason.message : String(result.reason),
-            });
-          }
+          }),
+        ]).then((results) => {
+          results.forEach((result, index) => {
+            if (result.status === "rejected") {
+              console.error("[training:email:failed]", {
+                target: index === 0 ? "admin" : "customer",
+                paymentIntentId: payment.id,
+                error:
+                  result.reason instanceof Error
+                    ? result.reason.stack || result.reason.message
+                    : String(result.reason),
+              });
+            }
+          });
         });
-      });
 
-      return;
-    } catch (error) {
-      return next(error);
-    }
-  });
+        return;
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
 
-  app.post("/api/stripe/booking-payment-intent", rateLimit({ key: "stripe-payment-intent", windowMs: 1000 * 60 * 10, limit: 40 }), async (req, res, next) => {
-    try {
-      const auth = getCurrentUser(req);
-      if (!auth) {
-        return res.status(401).json({ error: "Please sign in before starting payment." });
-      }
-
-      const serviceType = String(req.body?.serviceType || "consultation").trim() === "support" ? "support" : "consultation";
-      const priority = String(req.body?.priority || "standard").trim() === "express" ? "express" : "standard";
-      const slots = parseRequestedBookingSlots(req.body?.slots);
-      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-      const countryCode = getPricingCountryCode(req);
-
-      if (!slots.length) {
-        return res.status(400).json({ error: "Please choose at least one valid appointment time." });
-      }
-      if (!isBookingScheduleOpen(priority as BookingPriority)) {
-        return res.status(400).json({
-          error: priority === "express" ? "Express booking is currently closed." : "Standard booking is currently closed.",
-        });
-      }
-
-      const intent = await createBookingPaymentIntent({
-        userId: auth.user.id,
-        email: auth.user.email,
-        serviceType,
-        priority: priority as BookingPriority,
-        countryCode,
-        slots,
-        locale,
-      });
-
-      return res.json({
-        ok: true,
-        clientSecret: intent.client_secret,
-        paymentIntentId: intent.id,
-      });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.post("/api/bookings", rateLimit({ key: "bookings-create", windowMs: 1000 * 60 * 10, limit: 20 }), async (req, res, next) => {
-    try {
-      const auth = getCurrentUser(req);
-      if (!auth) {
-        return res.status(401).json({ error: "Please sign in before booking an appointment." });
-      }
-
-      const serviceType = String(req.body?.serviceType || "consultation").trim() === "support" ? "support" : "consultation";
-      const priority = String(req.body?.priority || "standard").trim() === "express" ? "express" : "standard";
-      const slots = parseRequestedBookingSlots(req.body?.slots);
-      const name = String(req.body?.name || "").trim();
-      const email = auth.user.email;
-      const phone = String(req.body?.phone || "").trim();
-      const countryCode = getPricingCountryCode(req);
-      const countryRecord = countryCode ? getTimezoneCountry(countryCode) : null;
-      const country = countryRecord?.name || String(req.body?.country || "").trim();
-      const company = String(req.body?.company || "").trim();
-      const notes = String(req.body?.notes || "").trim();
-      const packageKey = String(req.body?.packageKey || "").trim() || null;
-      const paymentIntentId = String(req.body?.paymentIntentId || "").trim();
-      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-
-      if (name.length < 2) {
-        return res.status(400).json({ error: "Name is required." });
-      }
-      if (phone.length < 6) {
-        return res.status(400).json({ error: "A valid phone number is required." });
-      }
-      if (!countryCode || !countryRecord) {
-        return res.status(400).json({ error: "Select a valid country from the list." });
-      }
-      if (company.length < 2) {
-        return res.status(400).json({ error: "Company name is required." });
-      }
-      if (notes.length < 10) {
-        return res.status(400).json({ error: "Please describe the issue or request." });
-      }
-      if (!slots.length) {
-        return res.status(400).json({ error: "Please choose at least one valid appointment time." });
-      }
-      if (!isBookingScheduleOpen(priority as BookingPriority)) {
-        return res.status(400).json({
-          error: priority === "express" ? "Express booking is currently closed." : "Standard booking is currently closed.",
-        });
-      }
-
-      const stripeConfig = getStripePricingSnapshot(countryCode);
-      let verifiedPayment: Awaited<ReturnType<typeof verifyBookingPayment>> | null = null;
-      if (stripeConfig.enabled) {
-        if (!paymentIntentId) {
-          return res.status(400).json({ error: "Payment is required before confirming this booking." });
+  app.post(
+    "/api/stripe/booking-payment-intent",
+    rateLimit({
+      key: "stripe-payment-intent",
+      windowMs: 1000 * 60 * 10,
+      limit: 40,
+    }),
+    async (req, res, next) => {
+      try {
+        const auth = getCurrentUser(req);
+        if (!auth) {
+          return res
+            .status(401)
+            .json({ error: "Please sign in before starting payment." });
         }
 
-        verifiedPayment = await verifyBookingPayment({
-          paymentIntentId,
+        const serviceType =
+          String(req.body?.serviceType || "consultation").trim() === "support"
+            ? "support"
+            : "consultation";
+        const priority =
+          String(req.body?.priority || "standard").trim() === "express"
+            ? "express"
+            : "standard";
+        const slots = parseRequestedBookingSlots(req.body?.slots);
+        const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+        const countryCode = getPricingCountryCode(req);
+
+        if (!slots.length) {
+          return res
+            .status(400)
+            .json({
+              error: "Please choose at least one valid appointment time.",
+            });
+        }
+        if (!isBookingScheduleOpen(priority as BookingPriority)) {
+          return res.status(400).json({
+            error:
+              priority === "express"
+                ? "Express booking is currently closed."
+                : "Standard booking is currently closed.",
+          });
+        }
+
+        const intent = await createBookingPaymentIntent({
           userId: auth.user.id,
+          email: auth.user.email,
           serviceType,
           priority: priority as BookingPriority,
           countryCode,
           slots,
+          locale,
         });
-      }
 
-      if (verifiedPayment?.id) {
-        const existingBookings = listBookingsByPaymentReference(verifiedPayment.id).filter(
-          (booking) => booking.userId === auth.user.id
-        );
-        if (existingBookings.length > 0) {
-          upsertCustomerProfile({
+        return res.json({
+          ok: true,
+          clientSecret: intent.client_secret,
+          paymentIntentId: intent.id,
+        });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/bookings",
+    rateLimit({ key: "bookings-create", windowMs: 1000 * 60 * 10, limit: 20 }),
+    async (req, res, next) => {
+      try {
+        const auth = getCurrentUser(req);
+        if (!auth) {
+          return res
+            .status(401)
+            .json({ error: "Please sign in before booking an appointment." });
+        }
+
+        const serviceType =
+          String(req.body?.serviceType || "consultation").trim() === "support"
+            ? "support"
+            : "consultation";
+        const priority =
+          String(req.body?.priority || "standard").trim() === "express"
+            ? "express"
+            : "standard";
+        const slots = parseRequestedBookingSlots(req.body?.slots);
+        const name = String(req.body?.name || "").trim();
+        const email = auth.user.email;
+        const phone = String(req.body?.phone || "").trim();
+        const countryCode = getPricingCountryCode(req);
+        const countryRecord = countryCode
+          ? getTimezoneCountry(countryCode)
+          : null;
+        const country =
+          countryRecord?.name || String(req.body?.country || "").trim();
+        const company = String(req.body?.company || "").trim();
+        const notes = String(req.body?.notes || "").trim();
+        const packageKey = String(req.body?.packageKey || "").trim() || null;
+        const paymentIntentId = String(req.body?.paymentIntentId || "").trim();
+        const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+
+        if (name.length < 2) {
+          return res.status(400).json({ error: "Name is required." });
+        }
+        if (phone.length < 6) {
+          return res
+            .status(400)
+            .json({ error: "A valid phone number is required." });
+        }
+        if (!countryCode || !countryRecord) {
+          return res
+            .status(400)
+            .json({ error: "Select a valid country from the list." });
+        }
+        if (company.length < 2) {
+          return res.status(400).json({ error: "Company name is required." });
+        }
+        if (notes.length < 10) {
+          return res
+            .status(400)
+            .json({ error: "Please describe the issue or request." });
+        }
+        if (!slots.length) {
+          return res
+            .status(400)
+            .json({
+              error: "Please choose at least one valid appointment time.",
+            });
+        }
+        if (!isBookingScheduleOpen(priority as BookingPriority)) {
+          return res.status(400).json({
+            error:
+              priority === "express"
+                ? "Express booking is currently closed."
+                : "Standard booking is currently closed.",
+          });
+        }
+
+        const stripeConfig = getStripePricingSnapshot(countryCode);
+        let verifiedPayment: Awaited<
+          ReturnType<typeof verifyBookingPayment>
+        > | null = null;
+        if (stripeConfig.enabled) {
+          if (!paymentIntentId) {
+            return res
+              .status(400)
+              .json({
+                error: "Payment is required before confirming this booking.",
+              });
+          }
+
+          verifiedPayment = await verifyBookingPayment({
+            paymentIntentId,
             userId: auth.user.id,
-            email: auth.user.email,
+            serviceType,
+            priority: priority as BookingPriority,
+            countryCode,
+            slots,
+          });
+        }
+
+        if (verifiedPayment?.id) {
+          const existingBookings = listBookingsByPaymentReference(
+            verifiedPayment.id,
+          ).filter((booking) => booking.userId === auth.user.id);
+          if (existingBookings.length > 0) {
+            upsertCustomerProfile({
+              userId: auth.user.id,
+              email: auth.user.email,
+              name,
+              country,
+              countryCode,
+              phone,
+              company,
+            });
+
+            return res
+              .status(201)
+              .json({
+                ok: true,
+                bookings: existingBookings,
+                booking: existingBookings[0],
+              });
+          }
+        }
+
+        const metadataSubtotal = Number(
+          verifiedPayment?.metadata?.bookingSubtotalCents || "",
+        );
+        const paidUnitAmount =
+          Number.isInteger(metadataSubtotal) &&
+          metadataSubtotal > 0 &&
+          slots.length
+            ? Math.round(metadataSubtotal / slots.length)
+            : getBookingPrice(
+                priority as BookingPriority,
+                serviceType,
+                countryCode,
+              );
+
+        const bookings = slots.map((slot) =>
+          createBooking({
+            userId: auth.user.id,
+            serviceType,
+            priority: priority as BookingPriority,
+            packageKey,
+            date: slot.date,
+            hour: slot.hour,
             name,
+            email,
+            phone,
             country,
             countryCode,
-            phone,
             company,
-          });
+            notes,
+            locale,
+            paymentStatus: verifiedPayment ? "paid" : "unpaid",
+            paymentProvider: verifiedPayment ? "stripe" : null,
+            paymentReference: verifiedPayment?.id || null,
+            unitAmount: paidUnitAmount,
+          }),
+        );
 
-          return res.status(201).json({ ok: true, bookings: existingBookings, booking: existingBookings[0] });
-        }
-      }
-
-      const metadataSubtotal = Number(verifiedPayment?.metadata?.bookingSubtotalCents || "");
-      const paidUnitAmount =
-        Number.isInteger(metadataSubtotal) && metadataSubtotal > 0 && slots.length
-          ? Math.round(metadataSubtotal / slots.length)
-          : getBookingPrice(priority as BookingPriority, serviceType, countryCode);
-
-      const bookings = slots.map((slot) =>
-        createBooking({
+        upsertCustomerProfile({
           userId: auth.user.id,
-          serviceType,
-          priority: priority as BookingPriority,
-          packageKey,
-          date: slot.date,
-          hour: slot.hour,
+          email: auth.user.email,
           name,
-          email,
-          phone,
           country,
           countryCode,
+          phone,
           company,
-          notes,
-          locale,
-          paymentStatus: verifiedPayment ? "paid" : "unpaid",
-          paymentProvider: verifiedPayment ? "stripe" : null,
-          paymentReference: verifiedPayment?.id || null,
-          unitAmount: paidUnitAmount,
-        })
-      );
+        });
 
-      upsertCustomerProfile({
-        userId: auth.user.id,
-        email: auth.user.email,
-        name,
-        country,
-        countryCode,
-        phone,
-        company,
-      });
+        const slotLabel = bookings
+          .map(
+            (booking) =>
+              `${booking.date} ${String(booking.hour).padStart(2, "0")}:00`,
+          )
+          .join(", ");
+        const destination = (
+          process.env.CONTACT_EMAIL || "contact@cvsolucion.com"
+        ).trim();
+        const priorityLabel = priority === "express" ? "Express" : "Standard";
+        const serviceLabel =
+          serviceType === "support" ? "Support" : "Consultation";
 
-      const slotLabel = bookings
-        .map((booking) => `${booking.date} ${String(booking.hour).padStart(2, "0")}:00`)
-        .join(", ");
-      const destination = (process.env.CONTACT_EMAIL || "contact@cvsolucion.com").trim();
-      const priorityLabel = priority === "express" ? "Express" : "Standard";
-      const serviceLabel = serviceType === "support" ? "Support" : "Consultation";
+        const bookingResponse = { ok: true, bookings, booking: bookings[0] };
+        res.status(201).json(bookingResponse);
 
-      const bookingResponse = { ok: true, bookings, booking: bookings[0] };
-      res.status(201).json(bookingResponse);
-
-      void Promise.allSettled([
-        sendAuthEmail({
-          to: destination,
-          subject: `New ${priorityLabel} booking - ${name}`,
-          text: [
-            `Booking IDs: ${bookings.map((booking) => booking.id).join(", ")}`,
-            `Service: ${serviceLabel}`,
-            `Priority: ${priorityLabel}`,
-            `Slots (Quebec): ${slotLabel}`,
-            `Name: ${name}`,
-            `Email: ${email}`,
-            `Phone: ${phone}`,
-            company ? `Company: ${company}` : null,
-            notes ? `Notes: ${notes}` : null,
-          ]
-            .filter(Boolean)
-            .join("\n"),
-          html: `
+        void Promise.allSettled([
+          sendAuthEmail({
+            to: destination,
+            subject: `New ${priorityLabel} booking - ${name}`,
+            text: [
+              `Booking IDs: ${bookings.map((booking) => booking.id).join(", ")}`,
+              `Service: ${serviceLabel}`,
+              `Priority: ${priorityLabel}`,
+              `Slots (Quebec): ${slotLabel}`,
+              `Name: ${name}`,
+              `Email: ${email}`,
+              `Phone: ${phone}`,
+              company ? `Company: ${company}` : null,
+              notes ? `Notes: ${notes}` : null,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            html: `
             <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
               <h2 style="margin:0 0 16px">New ${escapeHtml(priorityLabel)} booking</h2>
               <p><strong>Booking IDs:</strong> ${escapeHtml(bookings.map((booking) => booking.id).join(", "))}</p>
@@ -2162,19 +2699,19 @@ async function startServer() {
               ${notes ? `<p><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : ""}
             </div>
           `,
-        }),
-        sendAuthEmail({
-          to: email,
-          subject: "Your CVsolucion booking request is confirmed",
-          text: [
-            `Hello ${name},`,
-            "",
-            `Your ${priorityLabel.toLowerCase()} ${serviceLabel.toLowerCase()} booking request has been recorded.`,
-            `Requested slot(s) (Quebec time): ${slotLabel}`,
-            "",
-            "If any adjustment is needed, our team will contact you using the details you submitted.",
-          ].join("\n"),
-          html: `
+          }),
+          sendAuthEmail({
+            to: email,
+            subject: "Your CVsolucion booking request is confirmed",
+            text: [
+              `Hello ${name},`,
+              "",
+              `Your ${priorityLabel.toLowerCase()} ${serviceLabel.toLowerCase()} booking request has been recorded.`,
+              `Requested slot(s) (Quebec time): ${slotLabel}`,
+              "",
+              "If any adjustment is needed, our team will contact you using the details you submitted.",
+            ].join("\n"),
+            html: `
             <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
               <p>Hello ${escapeHtml(name)},</p>
               <p>Your <strong>${escapeHtml(priorityLabel.toLowerCase())}</strong> ${escapeHtml(serviceLabel.toLowerCase())} booking request has been recorded.</p>
@@ -2182,158 +2719,230 @@ async function startServer() {
               <p>If any adjustment is needed, our team will contact you using the details you submitted.</p>
             </div>
           `,
-        }),
-      ]).then((results) => {
-        results.forEach((result, index) => {
-          if (result.status === "rejected") {
-            const target = index === 0 ? "admin" : "customer";
-            console.error("[booking:email:failed]", {
-              target,
-              bookingIds: bookings.map((booking) => booking.id),
-              error: result.reason instanceof Error ? result.reason.stack || result.reason.message : String(result.reason),
-            });
-          }
+          }),
+        ]).then((results) => {
+          results.forEach((result, index) => {
+            if (result.status === "rejected") {
+              const target = index === 0 ? "admin" : "customer";
+              console.error("[booking:email:failed]", {
+                target,
+                bookingIds: bookings.map((booking) => booking.id),
+                error:
+                  result.reason instanceof Error
+                    ? result.reason.stack || result.reason.message
+                    : String(result.reason),
+              });
+            }
+          });
         });
-      });
 
-      return;
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.post("/api/bookings/:bookingId/reschedule", rateLimit({ key: "bookings-reschedule", windowMs: 1000 * 60 * 10, limit: 30 }), async (req, res, next) => {
-    try {
-      const auth = getCurrentUser(req);
-      if (!auth) {
-        return res.status(401).json({ error: "Please sign in before changing an appointment." });
+        return;
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      const bookingId = String(req.params.bookingId || "").trim();
-      const date = String(req.body?.date || "").trim();
-      const hour = Number(req.body?.hour);
+  app.post(
+    "/api/bookings/:bookingId/reschedule",
+    rateLimit({
+      key: "bookings-reschedule",
+      windowMs: 1000 * 60 * 10,
+      limit: 30,
+    }),
+    async (req, res, next) => {
+      try {
+        const auth = getCurrentUser(req);
+        if (!auth) {
+          return res
+            .status(401)
+            .json({ error: "Please sign in before changing an appointment." });
+        }
 
-      if (!bookingId) {
-        return res.status(400).json({ error: "Booking is required." });
+        const bookingId = String(req.params.bookingId || "").trim();
+        const date = String(req.body?.date || "").trim();
+        const hour = Number(req.body?.hour);
+
+        if (!bookingId) {
+          return res.status(400).json({ error: "Booking is required." });
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          return res
+            .status(400)
+            .json({ error: "Please choose a valid booking date." });
+        }
+        if (!Number.isInteger(hour)) {
+          return res
+            .status(400)
+            .json({ error: "Please choose a valid appointment time." });
+        }
+
+        const booking = rescheduleBooking({
+          bookingId,
+          userId: auth.user.id,
+          date,
+          hour,
+        });
+
+        return res.json({
+          ok: true,
+          booking: serializeCustomerBooking(booking),
+        });
+      } catch (error) {
+        return next(error);
       }
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        return res.status(400).json({ error: "Please choose a valid booking date." });
+    },
+  );
+
+  app.post(
+    "/api/auth/signup",
+    rateLimit({ key: "signup-ip", windowMs: 1000 * 60 * 10, limit: 10 }),
+    rateLimit({
+      key: "signup-email",
+      windowMs: 1000 * 60 * 30,
+      limit: 4,
+      scope: requestBodyFieldScope("email"),
+    }),
+    async (req, res, next) => {
+      try {
+        const email = String(req.body?.email || "").trim();
+        const password = String(req.body?.password || "");
+        const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+        const termsAccepted = Boolean(req.body?.termsAccepted);
+        const countryCode = normalizeCountryCode(req.body?.countryCode);
+        const countryRecord = countryCode
+          ? getTimezoneCountry(countryCode)
+          : null;
+        const country =
+          countryRecord?.name || String(req.body?.country || "").trim();
+        const termsVersion = "04/2026";
+
+        if (!EMAIL_REGEX.test(email) || !password) {
+          return res
+            .status(400)
+            .json({ error: "Email and password are required." });
+        }
+        if (!validatePasswordPolicy(password).valid) {
+          return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
+        }
+        if (!termsAccepted) {
+          return res
+            .status(400)
+            .json({
+              error:
+                "You must accept the Terms and Conditions before creating an account.",
+            });
+        }
+        if (!countryCode || !countryRecord) {
+          return res
+            .status(400)
+            .json({ error: "Select a valid country from the list." });
+        }
+
+        const user = createUser(email, password, termsVersion);
+        const { rawToken } = createToken(
+          user.id,
+          "verify_email",
+          VERIFY_LINK_MS,
+        );
+        const verifyUrl = `${appOrigin(req)}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}`;
+
+        recordEvent({
+          type: "signup",
+          userId: user.id,
+          email: user.email,
+          locale,
+          ip: getRequestIp(req),
+          userAgent: req.get("user-agent") || null,
+        });
+        try {
+          await sendLinkEmail({
+            email: user.email,
+            locale,
+            type: "verify",
+            url: verifyUrl,
+          });
+        } catch (error) {
+          if (error instanceof RecipientEmailRejectedError) {
+            deleteUserById(user.id);
+            return res
+              .status(400)
+              .json({
+                error: authEmailDeliveryMessage(locale, "recipient_rejected"),
+              });
+          }
+          return res
+            .status(502)
+            .json({
+              error: authEmailDeliveryMessage(locale, "delivery_failed"),
+            });
+        }
+
+        upsertCustomerProfile({
+          userId: user.id,
+          email: user.email,
+          country,
+          countryCode,
+        });
+
+        return res.status(201).json({ ok: true });
+      } catch (error) {
+        return next(error);
       }
-      if (!Number.isInteger(hour)) {
-        return res.status(400).json({ error: "Please choose a valid appointment time." });
-      }
+    },
+  );
 
-      const booking = rescheduleBooking({
-        bookingId,
-        userId: auth.user.id,
-        date,
-        hour,
-      });
-
-      return res.json({ ok: true, booking: serializeCustomerBooking(booking) });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.post("/api/auth/signup", rateLimit({ key: "signup", windowMs: 1000 * 60 * 10, limit: 10 }), async (req, res, next) => {
-    try {
+  app.post(
+    "/api/auth/login",
+    rateLimit({ key: "login-ip", windowMs: 1000 * 60 * 15, limit: 20 }),
+    rateLimit({
+      key: "login-email",
+      windowMs: 1000 * 60 * 15,
+      limit: 8,
+      scope: requestBodyFieldScope("email"),
+    }),
+    (req, res) => {
       const email = String(req.body?.email || "").trim();
       const password = String(req.body?.password || "");
-      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-      const termsAccepted = Boolean(req.body?.termsAccepted);
-      const countryCode = normalizeCountryCode(req.body?.countryCode);
-      const countryRecord = countryCode ? getTimezoneCountry(countryCode) : null;
-      const country = countryRecord?.name || String(req.body?.country || "").trim();
-      const termsVersion = "04/2026";
+      const user = getUserByEmail(email);
 
-      if (!EMAIL_REGEX.test(email) || !password) {
-        return res.status(400).json({ error: "Email and password are required." });
+      if (!user || !verifyPassword(password, user)) {
+        recordEvent({
+          type: "login_failed",
+          userId: user?.id ?? null,
+          email: email.toLowerCase() || null,
+          locale: null,
+          ip: getRequestIp(req),
+          userAgent: req.get("user-agent") || null,
+        });
+        return res.status(401).json({ error: "Invalid login credentials." });
       }
-      if (!validatePasswordPolicy(password).valid) {
-        return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
-      }
-      if (!termsAccepted) {
-        return res.status(400).json({ error: "You must accept the Terms and Conditions before creating an account." });
-      }
-      if (!countryCode || !countryRecord) {
-        return res.status(400).json({ error: "Select a valid country from the list." });
+      if (!user.emailVerifiedAt) {
+        return res
+          .status(403)
+          .json({ error: "Please confirm your email before signing in." });
       }
 
-      const user = createUser(email, password, termsVersion);
-      const { rawToken } = createToken(user.id, "verify_email", VERIFY_LINK_MS);
-      const verifyUrl = `${appOrigin(req)}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}`;
-
+      const session = createSession(user.id, ONE_YEAR_MS);
+      setSessionCookie(req, res, session.id);
       recordEvent({
-        type: "signup",
+        type: "login",
         userId: user.id,
         email: user.email,
-        locale,
-        ip: getRequestIp(req),
-        userAgent: req.get("user-agent") || null,
-      });
-      try {
-        await sendLinkEmail({ email: user.email, locale, type: "verify", url: verifyUrl });
-      } catch (error) {
-        if (error instanceof RecipientEmailRejectedError) {
-          deleteUserById(user.id);
-          return res.status(400).json({ error: authEmailDeliveryMessage(locale, "recipient_rejected") });
-        }
-        return res.status(502).json({ error: authEmailDeliveryMessage(locale, "delivery_failed") });
-      }
-
-      upsertCustomerProfile({
-        userId: user.id,
-        email: user.email,
-        country,
-        countryCode,
-      });
-
-      return res.status(201).json({ ok: true });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.post("/api/auth/login", rateLimit({ key: "login", windowMs: 1000 * 60 * 15, limit: 20 }), (req, res) => {
-    const email = String(req.body?.email || "").trim();
-    const password = String(req.body?.password || "");
-    const user = getUserByEmail(email);
-
-    if (!user || !verifyPassword(password, user)) {
-      recordEvent({
-        type: "login_failed",
-        userId: user?.id ?? null,
-        email: email.toLowerCase() || null,
         locale: null,
         ip: getRequestIp(req),
         userAgent: req.get("user-agent") || null,
       });
-      return res.status(401).json({ error: "Invalid login credentials." });
-    }
-    if (!user.emailVerifiedAt) {
-      return res.status(403).json({ error: "Please confirm your email before signing in." });
-    }
-
-    const session = createSession(user.id, ONE_YEAR_MS);
-    setSessionCookie(req, res, session.id);
-    recordEvent({
-      type: "login",
-      userId: user.id,
-      email: user.email,
-      locale: null,
-      ip: getRequestIp(req),
-      userAgent: req.get("user-agent") || null,
-    });
-    return res.json({
-      user: serializePublicUser(user),
-      role: getUserRole(user),
-      isAdmin: getUserRole(user) === "admin",
-      isDesigner: getUserRole(user) === "designer",
-      isTrainer: getUserRole(user) === "trainer",
-      csrfToken: createCsrfToken({ session, user }),
-    });
-  });
+      return res.json({
+        user: serializePublicUser(user),
+        role: getUserRole(user),
+        isAdmin: getUserRole(user) === "admin",
+        isDesigner: getUserRole(user) === "designer",
+        isTrainer: getUserRole(user) === "trainer",
+        csrfToken: createCsrfToken({ session, user }),
+      });
+    },
+  );
 
   app.post("/api/auth/logout", (req, res) => {
     const auth = getCurrentUser(req);
@@ -2354,79 +2963,135 @@ async function startServer() {
     return res.json({ ok: true });
   });
 
-  app.post("/api/auth/magic-link", rateLimit({ key: "magic", windowMs: 1000 * 60 * 15, limit: 12 }), (req, res) => {
-    console.warn("[auth:magic-link:disabled]", {
-      email: String(req.body?.email || "").trim() || null,
-      ip: getRequestIp(req),
-      userAgent: req.get("user-agent") || null,
-    });
-    return res.status(410).json({ error: "Magic link sign-in has been removed. Use your password or reset it if needed." });
-  });
-
-  app.post("/api/auth/forgot-password", rateLimit({ key: "forgot", windowMs: 1000 * 60 * 15, limit: 12 }), async (req, res, next) => {
-    try {
-      const email = String(req.body?.email || "").trim();
-      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-      const user = getUserByEmail(email);
-
-      if (!user) {
-        return res.json({ ok: true });
-      }
-
-      const { rawToken } = createToken(user.id, "reset_password", RESET_LINK_MS);
-      const resetUrl = `${appOrigin(req)}${localePrefix(locale)}/login?recovery=1&token=${encodeURIComponent(rawToken)}`;
-
-      recordEvent({
-        type: "password_reset_requested",
-        userId: user.id,
-        email: user.email,
-        locale,
+  app.post(
+    "/api/auth/magic-link",
+    rateLimit({ key: "magic-ip", windowMs: 1000 * 60 * 15, limit: 12 }),
+    rateLimit({
+      key: "magic-email",
+      windowMs: 1000 * 60 * 15,
+      limit: 6,
+      scope: requestBodyFieldScope("email"),
+    }),
+    (req, res) => {
+      console.warn("[auth:magic-link:disabled]", {
+        email: String(req.body?.email || "").trim() || null,
         ip: getRequestIp(req),
         userAgent: req.get("user-agent") || null,
       });
+      return res
+        .status(410)
+        .json({
+          error:
+            "Magic link sign-in has been removed. Use your password or reset it if needed.",
+        });
+    },
+  );
+
+  app.post(
+    "/api/auth/forgot-password",
+    rateLimit({ key: "forgot-ip", windowMs: 1000 * 60 * 15, limit: 12 }),
+    rateLimit({
+      key: "forgot-email",
+      windowMs: 1000 * 60 * 30,
+      limit: 5,
+      scope: requestBodyFieldScope("email"),
+    }),
+    async (req, res, next) => {
       try {
-        await sendLinkEmail({ email: user.email, locale, type: "reset", url: resetUrl });
-      } catch (error) {
-        if (error instanceof RecipientEmailRejectedError) {
-          return res.status(400).json({ error: authEmailDeliveryMessage(locale, "recipient_rejected") });
+        const email = String(req.body?.email || "").trim();
+        const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+        const user = getUserByEmail(email);
+
+        if (!user) {
+          return res.json({ ok: true });
         }
-        return res.status(502).json({ error: authEmailDeliveryMessage(locale, "delivery_failed") });
+
+        const { rawToken } = createToken(
+          user.id,
+          "reset_password",
+          RESET_LINK_MS,
+        );
+        const resetUrl = `${appOrigin(req)}${localePrefix(locale)}/login?recovery=1&token=${encodeURIComponent(rawToken)}`;
+
+        recordEvent({
+          type: "password_reset_requested",
+          userId: user.id,
+          email: user.email,
+          locale,
+          ip: getRequestIp(req),
+          userAgent: req.get("user-agent") || null,
+        });
+        try {
+          await sendLinkEmail({
+            email: user.email,
+            locale,
+            type: "reset",
+            url: resetUrl,
+          });
+        } catch (error) {
+          if (error instanceof RecipientEmailRejectedError) {
+            return res
+              .status(400)
+              .json({
+                error: authEmailDeliveryMessage(locale, "recipient_rejected"),
+              });
+          }
+          return res
+            .status(502)
+            .json({
+              error: authEmailDeliveryMessage(locale, "delivery_failed"),
+            });
+        }
+        return res.json({ ok: true });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
+
+  app.post(
+    "/api/auth/reset-password",
+    rateLimit({ key: "reset-ip", windowMs: 1000 * 60 * 15, limit: 12 }),
+    rateLimit({
+      key: "reset-token",
+      windowMs: 1000 * 60 * 15,
+      limit: 8,
+      scope: requestBodyFieldScope("token"),
+    }),
+    (req, res) => {
+      const token = String(req.body?.token || "").trim();
+      const password = String(req.body?.password || "");
+
+      if (!token || !password) {
+        return res
+          .status(400)
+          .json({ error: "A valid token and password are required." });
+      }
+      if (!validatePasswordPolicy(password).valid) {
+        return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
+      }
+
+      const tokenRecord = consumeToken(token, "reset_password");
+      if (!tokenRecord) {
+        return res
+          .status(400)
+          .json({ error: "Reset link expired. Please request a new one." });
+      }
+
+      updateUserPassword(tokenRecord.userId, password);
+      deleteUserSessions(tokenRecord.userId);
+      const user = getUserById(tokenRecord.userId);
+      recordEvent({
+        type: "password_reset_completed",
+        userId: tokenRecord.userId,
+        email: user?.email ?? null,
+        locale: null,
+        ip: getRequestIp(req),
+        userAgent: req.get("user-agent") || null,
+      });
       return res.json({ ok: true });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.post("/api/auth/reset-password", rateLimit({ key: "reset", windowMs: 1000 * 60 * 15, limit: 12 }), (req, res) => {
-    const token = String(req.body?.token || "").trim();
-    const password = String(req.body?.password || "");
-
-    if (!token || !password) {
-      return res.status(400).json({ error: "A valid token and password are required." });
-    }
-    if (!validatePasswordPolicy(password).valid) {
-      return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
-    }
-
-    const tokenRecord = consumeToken(token, "reset_password");
-    if (!tokenRecord) {
-      return res.status(400).json({ error: "Reset link expired. Please request a new one." });
-    }
-
-    updateUserPassword(tokenRecord.userId, password);
-    deleteUserSessions(tokenRecord.userId);
-    const user = getUserById(tokenRecord.userId);
-    recordEvent({
-      type: "password_reset_completed",
-      userId: tokenRecord.userId,
-      email: user?.email ?? null,
-      locale: null,
-      ip: getRequestIp(req),
-      userAgent: req.get("user-agent") || null,
-    });
-    return res.json({ ok: true });
-  });
+    },
+  );
 
   app.get("/api/auth/verify-email", (req, res) => {
     const token = String(req.query.token || "");
@@ -2454,61 +3119,79 @@ async function startServer() {
 
   app.get("/api/auth/magic-login", (req, res) => {
     const locale = normalizeAuthLocale(String(req.query.locale || "en"));
-    return res.redirect(302, `${appOrigin(req)}${localePrefix(locale)}/login?magic=disabled`);
+    return res.redirect(
+      302,
+      `${appOrigin(req)}${localePrefix(locale)}/login?magic=disabled`,
+    );
   });
 
-  app.get("/api/admin/dashboard", rateLimit({ key: "admin-dashboard", windowMs: 1000 * 60, limit: 120 }), async (req, res) => {
-    const auth = requireAdmin(req, res);
-    if (!auth) return;
-    res.setHeader("Cache-Control", "no-store");
-    const ga4 = await getGa4DashboardSnapshot();
-    const visitors = getVisitorsSnapshot();
-    const bookings = listBookings().map(serializeCustomerBooking);
-    const leads = listContactLeads();
-    return res.json({
-      admin: {
-        email: auth.user.email,
-      },
-      ...getAdminSnapshot(),
-      bookings,
-      bookingSchedule: getBookingScheduleSettings(),
-      leads,
-      visitors,
-      conversations: getConversationsSnapshot(visitors),
-      ga4,
-      chat: {
-        enabled: isChatEnabled(),
-      },
-    });
-  });
+  app.get(
+    "/api/admin/dashboard",
+    rateLimit({ key: "admin-dashboard", windowMs: 1000 * 60, limit: 120 }),
+    async (req, res) => {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+      res.setHeader("Cache-Control", "no-store");
+      const ga4 = await getGa4DashboardSnapshot();
+      const visitors = getVisitorsSnapshot();
+      const bookings = listBookings().map(serializeCustomerBooking);
+      const leads = listContactLeads();
+      return res.json({
+        admin: {
+          email: auth.user.email,
+        },
+        ...getAdminSnapshot(),
+        bookings,
+        bookingSchedule: getBookingScheduleSettings(),
+        leads,
+        visitors,
+        conversations: getConversationsSnapshot(visitors),
+        ga4,
+        chat: {
+          enabled: isChatEnabled(),
+        },
+      });
+    },
+  );
 
-  app.get("/api/admin/designers", rateLimit({ key: "admin-designers", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
-    const auth = requireAdmin(req, res);
-    if (!auth) return;
+  app.get(
+    "/api/admin/designers",
+    rateLimit({ key: "admin-designers", windowMs: 1000 * 60, limit: 120 }),
+    (req, res) => {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
 
-    const users = getAdminSnapshot().users;
-    const profiles = listDesignerProfiles();
-    const profileMap = new Map(profiles.map((profile) => [profile.userId, profile]));
-    const bookings = listBookings()
-      .filter((booking) => booking.status === "confirmed")
-      .map(serializeCustomerBooking);
-    const tasks = listDesignerTasks();
-    const bookingMap = new Map(bookings.map((booking) => [booking.id, booking]));
+      const users = getAdminSnapshot().users;
+      const profiles = listDesignerProfiles();
+      const profileMap = new Map(
+        profiles.map((profile) => [profile.userId, profile]),
+      );
+      const bookings = listBookings()
+        .filter((booking) => booking.status === "confirmed")
+        .map(serializeCustomerBooking);
+      const tasks = listDesignerTasks();
+      const bookingMap = new Map(
+        bookings.map((booking) => [booking.id, booking]),
+      );
 
-    const designers = users
-      .filter((user) => user.role === "designer")
-      .map((user) => {
-        const profile = profileMap.get(user.id);
-        const designerBookings = bookings.filter((booking) => booking.designerUserId === user.id);
-        const designerTasks = tasks.filter((task) => task.designerUserId === user.id);
-        return {
-          user: {
-            ...user,
-            displayName: profile?.displayName || fallbackDisplayNameFromEmail(user.email),
-          },
-          profile:
-            profile ??
-            {
+      const designers = users
+        .filter((user) => user.role === "designer")
+        .map((user) => {
+          const profile = profileMap.get(user.id);
+          const designerBookings = bookings.filter(
+            (booking) => booking.designerUserId === user.id,
+          );
+          const designerTasks = tasks.filter(
+            (task) => task.designerUserId === user.id,
+          );
+          return {
+            user: {
+              ...user,
+              displayName:
+                profile?.displayName ||
+                fallbackDisplayNameFromEmail(user.email),
+            },
+            profile: profile ?? {
               userId: user.id,
               email: user.email,
               displayName: fallbackDisplayNameFromEmail(user.email),
@@ -2518,55 +3201,74 @@ async function startServer() {
               createdAt: user.createdAt,
               updatedAt: user.updatedAt,
             },
-          stats: {
-            assignedBookings: designerBookings.length,
-            upcomingBookings: designerBookings.filter(
-              (booking) => new Date(`${booking.date}T${String(booking.hour).padStart(2, "0")}:00:00`).getTime() >= Date.now()
-            ).length,
-            openTasks: designerTasks.filter((task) => task.status !== "done").length,
-            completedTasks: designerTasks.filter((task) => task.status === "done").length,
-          },
-        };
+            stats: {
+              assignedBookings: designerBookings.length,
+              upcomingBookings: designerBookings.filter(
+                (booking) =>
+                  new Date(
+                    `${booking.date}T${String(booking.hour).padStart(2, "0")}:00:00`,
+                  ).getTime() >= Date.now(),
+              ).length,
+              openTasks: designerTasks.filter((task) => task.status !== "done")
+                .length,
+              completedTasks: designerTasks.filter(
+                (task) => task.status === "done",
+              ).length,
+            },
+          };
+        });
+
+      const candidateUsers = users
+        .filter((user) => user.role !== "admin")
+        .map((user) => ({
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          emailVerifiedAt: user.emailVerifiedAt,
+        }));
+
+      return res.json({
+        designers,
+        candidateUsers,
+        bookings,
+        tasks: tasks.map((task) => ({
+          ...serializeDesignerTaskForApi(task, bookingMap),
+          designer: users.find((user) => user.id === task.designerUserId)
+            ? {
+                userId: task.designerUserId,
+                email:
+                  users.find((user) => user.id === task.designerUserId)
+                    ?.email || "",
+                displayName:
+                  profileMap.get(task.designerUserId)?.displayName ||
+                  fallbackDisplayNameFromEmail(
+                    users.find((user) => user.id === task.designerUserId)
+                      ?.email || "",
+                  ),
+              }
+            : null,
+        })),
       });
-
-    const candidateUsers = users
-      .filter((user) => user.role !== "admin")
-      .map((user) => ({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        emailVerifiedAt: user.emailVerifiedAt,
-      }));
-
-    return res.json({
-      designers,
-      candidateUsers,
-      bookings,
-      tasks: tasks.map((task) => ({
-        ...serializeDesignerTaskForApi(task, bookingMap),
-        designer: users.find((user) => user.id === task.designerUserId)
-          ? {
-              userId: task.designerUserId,
-              email: users.find((user) => user.id === task.designerUserId)?.email || "",
-              displayName:
-                profileMap.get(task.designerUserId)?.displayName ||
-                fallbackDisplayNameFromEmail(users.find((user) => user.id === task.designerUserId)?.email || ""),
-            }
-          : null,
-      })),
-    });
-  });
+    },
+  );
 
   app.post(
     "/api/admin/bookings/:bookingId/assign-designer",
-    rateLimit({ key: "admin-booking-assign-designer", windowMs: 1000 * 60 * 5, limit: 120 }),
+    rateLimit({
+      key: "admin-booking-assign-designer",
+      windowMs: 1000 * 60 * 5,
+      limit: 120,
+    }),
     (req, res, next) => {
       try {
         const auth = requireAdmin(req, res);
         if (!auth) return;
 
         const bookingId = String(req.params.bookingId || "").trim();
-        const designerUserId = typeof req.body?.designerUserId === "string" ? req.body.designerUserId.trim() : "";
+        const designerUserId =
+          typeof req.body?.designerUserId === "string"
+            ? req.body.designerUserId.trim()
+            : "";
 
         if (!bookingId) {
           return res.status(400).json({ error: "Booking is required." });
@@ -2575,12 +3277,16 @@ async function startServer() {
         if (designerUserId) {
           const designerUser = getUserById(designerUserId);
           if (!designerUser || getUserRole(designerUser) !== "designer") {
-            return res.status(400).json({ error: "Select a valid designer account." });
+            return res
+              .status(400)
+              .json({ error: "Select a valid designer account." });
           }
           upsertDesignerProfile({
             userId: designerUser.id,
             email: designerUser.email,
-            displayName: getDesignerProfile(designerUser.id)?.displayName || fallbackDisplayNameFromEmail(designerUser.email),
+            displayName:
+              getDesignerProfile(designerUser.id)?.displayName ||
+              fallbackDisplayNameFromEmail(designerUser.email),
           });
         }
 
@@ -2599,16 +3305,23 @@ async function startServer() {
           userAgent: `admin:booking-assign:${booking.id}:${designerUserId || "none"}`,
         });
 
-        return res.json({ ok: true, booking: serializeCustomerBooking(booking) });
+        return res.json({
+          ok: true,
+          booking: serializeCustomerBooking(booking),
+        });
       } catch (error) {
         return next(error);
       }
-    }
+    },
   );
 
   app.post(
     "/api/admin/designer-tasks",
-    rateLimit({ key: "admin-designer-task-create", windowMs: 1000 * 60 * 5, limit: 80 }),
+    rateLimit({
+      key: "admin-designer-task-create",
+      windowMs: 1000 * 60 * 5,
+      limit: 80,
+    }),
     (req, res, next) => {
       try {
         const auth = requireAdmin(req, res);
@@ -2616,23 +3329,40 @@ async function startServer() {
 
         const designerUserId = String(req.body?.designerUserId || "").trim();
         const title = String(req.body?.title || "").trim();
-        const description = typeof req.body?.description === "string" ? req.body.description : null;
+        const description =
+          typeof req.body?.description === "string"
+            ? req.body.description
+            : null;
         const status = req.body?.status;
         const priority = req.body?.priority;
-        const dueAt = typeof req.body?.dueAt === "string" ? req.body.dueAt : null;
-        const bookingId = typeof req.body?.bookingId === "string" ? req.body.bookingId : null;
+        const dueAt =
+          typeof req.body?.dueAt === "string" ? req.body.dueAt : null;
+        const bookingId =
+          typeof req.body?.bookingId === "string" ? req.body.bookingId : null;
 
         const designerUser = getUserById(designerUserId);
         if (!designerUser || getUserRole(designerUser) !== "designer") {
-          return res.status(400).json({ error: "Select a valid designer account." });
+          return res
+            .status(400)
+            .json({ error: "Select a valid designer account." });
         }
         if (title.length < 3) {
           return res.status(400).json({ error: "Task title is required." });
         }
-        if (status && status !== "todo" && status !== "in_progress" && status !== "done") {
+        if (
+          status &&
+          status !== "todo" &&
+          status !== "in_progress" &&
+          status !== "done"
+        ) {
           return res.status(400).json({ error: "Invalid task status." });
         }
-        if (priority && priority !== "low" && priority !== "normal" && priority !== "high") {
+        if (
+          priority &&
+          priority !== "low" &&
+          priority !== "normal" &&
+          priority !== "high"
+        ) {
           return res.status(400).json({ error: "Invalid task priority." });
         }
 
@@ -2656,43 +3386,80 @@ async function startServer() {
           userAgent: `admin:designer-task-create:${task.id}:${designerUserId}`,
         });
 
-        const bookingMap = new Map(listBookings().map((booking) => [booking.id, serializeCustomerBooking(booking)]));
-        return res.json({ ok: true, task: serializeDesignerTaskForApi(task, bookingMap) });
+        const bookingMap = new Map(
+          listBookings().map((booking) => [
+            booking.id,
+            serializeCustomerBooking(booking),
+          ]),
+        );
+        return res.json({
+          ok: true,
+          task: serializeDesignerTaskForApi(task, bookingMap),
+        });
       } catch (error) {
         return next(error);
       }
-    }
+    },
   );
 
   app.patch(
     "/api/admin/designer-tasks/:taskId",
-    rateLimit({ key: "admin-designer-task-update", windowMs: 1000 * 60 * 5, limit: 120 }),
+    rateLimit({
+      key: "admin-designer-task-update",
+      windowMs: 1000 * 60 * 5,
+      limit: 120,
+    }),
     (req, res, next) => {
       try {
         const auth = requireAdmin(req, res);
         if (!auth) return;
 
         const taskId = String(req.params.taskId || "").trim();
-        const designerUserId = typeof req.body?.designerUserId === "string" ? req.body.designerUserId.trim() : undefined;
-        const title = typeof req.body?.title === "string" ? req.body.title : undefined;
+        const designerUserId =
+          typeof req.body?.designerUserId === "string"
+            ? req.body.designerUserId.trim()
+            : undefined;
+        const title =
+          typeof req.body?.title === "string" ? req.body.title : undefined;
         const description =
-          typeof req.body?.description === "string" || req.body?.description === null ? req.body.description : undefined;
-        const dueAt = typeof req.body?.dueAt === "string" || req.body?.dueAt === null ? req.body.dueAt : undefined;
+          typeof req.body?.description === "string" ||
+          req.body?.description === null
+            ? req.body.description
+            : undefined;
+        const dueAt =
+          typeof req.body?.dueAt === "string" || req.body?.dueAt === null
+            ? req.body.dueAt
+            : undefined;
         const bookingId =
-          typeof req.body?.bookingId === "string" || req.body?.bookingId === null ? req.body.bookingId : undefined;
+          typeof req.body?.bookingId === "string" ||
+          req.body?.bookingId === null
+            ? req.body.bookingId
+            : undefined;
         const status = req.body?.status;
         const priority = req.body?.priority;
 
         if (designerUserId) {
           const designerUser = getUserById(designerUserId);
           if (!designerUser || getUserRole(designerUser) !== "designer") {
-            return res.status(400).json({ error: "Select a valid designer account." });
+            return res
+              .status(400)
+              .json({ error: "Select a valid designer account." });
           }
         }
-        if (status && status !== "todo" && status !== "in_progress" && status !== "done") {
+        if (
+          status &&
+          status !== "todo" &&
+          status !== "in_progress" &&
+          status !== "done"
+        ) {
           return res.status(400).json({ error: "Invalid task status." });
         }
-        if (priority && priority !== "low" && priority !== "normal" && priority !== "high") {
+        if (
+          priority &&
+          priority !== "low" &&
+          priority !== "normal" &&
+          priority !== "high"
+        ) {
           return res.status(400).json({ error: "Invalid task priority." });
         }
 
@@ -2716,17 +3483,29 @@ async function startServer() {
           userAgent: `admin:designer-task-update:${task.id}`,
         });
 
-        const bookingMap = new Map(listBookings().map((booking) => [booking.id, serializeCustomerBooking(booking)]));
-        return res.json({ ok: true, task: serializeDesignerTaskForApi(task, bookingMap) });
+        const bookingMap = new Map(
+          listBookings().map((booking) => [
+            booking.id,
+            serializeCustomerBooking(booking),
+          ]),
+        );
+        return res.json({
+          ok: true,
+          task: serializeDesignerTaskForApi(task, bookingMap),
+        });
       } catch (error) {
         return next(error);
       }
-    }
+    },
   );
 
   app.delete(
     "/api/admin/designer-tasks/:taskId",
-    rateLimit({ key: "admin-designer-task-delete", windowMs: 1000 * 60 * 5, limit: 80 }),
+    rateLimit({
+      key: "admin-designer-task-delete",
+      windowMs: 1000 * 60 * 5,
+      limit: 80,
+    }),
     (req, res, next) => {
       try {
         const auth = requireAdmin(req, res);
@@ -2751,37 +3530,43 @@ async function startServer() {
       } catch (error) {
         return next(error);
       }
-    }
+    },
   );
 
-  app.get("/api/admin/training", rateLimit({ key: "admin-training", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
-    const auth = requireAdmin(req, res);
-    if (!auth) return;
+  app.get(
+    "/api/admin/training",
+    rateLimit({ key: "admin-training", windowMs: 1000 * 60, limit: 120 }),
+    (req, res) => {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
 
-    const locale = normalizeAuthLocale(String(req.query.locale || "en"));
-    const adminSnapshot = getAdminSnapshot();
-    const usersById = new Map(
-      adminSnapshot.users.map((user) => [
-        user.id,
-        {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          emailVerifiedAt: user.emailVerifiedAt,
-        },
-      ])
-    );
-    const trainerProfiles = listTrainerProfiles();
-    const trainerNamesById = new Map(
-      trainerProfiles.map((trainer) => [trainer.userId, trainer.displayName || fallbackDisplayNameFromEmail(trainer.email)])
-    );
-
-    const trainers = adminSnapshot.users
-      .filter((user) => user.role === "trainer")
-      .map((user) => {
-        const profile =
-          trainerProfiles.find((trainer) => trainer.userId === user.id) ||
+      const locale = normalizeAuthLocale(String(req.query.locale || "en"));
+      const adminSnapshot = getAdminSnapshot();
+      const usersById = new Map(
+        adminSnapshot.users.map((user) => [
+          user.id,
           {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            emailVerifiedAt: user.emailVerifiedAt,
+          },
+        ]),
+      );
+      const trainerProfiles = listTrainerProfiles();
+      const trainerNamesById = new Map(
+        trainerProfiles.map((trainer) => [
+          trainer.userId,
+          trainer.displayName || fallbackDisplayNameFromEmail(trainer.email),
+        ]),
+      );
+
+      const trainers = adminSnapshot.users
+        .filter((user) => user.role === "trainer")
+        .map((user) => {
+          const profile = trainerProfiles.find(
+            (trainer) => trainer.userId === user.id,
+          ) || {
             userId: user.id,
             email: user.email,
             displayName: fallbackDisplayNameFromEmail(user.email),
@@ -2792,289 +3577,401 @@ async function startServer() {
             updatedAt: user.updatedAt,
           };
 
-        const enrollments = listTrainingEnrollmentsForTrainer(user.id);
-        const activeEnrollments = enrollments.filter((item) => item.status === "active").length;
-        const completedEnrollments = enrollments.filter((item) => item.status === "completed").length;
+          const enrollments = listTrainingEnrollmentsForTrainer(user.id);
+          const activeEnrollments = enrollments.filter(
+            (item) => item.status === "active",
+          ).length;
+          const completedEnrollments = enrollments.filter(
+            (item) => item.status === "completed",
+          ).length;
 
-        return {
-          user,
-          profile,
-          stats: {
-            assignedEnrollments: enrollments.length,
-            activeEnrollments,
-            completedEnrollments,
-          },
-        };
-      });
+          return {
+            user,
+            profile,
+            stats: {
+              assignedEnrollments: enrollments.length,
+              activeEnrollments,
+              completedEnrollments,
+            },
+          };
+        });
 
-    const enrollments = listTrainingEnrollments()
-      .map((enrollment) => serializeTrainingEnrollmentForApi(enrollment.id, locale, usersById, trainerNamesById))
-      .filter(Boolean);
+      const enrollments = listTrainingEnrollments()
+        .map((enrollment) =>
+          serializeTrainingEnrollmentForApi(
+            enrollment.id,
+            locale,
+            usersById,
+            trainerNamesById,
+          ),
+        )
+        .filter(Boolean);
 
-    const candidateUsers = adminSnapshot.users
-      .filter((user) => user.role !== "admin")
-      .map((user) => ({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        emailVerifiedAt: user.emailVerifiedAt,
-      }));
-
-    return res.json({
-      blueprint: {
-        key: TRAINING_BLUEPRINT.key,
-        title: TRAINING_BLUEPRINT.title,
-        totalHours: TRAINING_BLUEPRINT.totalHours,
-        totalSessions: TRAINING_BLUEPRINT.totalSessions,
-        passThreshold: TRAINING_BLUEPRINT.passThreshold,
-        levels: TRAINING_BLUEPRINT.levels,
-        rubric: TRAINING_BLUEPRINT.rubric,
-      },
-      programs: getCatalogSnapshot().trainingPrograms,
-      trainers,
-      candidateUsers,
-      enrollments,
-    });
-  });
-
-  app.post("/api/admin/trainers", rateLimit({ key: "admin-trainer-upsert", windowMs: 1000 * 60 * 5, limit: 60 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const userId = String(req.body?.userId || "").trim();
-      if (!userId) {
-        return res.status(400).json({ error: "Trainer account is required." });
-      }
-
-      const user = getUserById(userId);
-      if (!user) {
-        return res.status(404).json({ error: "User not found." });
-      }
-      if (getUserRole(user) === "admin") {
-        return res.status(400).json({ error: "Admin accounts cannot be converted to trainers." });
-      }
-
-      const promotedUser = updateAdminUser({
-        userId: user.id,
-        role: "trainer",
-      });
-
-      if (getUserRole(user) === "designer") {
-        deleteDesignerProfile(user.id);
-        unassignDesignerFromBookings(user.id);
-      }
-
-      const profile = upsertTrainerProfile({
-        userId: promotedUser.id,
-        email: promotedUser.email,
-        displayName: typeof req.body?.displayName === "string" ? req.body.displayName : undefined,
-        title: typeof req.body?.title === "string" ? req.body.title : undefined,
-        notes: typeof req.body?.notes === "string" ? req.body.notes : undefined,
-        active: typeof req.body?.active === "boolean" ? req.body.active : undefined,
-      });
-
-      recordEvent({
-        type: "admin_trainer_profile_updated",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:trainer-upsert:${promotedUser.id}`,
-      });
-
-      return res.status(201).json({ ok: true, user: promotedUser, profile });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.patch("/api/admin/trainers/:userId", rateLimit({ key: "admin-trainer-patch", windowMs: 1000 * 60 * 5, limit: 60 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const userId = String(req.params.userId || "").trim();
-      const user = getUserById(userId);
-      if (!user || getUserRole(user) !== "trainer") {
-        return res.status(404).json({ error: "Trainer account not found." });
-      }
-
-      const profile = upsertTrainerProfile({
-        userId: user.id,
-        email: user.email,
-        displayName: typeof req.body?.displayName === "string" ? req.body.displayName : undefined,
-        title: typeof req.body?.title === "string" ? req.body.title : undefined,
-        notes: typeof req.body?.notes === "string" ? req.body.notes : undefined,
-        active: typeof req.body?.active === "boolean" ? req.body.active : undefined,
-      });
-
-      if (profile.active === false) {
-        deactivateTrainerProfile(user.id);
-        unassignTrainerFromEnrollments(user.id);
-      }
-
-      recordEvent({
-        type: "admin_trainer_profile_updated",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:trainer-patch:${user.id}`,
-      });
-
-      return res.json({ ok: true, profile });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.post("/api/admin/training/enrollments", rateLimit({ key: "admin-training-enrollment-create", windowMs: 1000 * 60 * 5, limit: 60 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const userId = String(req.body?.userId || "").trim();
-      const programKey = String(req.body?.programKey || "").trim();
-      const trainerUserId = typeof req.body?.trainerUserId === "string" ? req.body.trainerUserId.trim() : "";
-      const status = parseTrainingEnrollmentStatus(req.body?.status);
-
-      if (!userId) {
-        return res.status(400).json({ error: "Customer account is required." });
-      }
-      if (!programKey) {
-        return res.status(400).json({ error: "Training program is required." });
-      }
-
-      const customer = getUserById(userId);
-      if (!customer || getUserRole(customer) === "admin") {
-        return res.status(400).json({ error: "Select a valid customer account." });
-      }
-
-      if (trainerUserId) {
-        const trainer = getUserById(trainerUserId);
-        if (!trainer || getUserRole(trainer) !== "trainer") {
-          return res.status(400).json({ error: "Select a valid trainer account." });
-        }
-      }
-
-      const profile = getCustomerProfile(customer.id);
-      const program = getCatalogTrainingProgram(programKey);
-      const enrollment = createTrainingEnrollment({
-        userId: customer.id,
-        userEmail: customer.email,
-        customerName: profile?.name,
-        company: profile?.company,
-        country: profile?.country,
-        countryCode: profile?.countryCode,
-        programKey,
-        programId: program?.id || null,
-        trainerUserId: trainerUserId || null,
-        trainerAssignedByUserId: trainerUserId ? auth.user.id : null,
-        status: status || "pending",
-        notes: typeof req.body?.notes === "string" ? req.body.notes : null,
-        internalNotes: typeof req.body?.internalNotes === "string" ? req.body.internalNotes : null,
-      });
-
-      recordEvent({
-        type: "admin_training_enrollment_created",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:training-enrollment-create:${enrollment.id}`,
-      });
-
-      const adminSnapshot = getAdminSnapshot();
-      const usersById = new Map(
-        adminSnapshot.users.map((user) => [
-          user.id,
-          {
-            id: user.id,
-            email: user.email,
-            role: user.role,
-            emailVerifiedAt: user.emailVerifiedAt,
-          },
-        ])
-      );
-      const trainerNamesById = new Map(
-        listTrainerProfiles().map((trainer) => [trainer.userId, trainer.displayName || fallbackDisplayNameFromEmail(trainer.email)])
-      );
-
-      return res.status(201).json({
-        ok: true,
-        enrollment: serializeTrainingEnrollmentForApi(enrollment.id, normalizeAuthLocale(String(req.body?.locale || "en")), usersById, trainerNamesById),
-      });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.patch("/api/admin/training/enrollments/:enrollmentId", rateLimit({ key: "admin-training-enrollment-patch", windowMs: 1000 * 60 * 5, limit: 80 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const enrollmentId = String(req.params.enrollmentId || "").trim();
-      const trainerUserId =
-        typeof req.body?.trainerUserId === "string" || req.body?.trainerUserId === null ? req.body.trainerUserId : undefined;
-      const status = parseTrainingEnrollmentStatus(req.body?.status);
-
-      if (typeof trainerUserId === "string" && trainerUserId.trim()) {
-        const trainer = getUserById(trainerUserId.trim());
-        if (!trainer || getUserRole(trainer) !== "trainer") {
-          return res.status(400).json({ error: "Select a valid trainer account." });
-        }
-      }
-
-      const enrollment = updateTrainingEnrollment({
-        enrollmentId,
-        trainerUserId: typeof trainerUserId === "undefined" ? undefined : String(trainerUserId || "").trim() || null,
-        trainerAssignedByUserId:
-          typeof trainerUserId === "undefined" ? undefined : String(trainerUserId || "").trim() ? auth.user.id : null,
-        status,
-        notes: typeof req.body?.notes === "string" || req.body?.notes === null ? req.body.notes : undefined,
-        internalNotes:
-          typeof req.body?.internalNotes === "string" || req.body?.internalNotes === null ? req.body.internalNotes : undefined,
-      });
-
-      recordEvent({
-        type: "admin_training_enrollment_updated",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:training-enrollment-patch:${enrollment.id}`,
-      });
-
-      const adminSnapshot = getAdminSnapshot();
-      const usersById = new Map(
-        adminSnapshot.users.map((user) => [
-          user.id,
-          {
-            id: user.id,
-            email: user.email,
-            role: user.role,
-            emailVerifiedAt: user.emailVerifiedAt,
-          },
-        ])
-      );
-      const trainerNamesById = new Map(
-        listTrainerProfiles().map((trainer) => [trainer.userId, trainer.displayName || fallbackDisplayNameFromEmail(trainer.email)])
-      );
+      const candidateUsers = adminSnapshot.users
+        .filter((user) => user.role !== "admin")
+        .map((user) => ({
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          emailVerifiedAt: user.emailVerifiedAt,
+        }));
 
       return res.json({
-        ok: true,
-        enrollment: serializeTrainingEnrollmentForApi(enrollment.id, normalizeAuthLocale(String(req.body?.locale || "en")), usersById, trainerNamesById),
+        blueprint: {
+          key: TRAINING_BLUEPRINT.key,
+          title: TRAINING_BLUEPRINT.title,
+          totalHours: TRAINING_BLUEPRINT.totalHours,
+          totalSessions: TRAINING_BLUEPRINT.totalSessions,
+          passThreshold: TRAINING_BLUEPRINT.passThreshold,
+          levels: TRAINING_BLUEPRINT.levels,
+          rubric: TRAINING_BLUEPRINT.rubric,
+        },
+        programs: getCatalogSnapshot().trainingPrograms,
+        trainers,
+        candidateUsers,
+        enrollments,
       });
-    } catch (error) {
-      return next(error);
-    }
-  });
+    },
+  );
+
+  app.post(
+    "/api/admin/trainers",
+    rateLimit({
+      key: "admin-trainer-upsert",
+      windowMs: 1000 * 60 * 5,
+      limit: 60,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const userId = String(req.body?.userId || "").trim();
+        if (!userId) {
+          return res
+            .status(400)
+            .json({ error: "Trainer account is required." });
+        }
+
+        const user = getUserById(userId);
+        if (!user) {
+          return res.status(404).json({ error: "User not found." });
+        }
+        if (getUserRole(user) === "admin") {
+          return res
+            .status(400)
+            .json({ error: "Admin accounts cannot be converted to trainers." });
+        }
+
+        const promotedUser = updateAdminUser({
+          userId: user.id,
+          role: "trainer",
+        });
+
+        if (getUserRole(user) === "designer") {
+          deleteDesignerProfile(user.id);
+          unassignDesignerFromBookings(user.id);
+        }
+
+        const profile = upsertTrainerProfile({
+          userId: promotedUser.id,
+          email: promotedUser.email,
+          displayName:
+            typeof req.body?.displayName === "string"
+              ? req.body.displayName
+              : undefined,
+          title:
+            typeof req.body?.title === "string" ? req.body.title : undefined,
+          notes:
+            typeof req.body?.notes === "string" ? req.body.notes : undefined,
+          active:
+            typeof req.body?.active === "boolean" ? req.body.active : undefined,
+        });
+
+        recordEvent({
+          type: "admin_trainer_profile_updated",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:trainer-upsert:${promotedUser.id}`,
+        });
+
+        return res.status(201).json({ ok: true, user: promotedUser, profile });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/trainers/:userId",
+    rateLimit({
+      key: "admin-trainer-patch",
+      windowMs: 1000 * 60 * 5,
+      limit: 60,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const userId = String(req.params.userId || "").trim();
+        const user = getUserById(userId);
+        if (!user || getUserRole(user) !== "trainer") {
+          return res.status(404).json({ error: "Trainer account not found." });
+        }
+
+        const profile = upsertTrainerProfile({
+          userId: user.id,
+          email: user.email,
+          displayName:
+            typeof req.body?.displayName === "string"
+              ? req.body.displayName
+              : undefined,
+          title:
+            typeof req.body?.title === "string" ? req.body.title : undefined,
+          notes:
+            typeof req.body?.notes === "string" ? req.body.notes : undefined,
+          active:
+            typeof req.body?.active === "boolean" ? req.body.active : undefined,
+        });
+
+        if (profile.active === false) {
+          deactivateTrainerProfile(user.id);
+          unassignTrainerFromEnrollments(user.id);
+        }
+
+        recordEvent({
+          type: "admin_trainer_profile_updated",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:trainer-patch:${user.id}`,
+        });
+
+        return res.json({ ok: true, profile });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/training/enrollments",
+    rateLimit({
+      key: "admin-training-enrollment-create",
+      windowMs: 1000 * 60 * 5,
+      limit: 60,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const userId = String(req.body?.userId || "").trim();
+        const programKey = String(req.body?.programKey || "").trim();
+        const trainerUserId =
+          typeof req.body?.trainerUserId === "string"
+            ? req.body.trainerUserId.trim()
+            : "";
+        const status = parseTrainingEnrollmentStatus(req.body?.status);
+
+        if (!userId) {
+          return res
+            .status(400)
+            .json({ error: "Customer account is required." });
+        }
+        if (!programKey) {
+          return res
+            .status(400)
+            .json({ error: "Training program is required." });
+        }
+
+        const customer = getUserById(userId);
+        if (!customer || getUserRole(customer) === "admin") {
+          return res
+            .status(400)
+            .json({ error: "Select a valid customer account." });
+        }
+
+        if (trainerUserId) {
+          const trainer = getUserById(trainerUserId);
+          if (!trainer || getUserRole(trainer) !== "trainer") {
+            return res
+              .status(400)
+              .json({ error: "Select a valid trainer account." });
+          }
+        }
+
+        const profile = getCustomerProfile(customer.id);
+        const program = getCatalogTrainingProgram(programKey);
+        const enrollment = createTrainingEnrollment({
+          userId: customer.id,
+          userEmail: customer.email,
+          customerName: profile?.name,
+          company: profile?.company,
+          country: profile?.country,
+          countryCode: profile?.countryCode,
+          programKey,
+          programId: program?.id || null,
+          trainerUserId: trainerUserId || null,
+          trainerAssignedByUserId: trainerUserId ? auth.user.id : null,
+          status: status || "pending",
+          notes: typeof req.body?.notes === "string" ? req.body.notes : null,
+          internalNotes:
+            typeof req.body?.internalNotes === "string"
+              ? req.body.internalNotes
+              : null,
+        });
+
+        recordEvent({
+          type: "admin_training_enrollment_created",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:training-enrollment-create:${enrollment.id}`,
+        });
+
+        const adminSnapshot = getAdminSnapshot();
+        const usersById = new Map(
+          adminSnapshot.users.map((user) => [
+            user.id,
+            {
+              id: user.id,
+              email: user.email,
+              role: user.role,
+              emailVerifiedAt: user.emailVerifiedAt,
+            },
+          ]),
+        );
+        const trainerNamesById = new Map(
+          listTrainerProfiles().map((trainer) => [
+            trainer.userId,
+            trainer.displayName || fallbackDisplayNameFromEmail(trainer.email),
+          ]),
+        );
+
+        return res.status(201).json({
+          ok: true,
+          enrollment: serializeTrainingEnrollmentForApi(
+            enrollment.id,
+            normalizeAuthLocale(String(req.body?.locale || "en")),
+            usersById,
+            trainerNamesById,
+          ),
+        });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/training/enrollments/:enrollmentId",
+    rateLimit({
+      key: "admin-training-enrollment-patch",
+      windowMs: 1000 * 60 * 5,
+      limit: 80,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const enrollmentId = String(req.params.enrollmentId || "").trim();
+        const trainerUserId =
+          typeof req.body?.trainerUserId === "string" ||
+          req.body?.trainerUserId === null
+            ? req.body.trainerUserId
+            : undefined;
+        const status = parseTrainingEnrollmentStatus(req.body?.status);
+
+        if (typeof trainerUserId === "string" && trainerUserId.trim()) {
+          const trainer = getUserById(trainerUserId.trim());
+          if (!trainer || getUserRole(trainer) !== "trainer") {
+            return res
+              .status(400)
+              .json({ error: "Select a valid trainer account." });
+          }
+        }
+
+        const enrollment = updateTrainingEnrollment({
+          enrollmentId,
+          trainerUserId:
+            typeof trainerUserId === "undefined"
+              ? undefined
+              : String(trainerUserId || "").trim() || null,
+          trainerAssignedByUserId:
+            typeof trainerUserId === "undefined"
+              ? undefined
+              : String(trainerUserId || "").trim()
+                ? auth.user.id
+                : null,
+          status,
+          notes:
+            typeof req.body?.notes === "string" || req.body?.notes === null
+              ? req.body.notes
+              : undefined,
+          internalNotes:
+            typeof req.body?.internalNotes === "string" ||
+            req.body?.internalNotes === null
+              ? req.body.internalNotes
+              : undefined,
+        });
+
+        recordEvent({
+          type: "admin_training_enrollment_updated",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:training-enrollment-patch:${enrollment.id}`,
+        });
+
+        const adminSnapshot = getAdminSnapshot();
+        const usersById = new Map(
+          adminSnapshot.users.map((user) => [
+            user.id,
+            {
+              id: user.id,
+              email: user.email,
+              role: user.role,
+              emailVerifiedAt: user.emailVerifiedAt,
+            },
+          ]),
+        );
+        const trainerNamesById = new Map(
+          listTrainerProfiles().map((trainer) => [
+            trainer.userId,
+            trainer.displayName || fallbackDisplayNameFromEmail(trainer.email),
+          ]),
+        );
+
+        return res.json({
+          ok: true,
+          enrollment: serializeTrainingEnrollmentForApi(
+            enrollment.id,
+            normalizeAuthLocale(String(req.body?.locale || "en")),
+            usersById,
+            trainerNamesById,
+          ),
+        });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
 
   app.patch(
     "/api/admin/training/enrollments/:enrollmentId/sessions/:sessionCode",
-    rateLimit({ key: "admin-training-session-patch", windowMs: 1000 * 60 * 5, limit: 120 }),
+    rateLimit({
+      key: "admin-training-session-patch",
+      windowMs: 1000 * 60 * 5,
+      limit: 120,
+    }),
     (req, res, next) => {
       try {
         const auth = requireAdmin(req, res);
@@ -3084,7 +3981,9 @@ async function startServer() {
         const sessionCode = String(req.params.sessionCode || "").trim();
         const status = parseTrainingSessionStatus(req.body?.status);
         if (!status) {
-          return res.status(400).json({ error: "Select a valid session status." });
+          return res
+            .status(400)
+            .json({ error: "Select a valid session status." });
         }
 
         updateTrainingSessionProgress({
@@ -3092,10 +3991,21 @@ async function startServer() {
           sessionCode,
           updatedByUserId: auth.user.id,
           status,
-          score: typeof req.body?.score === "number" || typeof req.body?.score === "string" ? Number(req.body.score) : null,
-          trainerNotes: typeof req.body?.trainerNotes === "string" ? req.body.trainerNotes : null,
-          traineeNotes: typeof req.body?.traineeNotes === "string" ? req.body.traineeNotes : null,
-          evidence: typeof req.body?.evidence === "string" ? req.body.evidence : null,
+          score:
+            typeof req.body?.score === "number" ||
+            typeof req.body?.score === "string"
+              ? Number(req.body.score)
+              : null,
+          trainerNotes:
+            typeof req.body?.trainerNotes === "string"
+              ? req.body.trainerNotes
+              : null,
+          traineeNotes:
+            typeof req.body?.traineeNotes === "string"
+              ? req.body.traineeNotes
+              : null,
+          evidence:
+            typeof req.body?.evidence === "string" ? req.body.evidence : null,
         });
 
         recordEvent({
@@ -3117,632 +4027,908 @@ async function startServer() {
               role: user.role,
               emailVerifiedAt: user.emailVerifiedAt,
             },
-          ])
+          ]),
         );
         const trainerNamesById = new Map(
-          listTrainerProfiles().map((trainer) => [trainer.userId, trainer.displayName || fallbackDisplayNameFromEmail(trainer.email)])
+          listTrainerProfiles().map((trainer) => [
+            trainer.userId,
+            trainer.displayName || fallbackDisplayNameFromEmail(trainer.email),
+          ]),
         );
 
         return res.json({
           ok: true,
-          enrollment: serializeTrainingEnrollmentForApi(enrollmentId, normalizeAuthLocale(String(req.body?.locale || "en")), usersById, trainerNamesById),
+          enrollment: serializeTrainingEnrollmentForApi(
+            enrollmentId,
+            normalizeAuthLocale(String(req.body?.locale || "en")),
+            usersById,
+            trainerNamesById,
+          ),
         });
       } catch (error) {
         return next(error);
       }
-    }
+    },
   );
 
-  app.get("/api/admin/catalog", rateLimit({ key: "admin-catalog-get", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
-    const auth = requireAdmin(req, res);
-    if (!auth) return;
-    return res.json(getCatalogSnapshot());
-  });
-
-  app.put("/api/admin/catalog/pricing", rateLimit({ key: "admin-catalog-pricing", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
-    try {
+  app.get(
+    "/api/admin/catalog",
+    rateLimit({ key: "admin-catalog-get", windowMs: 1000 * 60, limit: 120 }),
+    (req, res) => {
       const auth = requireAdmin(req, res);
       if (!auth) return;
+      return res.json(getCatalogSnapshot());
+    },
+  );
 
-      const pricing = updateCatalogBookingPrices({
-        standardConsultation: Number(req.body?.standardConsultation),
-        standardSupport: Number(req.body?.standardSupport),
-        expressConsultation: Number(req.body?.expressConsultation),
-        expressSupport: Number(req.body?.expressSupport),
-      });
-
-      return res.json({ ok: true, bookingPrices: pricing });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.put("/api/admin/catalog/training-pricing", rateLimit({ key: "admin-catalog-training-pricing", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const pricing = updateCatalogTrainingPrices({
-        level1: Number(req.body?.level1),
-        level2: Number(req.body?.level2),
-        level3: Number(req.body?.level3),
-        level4: Number(req.body?.level4),
-        bundle: Number(req.body?.bundle),
-      });
-
-      return res.json({ ok: true, trainingPrices: pricing });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.put("/api/admin/catalog/country-pricing/:countryCode", rateLimit({ key: "admin-catalog-country-pricing", windowMs: 1000 * 60 * 5, limit: 80 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const override = upsertCatalogCountryPriceOverride({
-        countryCode: String(req.params.countryCode || req.body?.countryCode || ""),
-        active: typeof req.body?.active === "boolean" ? req.body.active : true,
-        bookingPrices: req.body?.bookingPrices,
-        trainingProgramPrices: req.body?.trainingProgramPrices,
-      });
-
-      return res.json({ ok: true, countryPriceOverride: override, countryPriceOverrides: getCatalogSnapshot().countryPriceOverrides });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.delete("/api/admin/catalog/country-pricing/:countryCode", rateLimit({ key: "admin-catalog-country-pricing-delete", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      deleteCatalogCountryPriceOverride(String(req.params.countryCode || ""));
-      return res.json({ ok: true, countryPriceOverrides: getCatalogSnapshot().countryPriceOverrides });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.post("/api/admin/catalog/training-programs", rateLimit({ key: "admin-catalog-training-program-create", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const record = createCatalogTrainingProgram({
-        key: typeof req.body?.key === "string" ? req.body.key : undefined,
-        active: typeof req.body?.active === "boolean" ? req.body.active : true,
-        featured: Boolean(req.body?.featured),
-        order: Number(req.body?.order),
-        priceCents: Number(req.body?.priceCents),
-        translations: req.body?.translations,
-      });
-
-      return res.status(201).json({ ok: true, trainingProgram: record, trainingPrograms: getCatalogSnapshot().trainingPrograms });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.patch("/api/admin/catalog/training-programs/:programId", rateLimit({ key: "admin-catalog-training-program-update", windowMs: 1000 * 60 * 5, limit: 100 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const programId = String(req.params.programId || "").trim();
-      if (!programId) {
-        return res.status(400).json({ error: "Training program is required." });
-      }
-
-      const record = updateCatalogTrainingProgram({
-        id: programId,
-        key: typeof req.body?.key === "string" ? req.body.key : undefined,
-        active: typeof req.body?.active === "boolean" ? req.body.active : undefined,
-        featured: typeof req.body?.featured === "boolean" ? req.body.featured : undefined,
-        order: typeof req.body?.order !== "undefined" ? Number(req.body.order) : undefined,
-        priceCents: typeof req.body?.priceCents !== "undefined" ? Number(req.body.priceCents) : undefined,
-        translations: req.body?.translations,
-      });
-
-      return res.json({ ok: true, trainingProgram: record, trainingPrograms: getCatalogSnapshot().trainingPrograms });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.delete("/api/admin/catalog/training-programs/:programId", rateLimit({ key: "admin-catalog-training-program-delete", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const programId = String(req.params.programId || "").trim();
-      if (!programId) {
-        return res.status(400).json({ error: "Training program is required." });
-      }
-
-      deleteCatalogTrainingProgram(programId);
-      return res.json({ ok: true, trainingPrograms: getCatalogSnapshot().trainingPrograms });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.post("/api/admin/catalog/packages", rateLimit({ key: "admin-catalog-package-create", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const record = createCatalogPackage({
-        active: typeof req.body?.active === "boolean" ? req.body.active : true,
-        highlight: Boolean(req.body?.highlight),
-        order: Number(req.body?.order),
-        translations: req.body?.translations,
-      });
-
-      return res.status(201).json({ ok: true, package: record });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.patch("/api/admin/catalog/packages/:packageId", rateLimit({ key: "admin-catalog-package-update", windowMs: 1000 * 60 * 5, limit: 100 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const packageId = String(req.params.packageId || "").trim();
-      if (!packageId) {
-        return res.status(400).json({ error: "Package is required." });
-      }
-
-      const record = updateCatalogPackage({
-        id: packageId,
-        active: typeof req.body?.active === "boolean" ? req.body.active : undefined,
-        highlight: typeof req.body?.highlight === "boolean" ? req.body.highlight : undefined,
-        order: typeof req.body?.order !== "undefined" ? Number(req.body.order) : undefined,
-        translations: req.body?.translations,
-      });
-
-      return res.json({ ok: true, package: record });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.delete("/api/admin/catalog/packages/:packageId", rateLimit({ key: "admin-catalog-package-delete", windowMs: 1000 * 60 * 5, limit: 50 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const packageId = String(req.params.packageId || "").trim();
-      if (!packageId) {
-        return res.status(400).json({ error: "Package is required." });
-      }
-
-      deleteCatalogPackage(packageId);
-      return res.json({ ok: true });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.patch("/api/admin/users/:userId", rateLimit({ key: "admin-user-patch", windowMs: 1000 * 60 * 5, limit: 60 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const userId = String(req.params.userId || "").trim();
-      const email = req.body?.email;
-      const password = req.body?.password;
-      const emailVerified = req.body?.emailVerified;
-      const role = req.body?.role;
-      const displayName = req.body?.displayName;
-      const title = req.body?.title;
-      const notes = req.body?.notes;
-      const active = req.body?.active;
-      const passwordChanged = typeof password === "string" && password.length > 0;
-      const nextRole: AuthUserRole | undefined =
-        role === "admin" || role === "designer" || role === "trainer" || role === "customer" ? role : undefined;
-
-      if (userId === auth.user.id && nextRole && nextRole !== "admin") {
-        return res.status(400).json({ error: "You cannot remove your own admin role." });
-      }
-
-      const user = updateAdminUser({
-        userId,
-        email: typeof email === "string" ? email : undefined,
-        password: typeof password === "string" ? password : undefined,
-        emailVerified: typeof emailVerified === "boolean" ? emailVerified : undefined,
-        role: nextRole,
-      });
-      if (passwordChanged) {
-        deleteUserSessions(user.id);
-      }
-
-      const resolvedRole = getUserRole(user);
-      if (resolvedRole === "designer") {
-        upsertDesignerProfile({
-          userId: user.id,
-          email: user.email,
-          displayName: typeof displayName === "string" ? displayName : undefined,
-          title: typeof title === "string" ? title : undefined,
-          notes: typeof notes === "string" ? notes : undefined,
-          active: typeof active === "boolean" ? active : undefined,
-        });
-      } else {
-        deleteDesignerProfile(user.id);
-        unassignDesignerFromBookings(user.id);
-      }
-
-      if (resolvedRole === "trainer") {
-        upsertTrainerProfile({
-          userId: user.id,
-          email: user.email,
-          displayName: typeof displayName === "string" ? displayName : undefined,
-          title: typeof title === "string" ? title : undefined,
-          notes: typeof notes === "string" ? notes : undefined,
-          active: typeof active === "boolean" ? active : undefined,
-        });
-      } else {
-        deactivateTrainerProfile(user.id);
-        unassignTrainerFromEnrollments(user.id);
-      }
-
-      recordEvent({
-        type: "admin_user_updated",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:update:${user.email}`,
-      });
-
-      return res.json({ ok: true, user });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.delete("/api/admin/users/:userId", rateLimit({ key: "admin-user-delete", windowMs: 1000 * 60 * 5, limit: 25 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const userId = String(req.params.userId || "").trim();
-      if (userId === auth.user.id) {
-        return res.status(400).json({ error: "You cannot delete your own admin account." });
-      }
-
-      const deletedUser = deleteUserById(userId);
-      if (getUserRole(deletedUser) === "designer") {
-        deleteDesignerProfile(deletedUser.id);
-        unassignDesignerFromBookings(deletedUser.id);
-      }
-      if (getUserRole(deletedUser) === "trainer") {
-        deactivateTrainerProfile(deletedUser.id);
-        unassignTrainerFromEnrollments(deletedUser.id);
-      }
-      recordEvent({
-        type: "admin_user_deleted",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:delete:${deletedUser.email}`,
-      });
-
-      return res.json({ ok: true });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.post("/api/admin/users/:userId/send-verification", rateLimit({ key: "admin-send-verification", windowMs: 1000 * 60 * 5, limit: 30 }), async (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const userId = String(req.params.userId || "").trim();
-      const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-      const user = getUserById(userId);
-
-      if (!user) {
-        return res.status(404).json({ error: "User not found." });
-      }
-
-      if (user.emailVerifiedAt) {
-        return res.status(400).json({ error: "This email is already verified." });
-      }
-
-      const { rawToken } = createToken(user.id, "verify_email", VERIFY_LINK_MS);
-      const verifyUrl = `${appOrigin(req)}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}`;
+  app.put(
+    "/api/admin/catalog/pricing",
+    rateLimit({
+      key: "admin-catalog-pricing",
+      windowMs: 1000 * 60 * 5,
+      limit: 50,
+    }),
+    (req, res, next) => {
       try {
-        await sendLinkEmail({ email: user.email, locale, type: "verify", url: verifyUrl });
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const pricing = updateCatalogBookingPrices({
+          standardConsultation: Number(req.body?.standardConsultation),
+          standardSupport: Number(req.body?.standardSupport),
+          expressConsultation: Number(req.body?.expressConsultation),
+          expressSupport: Number(req.body?.expressSupport),
+        });
+
+        return res.json({ ok: true, bookingPrices: pricing });
       } catch (error) {
-        if (error instanceof RecipientEmailRejectedError) {
-          return res.status(400).json({ error: "This email address cannot receive messages. Update the address and try again." });
+        return next(error);
+      }
+    },
+  );
+
+  app.put(
+    "/api/admin/catalog/training-pricing",
+    rateLimit({
+      key: "admin-catalog-training-pricing",
+      windowMs: 1000 * 60 * 5,
+      limit: 50,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const pricing = updateCatalogTrainingPrices({
+          level1: Number(req.body?.level1),
+          level2: Number(req.body?.level2),
+          level3: Number(req.body?.level3),
+          level4: Number(req.body?.level4),
+          bundle: Number(req.body?.bundle),
+        });
+
+        return res.json({ ok: true, trainingPrices: pricing });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.put(
+    "/api/admin/catalog/country-pricing/:countryCode",
+    rateLimit({
+      key: "admin-catalog-country-pricing",
+      windowMs: 1000 * 60 * 5,
+      limit: 80,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const override = upsertCatalogCountryPriceOverride({
+          countryCode: String(
+            req.params.countryCode || req.body?.countryCode || "",
+          ),
+          active:
+            typeof req.body?.active === "boolean" ? req.body.active : true,
+          bookingPrices: req.body?.bookingPrices,
+          trainingProgramPrices: req.body?.trainingProgramPrices,
+        });
+
+        return res.json({
+          ok: true,
+          countryPriceOverride: override,
+          countryPriceOverrides: getCatalogSnapshot().countryPriceOverrides,
+        });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.delete(
+    "/api/admin/catalog/country-pricing/:countryCode",
+    rateLimit({
+      key: "admin-catalog-country-pricing-delete",
+      windowMs: 1000 * 60 * 5,
+      limit: 50,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        deleteCatalogCountryPriceOverride(String(req.params.countryCode || ""));
+        return res.json({
+          ok: true,
+          countryPriceOverrides: getCatalogSnapshot().countryPriceOverrides,
+        });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/catalog/training-programs",
+    rateLimit({
+      key: "admin-catalog-training-program-create",
+      windowMs: 1000 * 60 * 5,
+      limit: 50,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const record = createCatalogTrainingProgram({
+          key: typeof req.body?.key === "string" ? req.body.key : undefined,
+          active:
+            typeof req.body?.active === "boolean" ? req.body.active : true,
+          featured: Boolean(req.body?.featured),
+          order: Number(req.body?.order),
+          priceCents: Number(req.body?.priceCents),
+          translations: req.body?.translations,
+        });
+
+        return res
+          .status(201)
+          .json({
+            ok: true,
+            trainingProgram: record,
+            trainingPrograms: getCatalogSnapshot().trainingPrograms,
+          });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/catalog/training-programs/:programId",
+    rateLimit({
+      key: "admin-catalog-training-program-update",
+      windowMs: 1000 * 60 * 5,
+      limit: 100,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const programId = String(req.params.programId || "").trim();
+        if (!programId) {
+          return res
+            .status(400)
+            .json({ error: "Training program is required." });
         }
-        return res.status(502).json({ error: "Unable to send the verification email right now." });
+
+        const record = updateCatalogTrainingProgram({
+          id: programId,
+          key: typeof req.body?.key === "string" ? req.body.key : undefined,
+          active:
+            typeof req.body?.active === "boolean" ? req.body.active : undefined,
+          featured:
+            typeof req.body?.featured === "boolean"
+              ? req.body.featured
+              : undefined,
+          order:
+            typeof req.body?.order !== "undefined"
+              ? Number(req.body.order)
+              : undefined,
+          priceCents:
+            typeof req.body?.priceCents !== "undefined"
+              ? Number(req.body.priceCents)
+              : undefined,
+          translations: req.body?.translations,
+        });
+
+        return res.json({
+          ok: true,
+          trainingProgram: record,
+          trainingPrograms: getCatalogSnapshot().trainingPrograms,
+        });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      recordEvent({
-        type: "admin_verification_sent",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:verify:${user.email}`,
-      });
+  app.delete(
+    "/api/admin/catalog/training-programs/:programId",
+    rateLimit({
+      key: "admin-catalog-training-program-delete",
+      windowMs: 1000 * 60 * 5,
+      limit: 50,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
 
-      return res.json({ ok: true });
-    } catch (error) {
-      return next(error);
-    }
-  });
+        const programId = String(req.params.programId || "").trim();
+        if (!programId) {
+          return res
+            .status(400)
+            .json({ error: "Training program is required." });
+        }
 
-  app.delete("/api/admin/sessions/:sessionId", rateLimit({ key: "admin-session-delete", windowMs: 1000 * 60 * 5, limit: 80 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const sessionId = String(req.params.sessionId || "").trim();
-      deleteSession(sessionId);
-      recordEvent({
-        type: "admin_session_revoked",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:session:${sessionId}`,
-      });
-      return res.json({ ok: true });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.delete("/api/admin/users/:userId/sessions", rateLimit({ key: "admin-user-sessions-delete", windowMs: 1000 * 60 * 5, limit: 40 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const userId = String(req.params.userId || "").trim();
-      const revoked = deleteUserSessions(userId);
-      recordEvent({
-        type: "admin_all_sessions_revoked",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:user-sessions:${userId}:${revoked}`,
-      });
-      return res.json({ ok: true, revoked });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.get("/api/admin/bookings/slots", rateLimit({ key: "admin-booking-slots", windowMs: 1000 * 60, limit: 180 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const date = String(req.query.date || "").trim();
-      const priority = String(req.query.priority || "standard").trim() === "express" ? "express" : "standard";
-      if (!date) {
-        return res.status(400).json({ error: "Date is required." });
+        deleteCatalogTrainingProgram(programId);
+        return res.json({
+          ok: true,
+          trainingPrograms: getCatalogSnapshot().trainingPrograms,
+        });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      const payload = getAdminBookingSlotsForDate({
-        date,
-        priority: priority as BookingPriority,
-      });
+  app.post(
+    "/api/admin/catalog/packages",
+    rateLimit({
+      key: "admin-catalog-package-create",
+      windowMs: 1000 * 60 * 5,
+      limit: 50,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
 
-      return res.json({ ok: true, ...payload });
-    } catch (error) {
-      return next(error);
-    }
-  });
+        const record = createCatalogPackage({
+          active:
+            typeof req.body?.active === "boolean" ? req.body.active : true,
+          highlight: Boolean(req.body?.highlight),
+          order: Number(req.body?.order),
+          translations: req.body?.translations,
+        });
 
-  app.post("/api/admin/bookings/slots/block", rateLimit({ key: "admin-booking-slot-block", windowMs: 1000 * 60 * 5, limit: 120 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const date = String(req.body?.date || "").trim();
-      const hour = Number(req.body?.hour);
-      const priority = String(req.body?.priority || "standard").trim() === "express" ? "express" : "standard";
-      const reason = typeof req.body?.reason === "string" ? req.body.reason : null;
-
-      if (!date || !Number.isInteger(hour)) {
-        return res.status(400).json({ error: "Valid date and hour are required." });
+        return res.status(201).json({ ok: true, package: record });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      const slot = blockBookingSlotByAdmin({
-        date,
-        hour,
-        priority: priority as BookingPriority,
-        reason,
-        adminUserId: auth.user.id,
-      });
+  app.patch(
+    "/api/admin/catalog/packages/:packageId",
+    rateLimit({
+      key: "admin-catalog-package-update",
+      windowMs: 1000 * 60 * 5,
+      limit: 100,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
 
-      recordEvent({
-        type: "admin_booking_slot_blocked",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:booking-slot-block:${date}:${hour}:${priority}`,
-      });
+        const packageId = String(req.params.packageId || "").trim();
+        if (!packageId) {
+          return res.status(400).json({ error: "Package is required." });
+        }
 
-      const slots = getAdminBookingSlotsForDate({
-        date,
-        priority: priority as BookingPriority,
-      });
+        const record = updateCatalogPackage({
+          id: packageId,
+          active:
+            typeof req.body?.active === "boolean" ? req.body.active : undefined,
+          highlight:
+            typeof req.body?.highlight === "boolean"
+              ? req.body.highlight
+              : undefined,
+          order:
+            typeof req.body?.order !== "undefined"
+              ? Number(req.body.order)
+              : undefined,
+          translations: req.body?.translations,
+        });
 
-      return res.json({ ok: true, slot, ...slots });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.post("/api/admin/bookings/slots/unblock", rateLimit({ key: "admin-booking-slot-unblock", windowMs: 1000 * 60 * 5, limit: 120 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const date = String(req.body?.date || "").trim();
-      const hour = Number(req.body?.hour);
-      const priority = String(req.body?.priority || "standard").trim() === "express" ? "express" : "standard";
-
-      if (!date || !Number.isInteger(hour)) {
-        return res.status(400).json({ error: "Valid date and hour are required." });
+        return res.json({ ok: true, package: record });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      const slot = unblockBookingSlotByAdmin({
-        date,
-        hour,
-        priority: priority as BookingPriority,
-      });
-      if (!slot) {
-        return res.status(404).json({ error: "Blocked slot not found." });
+  app.delete(
+    "/api/admin/catalog/packages/:packageId",
+    rateLimit({
+      key: "admin-catalog-package-delete",
+      windowMs: 1000 * 60 * 5,
+      limit: 50,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const packageId = String(req.params.packageId || "").trim();
+        if (!packageId) {
+          return res.status(400).json({ error: "Package is required." });
+        }
+
+        deleteCatalogPackage(packageId);
+        return res.json({ ok: true });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      recordEvent({
-        type: "admin_booking_slot_unblocked",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:booking-slot-unblock:${date}:${hour}:${priority}`,
-      });
+  app.patch(
+    "/api/admin/users/:userId",
+    rateLimit({ key: "admin-user-patch", windowMs: 1000 * 60 * 5, limit: 60 }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
 
-      const slots = getAdminBookingSlotsForDate({
-        date,
-        priority: priority as BookingPriority,
-      });
+        const userId = String(req.params.userId || "").trim();
+        const email = req.body?.email;
+        const password = req.body?.password;
+        const emailVerified = req.body?.emailVerified;
+        const role = req.body?.role;
+        const displayName = req.body?.displayName;
+        const title = req.body?.title;
+        const notes = req.body?.notes;
+        const active = req.body?.active;
+        const passwordChanged =
+          typeof password === "string" && password.length > 0;
+        const nextRole: AuthUserRole | undefined =
+          role === "admin" ||
+          role === "designer" ||
+          role === "trainer" ||
+          role === "customer"
+            ? role
+            : undefined;
 
-      return res.json({ ok: true, slot, ...slots });
-    } catch (error) {
-      return next(error);
-    }
-  });
+        if (userId === auth.user.id && nextRole && nextRole !== "admin") {
+          return res
+            .status(400)
+            .json({ error: "You cannot remove your own admin role." });
+        }
 
-  app.post("/api/admin/bookings/:bookingId/cancel", rateLimit({ key: "admin-booking-cancel", windowMs: 1000 * 60 * 5, limit: 80 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
+        const user = updateAdminUser({
+          userId,
+          email: typeof email === "string" ? email : undefined,
+          password: typeof password === "string" ? password : undefined,
+          emailVerified:
+            typeof emailVerified === "boolean" ? emailVerified : undefined,
+          role: nextRole,
+        });
+        if (passwordChanged) {
+          deleteUserSessions(user.id);
+        }
 
-      const bookingId = String(req.params.bookingId || "").trim();
-      if (!bookingId) {
-        return res.status(400).json({ error: "Booking is required." });
+        const resolvedRole = getUserRole(user);
+        if (resolvedRole === "designer") {
+          upsertDesignerProfile({
+            userId: user.id,
+            email: user.email,
+            displayName:
+              typeof displayName === "string" ? displayName : undefined,
+            title: typeof title === "string" ? title : undefined,
+            notes: typeof notes === "string" ? notes : undefined,
+            active: typeof active === "boolean" ? active : undefined,
+          });
+        } else {
+          deleteDesignerProfile(user.id);
+          unassignDesignerFromBookings(user.id);
+        }
+
+        if (resolvedRole === "trainer") {
+          upsertTrainerProfile({
+            userId: user.id,
+            email: user.email,
+            displayName:
+              typeof displayName === "string" ? displayName : undefined,
+            title: typeof title === "string" ? title : undefined,
+            notes: typeof notes === "string" ? notes : undefined,
+            active: typeof active === "boolean" ? active : undefined,
+          });
+        } else {
+          deactivateTrainerProfile(user.id);
+          unassignTrainerFromEnrollments(user.id);
+        }
+
+        recordEvent({
+          type: "admin_user_updated",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:update:${user.email}`,
+        });
+
+        return res.json({ ok: true, user });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      const booking = cancelBookingByAdmin({ bookingId });
+  app.delete(
+    "/api/admin/users/:userId",
+    rateLimit({ key: "admin-user-delete", windowMs: 1000 * 60 * 5, limit: 25 }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
 
-      recordEvent({
-        type: "admin_booking_cancelled",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:booking-cancel:${booking.id}`,
-      });
+        const userId = String(req.params.userId || "").trim();
+        if (userId === auth.user.id) {
+          return res
+            .status(400)
+            .json({ error: "You cannot delete your own admin account." });
+        }
 
-      return res.json({ ok: true, booking: serializeCustomerBooking(booking) });
-    } catch (error) {
-      return next(error);
-    }
-  });
+        const deletedUser = deleteUserById(userId);
+        if (getUserRole(deletedUser) === "designer") {
+          deleteDesignerProfile(deletedUser.id);
+          unassignDesignerFromBookings(deletedUser.id);
+        }
+        if (getUserRole(deletedUser) === "trainer") {
+          deactivateTrainerProfile(deletedUser.id);
+          unassignTrainerFromEnrollments(deletedUser.id);
+        }
+        recordEvent({
+          type: "admin_user_deleted",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:delete:${deletedUser.email}`,
+        });
 
-  app.post("/api/admin/bookings/:bookingId/refund", rateLimit({ key: "admin-booking-refund", windowMs: 1000 * 60 * 5, limit: 40 }), async (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const bookingId = String(req.params.bookingId || "").trim();
-      if (!bookingId) {
-        return res.status(400).json({ error: "Booking is required." });
+        return res.json({ ok: true });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      const booking = getBookingById(bookingId);
-      if (!booking) {
-        return res.status(404).json({ error: "Booking not found." });
+  app.post(
+    "/api/admin/users/:userId/send-verification",
+    rateLimit({
+      key: "admin-send-verification",
+      windowMs: 1000 * 60 * 5,
+      limit: 30,
+    }),
+    async (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const userId = String(req.params.userId || "").trim();
+        const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+        const user = getUserById(userId);
+
+        if (!user) {
+          return res.status(404).json({ error: "User not found." });
+        }
+
+        if (user.emailVerifiedAt) {
+          return res
+            .status(400)
+            .json({ error: "This email is already verified." });
+        }
+
+        const { rawToken } = createToken(
+          user.id,
+          "verify_email",
+          VERIFY_LINK_MS,
+        );
+        const verifyUrl = `${appOrigin(req)}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}`;
+        try {
+          await sendLinkEmail({
+            email: user.email,
+            locale,
+            type: "verify",
+            url: verifyUrl,
+          });
+        } catch (error) {
+          if (error instanceof RecipientEmailRejectedError) {
+            return res
+              .status(400)
+              .json({
+                error:
+                  "This email address cannot receive messages. Update the address and try again.",
+              });
+          }
+          return res
+            .status(502)
+            .json({
+              error: "Unable to send the verification email right now.",
+            });
+        }
+
+        recordEvent({
+          type: "admin_verification_sent",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:verify:${user.email}`,
+        });
+
+        return res.json({ ok: true });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      if (!booking.paymentReference || booking.paymentProvider !== "stripe") {
-        return res.status(400).json({ error: "This booking has no Stripe payment to refund." });
+  app.delete(
+    "/api/admin/sessions/:sessionId",
+    rateLimit({
+      key: "admin-session-delete",
+      windowMs: 1000 * 60 * 5,
+      limit: 80,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const sessionId = String(req.params.sessionId || "").trim();
+        deleteSession(sessionId);
+        recordEvent({
+          type: "admin_session_revoked",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:session:${sessionId}`,
+        });
+        return res.json({ ok: true });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      if (booking.paymentStatus === "refunded") {
-        return res.status(400).json({ error: "This booking has already been refunded." });
+  app.delete(
+    "/api/admin/users/:userId/sessions",
+    rateLimit({
+      key: "admin-user-sessions-delete",
+      windowMs: 1000 * 60 * 5,
+      limit: 40,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const userId = String(req.params.userId || "").trim();
+        const revoked = deleteUserSessions(userId);
+        recordEvent({
+          type: "admin_all_sessions_revoked",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:user-sessions:${userId}:${revoked}`,
+        });
+        return res.json({ ok: true, revoked });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      const refund = await createBookingRefund({
-        paymentIntentId: booking.paymentReference,
-        amount: booking.unitAmount,
-        bookingIds: [booking.id],
-      });
+  app.get(
+    "/api/admin/bookings/slots",
+    rateLimit({ key: "admin-booking-slots", windowMs: 1000 * 60, limit: 180 }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
 
-      const updated = markBookingRefundPendingByAdmin({
-        bookingId: booking.id,
-        refundId: refund.id,
-        refundAmount: refund.amount || booking.unitAmount,
-      });
+        const date = String(req.query.date || "").trim();
+        const priority =
+          String(req.query.priority || "standard").trim() === "express"
+            ? "express"
+            : "standard";
+        if (!date) {
+          return res.status(400).json({ error: "Date is required." });
+        }
 
-      recordEvent({
-        type: "admin_booking_refund_requested",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:booking-refund:${booking.id}:${refund.id}`,
-      });
+        const payload = getAdminBookingSlotsForDate({
+          date,
+          priority: priority as BookingPriority,
+        });
 
-      return res.json({
-        ok: true,
-        booking: serializeCustomerBooking(updated),
-        refund: {
-          id: refund.id,
-          status: refund.status,
-          amount: refund.amount,
-          currency: refund.currency,
-        },
-      });
-    } catch (error) {
-      return next(error);
-    }
-  });
+        return res.json({ ok: true, ...payload });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
 
-  app.patch("/api/admin/bookings/schedule", rateLimit({ key: "admin-booking-schedule", windowMs: 1000 * 60 * 5, limit: 60 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
+  app.post(
+    "/api/admin/bookings/slots/block",
+    rateLimit({
+      key: "admin-booking-slot-block",
+      windowMs: 1000 * 60 * 5,
+      limit: 120,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
 
-      const settings = updateBookingScheduleSettings({
-        standardOpen: typeof req.body?.standardOpen === "boolean" ? req.body.standardOpen : undefined,
-        expressOpen: typeof req.body?.expressOpen === "boolean" ? req.body.expressOpen : undefined,
-      });
+        const date = String(req.body?.date || "").trim();
+        const hour = Number(req.body?.hour);
+        const priority =
+          String(req.body?.priority || "standard").trim() === "express"
+            ? "express"
+            : "standard";
+        const reason =
+          typeof req.body?.reason === "string" ? req.body.reason : null;
 
-      recordEvent({
-        type: "admin_booking_schedule_updated",
-        userId: auth.user.id,
-        email: auth.user.email,
-        locale: "admin",
-        ip: getRequestIp(req),
-        userAgent: `admin:booking-schedule:${settings.standardOpen}:${settings.expressOpen}`,
-      });
+        if (!date || !Number.isInteger(hour)) {
+          return res
+            .status(400)
+            .json({ error: "Valid date and hour are required." });
+        }
 
-      return res.json({ ok: true, schedule: settings });
-    } catch (error) {
-      return next(error);
-    }
-  });
+        const slot = blockBookingSlotByAdmin({
+          date,
+          hour,
+          priority: priority as BookingPriority,
+          reason,
+          adminUserId: auth.user.id,
+        });
+
+        recordEvent({
+          type: "admin_booking_slot_blocked",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:booking-slot-block:${date}:${hour}:${priority}`,
+        });
+
+        const slots = getAdminBookingSlotsForDate({
+          date,
+          priority: priority as BookingPriority,
+        });
+
+        return res.json({ ok: true, slot, ...slots });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/bookings/slots/unblock",
+    rateLimit({
+      key: "admin-booking-slot-unblock",
+      windowMs: 1000 * 60 * 5,
+      limit: 120,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const date = String(req.body?.date || "").trim();
+        const hour = Number(req.body?.hour);
+        const priority =
+          String(req.body?.priority || "standard").trim() === "express"
+            ? "express"
+            : "standard";
+
+        if (!date || !Number.isInteger(hour)) {
+          return res
+            .status(400)
+            .json({ error: "Valid date and hour are required." });
+        }
+
+        const slot = unblockBookingSlotByAdmin({
+          date,
+          hour,
+          priority: priority as BookingPriority,
+        });
+        if (!slot) {
+          return res.status(404).json({ error: "Blocked slot not found." });
+        }
+
+        recordEvent({
+          type: "admin_booking_slot_unblocked",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:booking-slot-unblock:${date}:${hour}:${priority}`,
+        });
+
+        const slots = getAdminBookingSlotsForDate({
+          date,
+          priority: priority as BookingPriority,
+        });
+
+        return res.json({ ok: true, slot, ...slots });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/bookings/:bookingId/cancel",
+    rateLimit({
+      key: "admin-booking-cancel",
+      windowMs: 1000 * 60 * 5,
+      limit: 80,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const bookingId = String(req.params.bookingId || "").trim();
+        if (!bookingId) {
+          return res.status(400).json({ error: "Booking is required." });
+        }
+
+        const booking = cancelBookingByAdmin({ bookingId });
+
+        recordEvent({
+          type: "admin_booking_cancelled",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:booking-cancel:${booking.id}`,
+        });
+
+        return res.json({
+          ok: true,
+          booking: serializeCustomerBooking(booking),
+        });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/bookings/:bookingId/refund",
+    rateLimit({
+      key: "admin-booking-refund",
+      windowMs: 1000 * 60 * 5,
+      limit: 40,
+    }),
+    async (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const bookingId = String(req.params.bookingId || "").trim();
+        if (!bookingId) {
+          return res.status(400).json({ error: "Booking is required." });
+        }
+
+        const booking = getBookingById(bookingId);
+        if (!booking) {
+          return res.status(404).json({ error: "Booking not found." });
+        }
+
+        if (!booking.paymentReference || booking.paymentProvider !== "stripe") {
+          return res
+            .status(400)
+            .json({ error: "This booking has no Stripe payment to refund." });
+        }
+
+        if (booking.paymentStatus === "refunded") {
+          return res
+            .status(400)
+            .json({ error: "This booking has already been refunded." });
+        }
+
+        const refund = await createBookingRefund({
+          paymentIntentId: booking.paymentReference,
+          amount: booking.unitAmount,
+          bookingIds: [booking.id],
+        });
+
+        const updated = markBookingRefundPendingByAdmin({
+          bookingId: booking.id,
+          refundId: refund.id,
+          refundAmount: refund.amount || booking.unitAmount,
+        });
+
+        recordEvent({
+          type: "admin_booking_refund_requested",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:booking-refund:${booking.id}:${refund.id}`,
+        });
+
+        return res.json({
+          ok: true,
+          booking: serializeCustomerBooking(updated),
+          refund: {
+            id: refund.id,
+            status: refund.status,
+            amount: refund.amount,
+            currency: refund.currency,
+          },
+        });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/bookings/schedule",
+    rateLimit({
+      key: "admin-booking-schedule",
+      windowMs: 1000 * 60 * 5,
+      limit: 60,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const settings = updateBookingScheduleSettings({
+          standardOpen:
+            typeof req.body?.standardOpen === "boolean"
+              ? req.body.standardOpen
+              : undefined,
+          expressOpen:
+            typeof req.body?.expressOpen === "boolean"
+              ? req.body.expressOpen
+              : undefined,
+        });
+
+        recordEvent({
+          type: "admin_booking_schedule_updated",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:booking-schedule:${settings.standardOpen}:${settings.expressOpen}`,
+        });
+
+        return res.json({ ok: true, schedule: settings });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
 
   app.get("/api/articles", (req, res) => {
-    const locale = normalizeAuthLocale(String(req.query.locale || "en")) as ArticleLocale;
+    const locale = normalizeAuthLocale(
+      String(req.query.locale || "en"),
+    ) as ArticleLocale;
     const articles = listPublishedArticles(locale).map((item) => ({
       ...item,
       excerpt: summarizeArticle(item.body),
@@ -3752,7 +4938,9 @@ async function startServer() {
 
   app.get("/api/articles/:slug", (req, res) => {
     const slug = String(req.params.slug || "").trim();
-    const locale = normalizeAuthLocale(String(req.query.locale || "en")) as ArticleLocale;
+    const locale = normalizeAuthLocale(
+      String(req.query.locale || "en"),
+    ) as ArticleLocale;
     const article = getArticleBySlug(slug, locale);
     if (!article) {
       return res.status(404).json({ error: "Article not found." });
@@ -3766,112 +4954,193 @@ async function startServer() {
     });
   });
 
-  app.get("/api/admin/articles", rateLimit({ key: "admin-articles", windowMs: 1000 * 60, limit: 120 }), (req, res) => {
-    const auth = requireAdmin(req, res);
-    if (!auth) return;
-    const articles = listAdminArticles().map((item) => ({
-      ...item,
-      excerpt: summarizeArticle(item.body),
-    }));
-    return res.json({ articles });
-  });
+  app.get(
+    "/api/admin/articles",
+    rateLimit({ key: "admin-articles", windowMs: 1000 * 60, limit: 120 }),
+    (req, res) => {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+      const articles = listAdminArticles().map((item) => ({
+        ...item,
+        excerpt: summarizeArticle(item.body),
+      }));
+      return res.json({ articles });
+    },
+  );
 
   app.post(
     "/api/admin/article-images",
-    express.raw({ type: ["image/png", "image/jpeg", "image/webp"], limit: "12mb" }),
-    rateLimit({ key: "admin-article-images", windowMs: 1000 * 60 * 5, limit: 40 }),
+    express.raw({
+      type: ["image/png", "image/jpeg", "image/webp"],
+      limit: "12mb",
+    }),
+    rateLimit({
+      key: "admin-article-images",
+      windowMs: 1000 * 60 * 5,
+      limit: 40,
+    }),
     (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
 
-      const rawContentType = String(req.headers["content-type"] || "").trim().toLowerCase();
-      const binaryTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+        const rawContentType = String(req.headers["content-type"] || "")
+          .trim()
+          .toLowerCase();
+        const binaryTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
-      if (binaryTypes.has(rawContentType)) {
-        const rawFilename = String(req.headers["x-upload-filename"] || "").trim();
-        const filename = rawFilename ? decodeURIComponent(rawFilename) : "";
-        const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-        if (!buffer.length) {
+        if (binaryTypes.has(rawContentType)) {
+          const rawFilename = String(
+            req.headers["x-upload-filename"] || "",
+          ).trim();
+          const filename = rawFilename ? decodeURIComponent(rawFilename) : "";
+          const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+          if (!buffer.length) {
+            return res
+              .status(400)
+              .json({ error: "Image content is required." });
+          }
+
+          const image = saveArticleImageBuffer({
+            filename,
+            contentType: rawContentType,
+            buffer,
+          });
+          return res.json({ ok: true, image });
+        }
+
+        const filename = String(req.body?.filename || "").trim();
+        const contentType = String(req.body?.contentType || "")
+          .trim()
+          .toLowerCase();
+        const base64 = String(req.body?.base64 || "").trim();
+        if (!contentType || !base64) {
           return res.status(400).json({ error: "Image content is required." });
         }
 
-        const image = saveArticleImageBuffer({ filename, contentType: rawContentType, buffer });
+        const image = saveArticleImage({ filename, contentType, base64 });
         return res.json({ ok: true, image });
+      } catch (error) {
+        return next(error);
       }
-
-      const filename = String(req.body?.filename || "").trim();
-      const contentType = String(req.body?.contentType || "").trim().toLowerCase();
-      const base64 = String(req.body?.base64 || "").trim();
-      if (!contentType || !base64) {
-        return res.status(400).json({ error: "Image content is required." });
-      }
-
-      const image = saveArticleImage({ filename, contentType, base64 });
-      return res.json({ ok: true, image });
-    } catch (error) {
-      return next(error);
-    }
-    }
+    },
   );
 
-  app.post("/api/admin/articles", rateLimit({ key: "admin-articles-create", windowMs: 1000 * 60 * 5, limit: 40 }), async (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
+  app.post(
+    "/api/admin/articles",
+    rateLimit({
+      key: "admin-articles-create",
+      windowMs: 1000 * 60 * 5,
+      limit: 40,
+    }),
+    async (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
 
-      const title = String(req.body?.title || "").trim();
-      const body = String(req.body?.body || "").trim();
-      const sourceLocale = normalizeAuthLocale(String(req.body?.sourceLocale || "en")) as ArticleLocale;
-      const imageUrl = typeof req.body?.imageUrl === "string" ? req.body.imageUrl : null;
-      const publishedAt = typeof req.body?.publishedAt === "string" ? req.body.publishedAt : null;
+        const title = String(req.body?.title || "").trim();
+        const body = String(req.body?.body || "").trim();
+        const sourceLocale = normalizeAuthLocale(
+          String(req.body?.sourceLocale || "en"),
+        ) as ArticleLocale;
+        const imageUrl =
+          typeof req.body?.imageUrl === "string" ? req.body.imageUrl : null;
+        const publishedAt =
+          typeof req.body?.publishedAt === "string"
+            ? req.body.publishedAt
+            : null;
 
-      if (!title || !body) {
-        return res.status(400).json({ error: "Title and article body are required." });
+        if (!title || !body) {
+          return res
+            .status(400)
+            .json({ error: "Title and article body are required." });
+        }
+
+        const article = await createArticle({
+          sourceLocale,
+          title,
+          body,
+          imageUrl,
+          publishedAt,
+        });
+        return res.json({
+          ok: true,
+          article: { ...article, excerpt: summarizeArticle(article.body) },
+        });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      const article = await createArticle({ sourceLocale, title, body, imageUrl, publishedAt });
-      return res.json({ ok: true, article: { ...article, excerpt: summarizeArticle(article.body) } });
-    } catch (error) {
-      return next(error);
-    }
-  });
+  app.patch(
+    "/api/admin/articles/:articleId",
+    rateLimit({
+      key: "admin-articles-update",
+      windowMs: 1000 * 60 * 5,
+      limit: 80,
+    }),
+    async (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
 
-  app.patch("/api/admin/articles/:articleId", rateLimit({ key: "admin-articles-update", windowMs: 1000 * 60 * 5, limit: 80 }), async (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
+        const articleId = String(req.params.articleId || "").trim();
+        const title = String(req.body?.title || "").trim();
+        const body = String(req.body?.body || "").trim();
+        const sourceLocale = normalizeAuthLocale(
+          String(req.body?.sourceLocale || "en"),
+        ) as ArticleLocale;
+        const imageUrl =
+          typeof req.body?.imageUrl === "string" ? req.body.imageUrl : null;
+        const publishedAt =
+          typeof req.body?.publishedAt === "string"
+            ? req.body.publishedAt
+            : null;
 
-      const articleId = String(req.params.articleId || "").trim();
-      const title = String(req.body?.title || "").trim();
-      const body = String(req.body?.body || "").trim();
-      const sourceLocale = normalizeAuthLocale(String(req.body?.sourceLocale || "en")) as ArticleLocale;
-      const imageUrl = typeof req.body?.imageUrl === "string" ? req.body.imageUrl : null;
-      const publishedAt = typeof req.body?.publishedAt === "string" ? req.body.publishedAt : null;
+        if (!title || !body) {
+          return res
+            .status(400)
+            .json({ error: "Title and article body are required." });
+        }
 
-      if (!title || !body) {
-        return res.status(400).json({ error: "Title and article body are required." });
+        const article = await updateArticle(articleId, {
+          sourceLocale,
+          title,
+          body,
+          imageUrl,
+          publishedAt,
+        });
+        return res.json({
+          ok: true,
+          article: { ...article, excerpt: summarizeArticle(article.body) },
+        });
+      } catch (error) {
+        return next(error);
       }
+    },
+  );
 
-      const article = await updateArticle(articleId, { sourceLocale, title, body, imageUrl, publishedAt });
-      return res.json({ ok: true, article: { ...article, excerpt: summarizeArticle(article.body) } });
-    } catch (error) {
-      return next(error);
-    }
-  });
+  app.delete(
+    "/api/admin/articles/:articleId",
+    rateLimit({
+      key: "admin-articles-delete",
+      windowMs: 1000 * 60 * 5,
+      limit: 40,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
 
-  app.delete("/api/admin/articles/:articleId", rateLimit({ key: "admin-articles-delete", windowMs: 1000 * 60 * 5, limit: 40 }), (req, res, next) => {
-    try {
-      const auth = requireAdmin(req, res);
-      if (!auth) return;
-
-      const articleId = String(req.params.articleId || "").trim();
-      deleteArticle(articleId);
-      return res.json({ ok: true });
-    } catch (error) {
-      return next(error);
-    }
-  });
+        const articleId = String(req.params.articleId || "").trim();
+        deleteArticle(articleId);
+        return res.json({ ok: true });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
 
   const staticPath =
     process.env.NODE_ENV === "production"
@@ -3890,10 +5159,16 @@ async function startServer() {
 
   app.get("/BingSiteAuth.xml", (_req, res) => {
     const customXml = String(process.env.BING_SITE_AUTH_XML || "").trim();
-    const token = String(process.env.BING_SITE_AUTH_TOKEN || process.env.BING_SITE_VERIFICATION || "").trim();
+    const token = String(
+      process.env.BING_SITE_AUTH_TOKEN ||
+        process.env.BING_SITE_VERIFICATION ||
+        "",
+    ).trim();
 
     if (customXml) {
-      const body = customXml.startsWith("<?xml") ? customXml : `<?xml version="1.0"?>\n${customXml}`;
+      const body = customXml.startsWith("<?xml")
+        ? customXml
+        : `<?xml version="1.0"?>\n${customXml}`;
       res.setHeader("Content-Type", "application/xml; charset=UTF-8");
       res.setHeader("Cache-Control", "public, max-age=300");
       return res.status(200).send(body);
@@ -3927,15 +5202,25 @@ async function startServer() {
         if (filePath.endsWith(".html")) {
           res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
         } else if (filePath.endsWith(".js")) {
-          res.setHeader("Content-Type", "application/javascript; charset=UTF-8");
+          res.setHeader(
+            "Content-Type",
+            "application/javascript; charset=UTF-8",
+          );
         } else if (filePath.endsWith(".css")) {
           res.setHeader("Content-Type", "text/css; charset=UTF-8");
         }
       },
-    })
+    }),
   );
 
-  app.use("/uploads", express.static(path.join(getAppDataDir(), "uploads"), { maxAge: "30d", etag: true, lastModified: true }));
+  app.use(
+    "/uploads",
+    express.static(path.join(getAppDataDir(), "uploads"), {
+      maxAge: "30d",
+      etag: true,
+      lastModified: true,
+    }),
+  );
 
   app.get("*", (req, res) => {
     if (isMissingStaticAssetRequest(req.path)) {
@@ -3954,31 +5239,50 @@ async function startServer() {
     }
   });
 
-  app.use((err: Error & { expose?: boolean; status?: number; statusCode?: number; type?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    const status = Number(err.status || err.statusCode || 500);
-    const safeStatus = status >= 400 && status < 600 ? status : 500;
-    if (safeStatus >= 500) {
-      console.error("Server Error:", err);
-    } else {
-      console.warn("Client Error:", { status: safeStatus, type: err.type, message: err.message });
-    }
-    const message =
-      err.type === "entity.parse.failed"
-        ? "Invalid JSON payload."
-        : safeStatus < 500 && err.expose
-          ? err.message
-          : "Internal Server Error";
-    res.status(safeStatus).json({ error: message });
-  });
+  app.use(
+    (
+      err: Error & {
+        expose?: boolean;
+        status?: number;
+        statusCode?: number;
+        type?: string;
+      },
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      const status = Number(err.status || err.statusCode || 500);
+      const safeStatus = status >= 400 && status < 600 ? status : 500;
+      if (safeStatus >= 500) {
+        console.error("Server Error:", err);
+      } else {
+        console.warn("Client Error:", {
+          status: safeStatus,
+          type: err.type,
+          message: err.message,
+        });
+      }
+      const message =
+        err.type === "entity.parse.failed"
+          ? "Invalid JSON payload."
+          : safeStatus < 500 && err.expose
+            ? err.message
+            : "Internal Server Error";
+      res.status(safeStatus).json({ error: message });
+    },
+  );
 
-  const port = process.env.PORT || (process.env.NODE_ENV === "production" ? 3000 : 3001);
+  const port =
+    process.env.PORT || (process.env.NODE_ENV === "production" ? 3000 : 3001);
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
     console.log("Security headers enabled");
     void backfillArticleTranslations()
       .then(({ translated }) => {
         if (translated > 0) {
-          console.log(`[articles] backfilled translations for ${translated} article(s)`);
+          console.log(
+            `[articles] backfilled translations for ${translated} article(s)`,
+          );
         }
       })
       .catch((error) => {

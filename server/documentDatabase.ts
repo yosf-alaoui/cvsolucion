@@ -2,7 +2,10 @@ import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
-import { ensureStructuredSchema, syncStructuredDocument } from "./structuredDatabase";
+import {
+  ensureStructuredSchema,
+  syncStructuredDocument,
+} from "./structuredDatabase";
 
 let database: Database.Database | null = null;
 let databasePath: string | null = null;
@@ -35,7 +38,9 @@ export function isSqliteStorageEnabled() {
 export function getDocumentDatabasePath() {
   const configured = process.env.APP_DATABASE_PATH?.trim();
   if (configured) {
-    return path.isAbsolute(configured) ? configured : path.resolve(process.cwd(), configured);
+    return path.isAbsolute(configured)
+      ? configured
+      : path.resolve(process.cwd(), configured);
   }
 
   return path.join(getAppDataDir(), "cvsolucion.sqlite");
@@ -72,15 +77,27 @@ function getDocumentDatabase() {
   return database;
 }
 
+export function withDocumentDatabase<T>(
+  callback: (db: Database.Database) => T,
+) {
+  return callback(getDocumentDatabase());
+}
+
 export function closeDocumentDatabase() {
   database?.close();
   database = null;
   databasePath = null;
 }
 
-export function ensureDocument<T>(key: string, initialValue: T, legacyLoader?: () => T) {
+export function ensureDocument<T>(
+  key: string,
+  initialValue: T,
+  legacyLoader?: () => T,
+) {
   const db = getDocumentDatabase();
-  const existing = db.prepare("SELECT key FROM documents WHERE key = ?").get(key);
+  const existing = db
+    .prepare("SELECT key FROM documents WHERE key = ?")
+    .get(key);
   if (existing) return;
 
   const value = legacyLoader ? legacyLoader() : initialValue;
@@ -88,9 +105,9 @@ export function ensureDocument<T>(key: string, initialValue: T, legacyLoader?: (
 }
 
 export function readDocument<T>(key: string) {
-  const row = getDocumentDatabase().prepare("SELECT value FROM documents WHERE key = ?").get(key) as
-    | { value: string }
-    | undefined;
+  const row = getDocumentDatabase()
+    .prepare("SELECT value FROM documents WHERE key = ?")
+    .get(key) as { value: string } | undefined;
 
   if (!row) {
     throw new Error(`Storage document not found: ${key}`);
@@ -109,7 +126,7 @@ export function writeDocument(key: string, data: unknown) {
       ON CONFLICT(key) DO UPDATE SET
         value = excluded.value,
         updated_at = excluded.updated_at
-    `
+    `,
   );
   db.transaction(() => {
     upsert.run({

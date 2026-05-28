@@ -1,14 +1,31 @@
 import crypto from "crypto";
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import {
+  isSqliteStorageEnabled,
+  withDocumentDatabase,
+} from "./documentDatabase";
 import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
-import { getBookingScheduleSettings, isBookingScheduleOpen } from "./bookingSettingsStore";
+import {
+  getBookingScheduleSettings,
+  isBookingScheduleOpen,
+} from "./bookingSettingsStore";
 
 export type BookingPriority = "standard" | "express";
 export type BookingServiceType = "consultation" | "support";
 export type BookingStatus = "confirmed" | "cancelled";
-export type BookingPaymentStatus = "pending" | "paid" | "unpaid" | "partially_refunded" | "refunded";
-export type BookingRefundStatus = "none" | "pending" | "succeeded" | "failed" | "canceled";
+export type BookingPaymentStatus =
+  | "pending"
+  | "paid"
+  | "unpaid"
+  | "partially_refunded"
+  | "refunded";
+export type BookingRefundStatus =
+  | "none"
+  | "pending"
+  | "succeeded"
+  | "failed"
+  | "canceled";
 
 export type BlockedBookingSlotRecord = {
   id: string;
@@ -29,23 +46,19 @@ export type AdminBookingSlotView = {
   priority: BookingPriority;
   status: "booked" | "available";
   source: "real" | "blocked" | "available";
-  booking:
-    | {
-        id: string;
-        name: string;
-        email: string;
-        status: BookingStatus;
-        paymentStatus: BookingPaymentStatus;
-      }
-    | null;
-  block:
-    | {
-        id: string;
-        reason: string | null;
-        createdAt: string;
-        updatedAt: string;
-      }
-    | null;
+  booking: {
+    id: string;
+    name: string;
+    email: string;
+    status: BookingStatus;
+    paymentStatus: BookingPaymentStatus;
+  } | null;
+  block: {
+    id: string;
+    reason: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
 };
 
 export type BookingRecord = {
@@ -99,23 +112,223 @@ function ensureDbFile() {
   ensureJsonFile(DB_PATH, { bookings: [], blockedSlots: [] });
 }
 
+function normalizeServiceType(value: unknown): BookingServiceType {
+  return value === "support" ? "support" : "consultation";
+}
+
+function normalizePriority(value: unknown): BookingPriority {
+  return value === "express" ? "express" : "standard";
+}
+
+function normalizeBookingStatus(value: unknown): BookingStatus {
+  return value === "cancelled" ? "cancelled" : "confirmed";
+}
+
+function normalizePaymentStatus(value: unknown): BookingPaymentStatus {
+  return value === "pending" ||
+    value === "paid" ||
+    value === "unpaid" ||
+    value === "partially_refunded" ||
+    value === "refunded"
+    ? value
+    : "unpaid";
+}
+
+function normalizeRefundStatus(value: unknown): BookingRefundStatus {
+  return value === "pending" ||
+    value === "succeeded" ||
+    value === "failed" ||
+    value === "canceled"
+    ? value
+    : "none";
+}
+
+function normalizeLocale(value: unknown): "en" | "fr" | "ar" {
+  return value === "fr" || value === "ar" ? value : "en";
+}
+
+function nullableText(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function loadStructuredDb(): BookingDb | null {
+  if (!isSqliteStorageEnabled()) return null;
+
+  return withDocumentDatabase((sqlite) => {
+    const bookingRows = sqlite
+      .prepare(
+        `
+            SELECT
+              id,
+              COALESCE(user_id, '') AS userId,
+              service_type AS serviceType,
+              priority,
+              package_key AS packageKey,
+              currency,
+              date,
+              hour,
+              name,
+              email,
+              phone,
+              country,
+              country_code AS countryCode,
+              company,
+              notes,
+              locale,
+              status,
+              designer_user_id AS designerUserId,
+              designer_assigned_at AS designerAssignedAt,
+              designer_assigned_by_user_id AS designerAssignedByUserId,
+              created_at AS createdAt,
+              updated_at AS updatedAt,
+              rescheduled_from_booking_id AS rescheduledFromBookingId,
+              payment_status AS paymentStatus,
+              payment_provider AS paymentProvider,
+              payment_reference AS paymentReference,
+              unit_amount AS unitAmount,
+              refund_status AS refundStatus,
+              refund_reference AS refundReference,
+              refund_amount AS refundAmount,
+              refunded_at AS refundedAt
+            FROM bookings
+          `,
+      )
+      .all() as Array<Record<string, unknown>>;
+    const blockedRows = sqlite
+      .prepare(
+        `
+            SELECT
+              id,
+              date,
+              hour,
+              priority,
+              reason,
+              created_by_user_id AS createdByUserId,
+              created_at AS createdAt,
+              updated_at AS updatedAt
+            FROM blocked_booking_slots
+          `,
+      )
+      .all() as Array<Record<string, unknown>>;
+
+    if (!bookingRows.length && !blockedRows.length) {
+      const document = sqlite
+        .prepare("SELECT value FROM documents WHERE key = ?")
+        .get("bookings-db.json") as { value: string } | undefined;
+      if (document) {
+        const parsed = JSON.parse(document.value) as Partial<BookingDb>;
+        if (
+          (parsed.bookings?.length ?? 0) > 0 ||
+          (parsed.blockedSlots?.length ?? 0) > 0
+        ) {
+          return null;
+        }
+      }
+    }
+
+    const bookings = bookingRows.map((booking): BookingRecord => {
+      const serviceType = normalizeServiceType(booking.serviceType);
+      const priority = normalizePriority(booking.priority);
+      return {
+        id: String(booking.id || ""),
+        userId: String(booking.userId || ""),
+        serviceType,
+        priority,
+        packageKey: nullableText(booking.packageKey),
+        currency:
+          typeof booking.currency === "string" && booking.currency.trim()
+            ? booking.currency.trim().toLowerCase()
+            : "cad",
+        date: String(booking.date || ""),
+        hour: Number.isInteger(booking.hour) ? Number(booking.hour) : 0,
+        name: String(booking.name || ""),
+        email: String(booking.email || "").toLowerCase(),
+        phone: String(booking.phone || ""),
+        country: nullableText(booking.country),
+        countryCode: nullableText(booking.countryCode)?.toUpperCase() ?? null,
+        company: nullableText(booking.company),
+        notes: nullableText(booking.notes),
+        locale: normalizeLocale(booking.locale),
+        status: normalizeBookingStatus(booking.status),
+        designerUserId: nullableText(booking.designerUserId),
+        designerAssignedAt: nullableText(booking.designerAssignedAt),
+        designerAssignedByUserId: nullableText(
+          booking.designerAssignedByUserId,
+        ),
+        createdAt: String(booking.createdAt || nowIso()),
+        updatedAt: String(booking.updatedAt || booking.createdAt || nowIso()),
+        rescheduledFromBookingId: nullableText(
+          booking.rescheduledFromBookingId,
+        ),
+        paymentStatus: normalizePaymentStatus(booking.paymentStatus),
+        paymentProvider: booking.paymentProvider === "stripe" ? "stripe" : null,
+        paymentReference: nullableText(booking.paymentReference),
+        unitAmount:
+          Number.isInteger(booking.unitAmount) && Number(booking.unitAmount) > 0
+            ? Number(booking.unitAmount)
+            : resolveBookingUnitAmount({ serviceType, priority }),
+        refundStatus: normalizeRefundStatus(booking.refundStatus),
+        refundReference: nullableText(booking.refundReference),
+        refundAmount: Number.isInteger(booking.refundAmount)
+          ? Number(booking.refundAmount)
+          : 0,
+        refundedAt: nullableText(booking.refundedAt),
+      };
+    });
+
+    const blockedSlots = blockedRows.map((slot): BlockedBookingSlotRecord => {
+      const date = String(slot.date || "");
+      const hour = Number.isInteger(slot.hour) ? Number(slot.hour) : 0;
+      const priority = normalizePriority(slot.priority);
+      return {
+        id: String(slot.id || buildSlotId(date, hour, priority)),
+        date,
+        hour,
+        priority,
+        reason: nullableText(slot.reason),
+        createdByUserId: nullableText(slot.createdByUserId),
+        createdAt: String(slot.createdAt || nowIso()),
+        updatedAt: String(slot.updatedAt || slot.createdAt || nowIso()),
+      };
+    });
+
+    return { bookings, blockedSlots };
+  });
+}
+
 function loadDb(): BookingDb {
   ensureDbFile();
+  const structured = loadStructuredDb();
+  if (structured) return structured;
+
   const parsed = readJsonFile<Partial<BookingDb>>(DB_PATH);
   return {
     bookings: (parsed.bookings ?? []).map((booking) => ({
       ...booking,
       userId: booking.userId ?? "",
-      packageKey: typeof booking.packageKey === "string" && booking.packageKey.trim() ? booking.packageKey.trim() : null,
-      currency: typeof booking.currency === "string" && booking.currency.trim() ? booking.currency.trim().toLowerCase() : "cad",
+      packageKey:
+        typeof booking.packageKey === "string" && booking.packageKey.trim()
+          ? booking.packageKey.trim()
+          : null,
+      currency:
+        typeof booking.currency === "string" && booking.currency.trim()
+          ? booking.currency.trim().toLowerCase()
+          : "cad",
       country: booking.country ?? null,
-      countryCode: typeof booking.countryCode === "string" && booking.countryCode.trim() ? booking.countryCode.trim().toUpperCase() : null,
+      countryCode:
+        typeof booking.countryCode === "string" && booking.countryCode.trim()
+          ? booking.countryCode.trim().toUpperCase()
+          : null,
       status: booking.status ?? "confirmed",
       designerUserId:
-        typeof booking.designerUserId === "string" && booking.designerUserId.trim() ? booking.designerUserId.trim() : null,
+        typeof booking.designerUserId === "string" &&
+        booking.designerUserId.trim()
+          ? booking.designerUserId.trim()
+          : null,
       designerAssignedAt: booking.designerAssignedAt ?? null,
       designerAssignedByUserId:
-        typeof booking.designerAssignedByUserId === "string" && booking.designerAssignedByUserId.trim()
+        typeof booking.designerAssignedByUserId === "string" &&
+        booking.designerAssignedByUserId.trim()
           ? booking.designerAssignedByUserId.trim()
           : null,
       updatedAt: booking.updatedAt ?? booking.createdAt ?? nowIso(),
@@ -126,16 +339,30 @@ function loadDb(): BookingDb {
       unitAmount: resolveBookingUnitAmount(booking),
       refundStatus: booking.refundStatus ?? "none",
       refundReference: booking.refundReference ?? null,
-      refundAmount: Number.isFinite(booking.refundAmount) ? Number(booking.refundAmount) : 0,
+      refundAmount: Number.isFinite(booking.refundAmount)
+        ? Number(booking.refundAmount)
+        : 0,
       refundedAt: booking.refundedAt ?? null,
     })),
     blockedSlots: (parsed.blockedSlots ?? []).map((slot) => ({
-      id: slot.id || buildSlotId(slot.date || "", Number(slot.hour || 0), slot.priority === "express" ? "express" : "standard"),
+      id:
+        slot.id ||
+        buildSlotId(
+          slot.date || "",
+          Number(slot.hour || 0),
+          slot.priority === "express" ? "express" : "standard",
+        ),
       date: String(slot.date || ""),
       hour: Number(slot.hour || 0),
       priority: slot.priority === "express" ? "express" : "standard",
-      reason: typeof slot.reason === "string" && slot.reason.trim() ? slot.reason.trim() : null,
-      createdByUserId: typeof slot.createdByUserId === "string" && slot.createdByUserId.trim() ? slot.createdByUserId.trim() : null,
+      reason:
+        typeof slot.reason === "string" && slot.reason.trim()
+          ? slot.reason.trim()
+          : null,
+      createdByUserId:
+        typeof slot.createdByUserId === "string" && slot.createdByUserId.trim()
+          ? slot.createdByUserId.trim()
+          : null,
       createdAt: slot.createdAt || nowIso(),
       updatedAt: slot.updatedAt || slot.createdAt || nowIso(),
     })),
@@ -168,7 +395,8 @@ function resolveBookingUnitAmount(booking: Partial<BookingRecord>) {
     return Number(booking.unitAmount);
   }
 
-  const serviceType = booking.serviceType === "support" ? "support" : "consultation";
+  const serviceType =
+    booking.serviceType === "support" ? "support" : "consultation";
   const priority = booking.priority === "express" ? "express" : "standard";
 
   const envKey =
@@ -225,7 +453,9 @@ function formatInTimeZone(date: Date, timeZone: string) {
     weekday: "short",
   }).formatToParts(date);
 
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
   return {
     year: Number(values.year),
     month: Number(values.month),
@@ -256,7 +486,12 @@ function priorityClosedError(priority: BookingPriority) {
     : "Standard booking is currently closed.";
 }
 
-function getBookableHoursForDate(priority: BookingPriority, date: string, startDate: string, currentHour: number) {
+function getBookableHoursForDate(
+  priority: BookingPriority,
+  date: string,
+  startDate: string,
+  currentHour: number,
+) {
   const hours = getHoursForPriority(priority);
 
   if (priority === "express") {
@@ -296,7 +531,14 @@ function getBookingUtcMs(dateKey: string, hour: number) {
   for (let index = 0; index < 4; index += 1) {
     const zoned = formatInTimeZone(new Date(utcMs), QUEBEC_TIMEZONE);
     const targetMs = Date.UTC(year, month - 1, day, hour, 0, 0);
-    const zonedMs = Date.UTC(zoned.year, zoned.month - 1, zoned.day, zoned.hour, 0, 0);
+    const zonedMs = Date.UTC(
+      zoned.year,
+      zoned.month - 1,
+      zoned.day,
+      zoned.hour,
+      0,
+      0,
+    );
     const diffMs = targetMs - zonedMs;
     if (diffMs === 0) break;
     utcMs += diffMs;
@@ -305,7 +547,9 @@ function getBookingUtcMs(dateKey: string, hour: number) {
   return utcMs;
 }
 
-export function hasBookingPassed(booking: Pick<BookingRecord, "date" | "hour">) {
+export function hasBookingPassed(
+  booking: Pick<BookingRecord, "date" | "hour">,
+) {
   return getBookingUtcMs(booking.date, booking.hour) <= Date.now();
 }
 
@@ -329,21 +573,31 @@ export function listBookingsForUser(userId: string, email?: string | null) {
   const normalizedEmail = email?.trim().toLowerCase() || null;
   return sortBookings(
     db.bookings.filter(
-      (booking) => booking.userId === userId || (!!normalizedEmail && !booking.userId && booking.email === normalizedEmail)
-    )
+      (booking) =>
+        booking.userId === userId ||
+        (!!normalizedEmail &&
+          !booking.userId &&
+          booking.email === normalizedEmail),
+    ),
   );
 }
 
 export function listBookingsByPaymentReference(paymentReference: string) {
   const db = loadDb();
   return sortBookings(
-    db.bookings.filter((booking) => booking.paymentReference && booking.paymentReference === paymentReference)
+    db.bookings.filter(
+      (booking) =>
+        booking.paymentReference &&
+        booking.paymentReference === paymentReference,
+    ),
   );
 }
 
 export function listBookingsForDesigner(designerUserId: string) {
   const db = loadDb();
-  return sortBookings(db.bookings.filter((booking) => booking.designerUserId === designerUserId));
+  return sortBookings(
+    db.bookings.filter((booking) => booking.designerUserId === designerUserId),
+  );
 }
 
 export function getBookingAvailability(priority: BookingPriority) {
@@ -351,7 +605,8 @@ export function getBookingAvailability(priority: BookingPriority) {
   const quebecNow = getQuebecNow();
   const startDate = quebecNow.dateKey;
   const schedule = getBookingScheduleSettings();
-  const isOpen = priority === "express" ? schedule.expressOpen : schedule.standardOpen;
+  const isOpen =
+    priority === "express" ? schedule.expressOpen : schedule.standardOpen;
   const days: Array<{
     date: string;
     slots: Array<{
@@ -391,31 +646,47 @@ export function getBookingAvailability(priority: BookingPriority) {
     const weekdayIndex = getWeekdayIndex(date);
     if (priority === "standard" && weekdayIndex > 5) continue;
 
-    const hours = getBookableHoursForDate(priority, date, startDate, quebecNow.hour);
+    const hours = getBookableHoursForDate(
+      priority,
+      date,
+      startDate,
+      quebecNow.hour,
+    );
 
-    const slots = hours
-      .map((hour) => {
-        const slotId = buildSlotId(date, hour, priority);
-        const actualBooking = db.bookings.find(
-          (booking) => booking.date === date && booking.hour === hour && booking.priority === priority && booking.status === "confirmed"
-        );
-        const blockedSlot = db.blockedSlots.find(
-          (slot) => slot.date === date && slot.hour === hour && slot.priority === priority
-        );
-        const utcStart = new Date(getBookingUtcMs(date, hour)).toISOString();
-        const status: "booked" | "available" = actualBooking || blockedSlot ? "booked" : "available";
-        const source: "real" | "blocked" | "available" = actualBooking ? "real" : blockedSlot ? "blocked" : "available";
+    const slots = hours.map((hour) => {
+      const slotId = buildSlotId(date, hour, priority);
+      const actualBooking = db.bookings.find(
+        (booking) =>
+          booking.date === date &&
+          booking.hour === hour &&
+          booking.priority === priority &&
+          booking.status === "confirmed",
+      );
+      const blockedSlot = db.blockedSlots.find(
+        (slot) =>
+          slot.date === date &&
+          slot.hour === hour &&
+          slot.priority === priority,
+      );
+      const utcStart = new Date(getBookingUtcMs(date, hour)).toISOString();
+      const status: "booked" | "available" =
+        actualBooking || blockedSlot ? "booked" : "available";
+      const source: "real" | "blocked" | "available" = actualBooking
+        ? "real"
+        : blockedSlot
+          ? "blocked"
+          : "available";
 
-        return {
-          id: slotId,
-          date,
-          hour,
-          utcStart,
-          priority,
-          status,
-          source,
-        };
-      });
+      return {
+        id: slotId,
+        date,
+        hour,
+        utcStart,
+        priority,
+        status,
+        source,
+      };
+    });
 
     if (slots.length) {
       days.push({ date, slots });
@@ -467,11 +738,15 @@ export function createBooking(input: {
       ? getHoursForPriority(input.priority)
       : getHoursForPriority(input.priority);
   const dateDiff =
-    (parseDateKey(input.date).getTime() - parseDateKey(quebecNow.dateKey).getTime()) / (1000 * 60 * 60 * 24);
+    (parseDateKey(input.date).getTime() -
+      parseDateKey(quebecNow.dateKey).getTime()) /
+    (1000 * 60 * 60 * 24);
 
   if (input.priority === "express") {
     if (dateDiff < 0 || dateDiff > 1) {
-      throw new Error("Express booking is available for today and tomorrow only.");
+      throw new Error(
+        "Express booking is available for today and tomorrow only.",
+      );
     }
   } else if (dateDiff < 0 || dateDiff > 30) {
     throw new Error("Selected slot must be within the next 30 days.");
@@ -504,16 +779,20 @@ export function createBooking(input: {
       booking.date === input.date &&
       booking.hour === input.hour &&
       booking.priority === input.priority &&
-      booking.status === "confirmed"
+      booking.status === "confirmed",
   );
 
   if (alreadyBooked) {
-    throw new Error("This slot has just been taken. Please choose another time.");
+    throw new Error(
+      "This slot has just been taken. Please choose another time.",
+    );
   }
 
   const blockedSlot = db.blockedSlots.find((slot) => slot.id === slotId);
   if (blockedSlot) {
-    throw new Error("This slot is closed by admin. Please choose another time.");
+    throw new Error(
+      "This slot is closed by admin. Please choose another time.",
+    );
   }
 
   const booking: BookingRecord = {
@@ -543,12 +822,13 @@ export function createBooking(input: {
     paymentStatus: input.paymentStatus ?? "unpaid",
     paymentProvider: input.paymentProvider ?? null,
     paymentReference: input.paymentReference ?? null,
-    unitAmount: Number.isInteger(input.unitAmount) && Number(input.unitAmount) > 0
-      ? Number(input.unitAmount)
-      : resolveBookingUnitAmount({
-          serviceType: input.serviceType,
-          priority: input.priority,
-        }),
+    unitAmount:
+      Number.isInteger(input.unitAmount) && Number(input.unitAmount) > 0
+        ? Number(input.unitAmount)
+        : resolveBookingUnitAmount({
+            serviceType: input.serviceType,
+            priority: input.priority,
+          }),
     refundStatus: "none",
     refundReference: null,
     refundAmount: 0,
@@ -598,7 +878,7 @@ function sortBookingsLatestFirst(bookings: BookingRecord[]) {
 function selectBookingsForRefund(
   bookings: BookingRecord[],
   refundAmount: number,
-  preferredBookingIds: string[] = []
+  preferredBookingIds: string[] = [],
 ): RefundSelectionResult {
   const refundable = sortBookingsLatestFirst(getRefundableBookings(bookings));
   if (!refundable.length || refundAmount <= 0) {
@@ -610,29 +890,50 @@ function selectBookingsForRefund(
     : [];
 
   if (preferred.length) {
-    const preferredTotal = preferred.reduce((sum, booking) => sum + booking.unitAmount, 0);
+    const preferredTotal = preferred.reduce(
+      (sum, booking) => sum + booking.unitAmount,
+      0,
+    );
     if (refundAmount >= preferredTotal) {
       return {
-        scope: preferred.length === refundable.length ? ("full" as const) : ("partial" as const),
+        scope:
+          preferred.length === refundable.length
+            ? ("full" as const)
+            : ("partial" as const),
         affectedBookings: preferred,
       };
     }
   }
 
-  const totalAmount = refundable.reduce((sum, booking) => sum + booking.unitAmount, 0);
+  const totalAmount = refundable.reduce(
+    (sum, booking) => sum + booking.unitAmount,
+    0,
+  );
   if (refundAmount >= totalAmount) {
     return { scope: "full" as const, affectedBookings: refundable };
   }
 
   const unitAmount = refundable[0]?.unitAmount || 0;
-  const homogeneousUnitAmount = refundable.every((booking) => booking.unitAmount === unitAmount);
-  if (!homogeneousUnitAmount || !unitAmount || refundAmount % unitAmount !== 0) {
-    return { scope: "manual" as const, affectedBookings: [] as BookingRecord[] };
+  const homogeneousUnitAmount = refundable.every(
+    (booking) => booking.unitAmount === unitAmount,
+  );
+  if (
+    !homogeneousUnitAmount ||
+    !unitAmount ||
+    refundAmount % unitAmount !== 0
+  ) {
+    return {
+      scope: "manual" as const,
+      affectedBookings: [] as BookingRecord[],
+    };
   }
 
   const slotCount = refundAmount / unitAmount;
   if (!Number.isInteger(slotCount) || slotCount <= 0) {
-    return { scope: "manual" as const, affectedBookings: [] as BookingRecord[] };
+    return {
+      scope: "manual" as const,
+      affectedBookings: [] as BookingRecord[],
+    };
   }
 
   return {
@@ -651,7 +952,11 @@ export function applyStripeRefundUpdate(input: {
 }) {
   const db = loadDb();
   const relatedBookings = sortBookings(
-    db.bookings.filter((booking) => booking.paymentReference && booking.paymentReference === input.paymentReference)
+    db.bookings.filter(
+      (booking) =>
+        booking.paymentReference &&
+        booking.paymentReference === input.paymentReference,
+    ),
   );
 
   if (!relatedBookings.length) {
@@ -661,7 +966,7 @@ export function applyStripeRefundUpdate(input: {
   const { scope, affectedBookings } = selectBookingsForRefund(
     relatedBookings,
     input.refundAmount,
-    input.bookingIds ?? []
+    input.bookingIds ?? [],
   );
   const timestamp = nowIso();
   const normalizedRefundStatus: BookingRefundStatus =
@@ -674,7 +979,8 @@ export function applyStripeRefundUpdate(input: {
           : "pending";
 
   if (input.refundStatus === "pending") {
-    const pendingTargets = scope === "manual" ? relatedBookings : affectedBookings;
+    const pendingTargets =
+      scope === "manual" ? relatedBookings : affectedBookings;
     for (const booking of pendingTargets) {
       booking.refundStatus = normalizedRefundStatus;
       booking.refundReference = input.refundId;
@@ -703,7 +1009,8 @@ export function applyStripeRefundUpdate(input: {
     }
   } else {
     const failedTargets = relatedBookings.filter(
-      (booking) => booking.refundReference === input.refundId || scope === "manual"
+      (booking) =>
+        booking.refundReference === input.refundId || scope === "manual",
     );
     for (const booking of failedTargets) {
       booking.refundStatus = normalizedRefundStatus;
@@ -768,7 +1075,9 @@ export function markBookingRefundPendingByAdmin(input: {
   return booking;
 }
 
-export function getBookingInvoiceStatus(booking: BookingRecord): BookingInvoiceStatus {
+export function getBookingInvoiceStatus(
+  booking: BookingRecord,
+): BookingInvoiceStatus {
   if (
     booking.status === "cancelled" ||
     booking.paymentStatus === "unpaid" ||
@@ -793,24 +1102,32 @@ export function rescheduleBooking(input: {
   hour: number;
 }) {
   const db = loadDb();
-  const booking = db.bookings.find((item) => item.id === input.bookingId && item.userId === input.userId);
+  const booking = db.bookings.find(
+    (item) => item.id === input.bookingId && item.userId === input.userId,
+  );
 
   if (!booking) {
     throw new Error("Booking not found.");
   }
 
   if (!canRescheduleBooking(booking)) {
-    throw new Error("This booking can only be changed more than 12 hours before the appointment.");
+    throw new Error(
+      "This booking can only be changed more than 12 hours before the appointment.",
+    );
   }
 
   const hours = getHoursForPriority(booking.priority);
   const quebecNow = getQuebecNow();
   const dateDiff =
-    (parseDateKey(input.date).getTime() - parseDateKey(quebecNow.dateKey).getTime()) / (1000 * 60 * 60 * 24);
+    (parseDateKey(input.date).getTime() -
+      parseDateKey(quebecNow.dateKey).getTime()) /
+    (1000 * 60 * 60 * 24);
 
   if (booking.priority === "express") {
     if (dateDiff < 0 || dateDiff > 1) {
-      throw new Error("Express booking is available for today and tomorrow only.");
+      throw new Error(
+        "Express booking is available for today and tomorrow only.",
+      );
     }
   } else if (dateDiff < 0 || dateDiff > 30) {
     throw new Error("Selected slot must be within the next 30 days.");
@@ -839,16 +1156,22 @@ export function rescheduleBooking(input: {
       item.date === input.date &&
       item.hour === input.hour &&
       item.priority === booking.priority &&
-      item.status === "confirmed"
+      item.status === "confirmed",
   );
 
   if (isTaken) {
-    throw new Error("This slot has just been taken. Please choose another time.");
+    throw new Error(
+      "This slot has just been taken. Please choose another time.",
+    );
   }
 
-  const blockedSlot = db.blockedSlots.find((slot) => slot.id === buildSlotId(input.date, input.hour, booking.priority));
+  const blockedSlot = db.blockedSlots.find(
+    (slot) => slot.id === buildSlotId(input.date, input.hour, booking.priority),
+  );
   if (blockedSlot) {
-    throw new Error("This slot is closed by admin. Please choose another time.");
+    throw new Error(
+      "This slot is closed by admin. Please choose another time.",
+    );
   }
 
   booking.date = input.date;
@@ -872,7 +1195,9 @@ export function assignBookingDesigner(input: {
 
   booking.designerUserId = input.designerUserId?.trim() || null;
   booking.designerAssignedAt = booking.designerUserId ? nowIso() : null;
-  booking.designerAssignedByUserId = booking.designerUserId ? input.assignedByUserId?.trim() || null : null;
+  booking.designerAssignedByUserId = booking.designerUserId
+    ? input.assignedByUserId?.trim() || null
+    : null;
   booking.updatedAt = nowIso();
   saveDb(db);
   return booking;
@@ -903,7 +1228,10 @@ export function serializeCustomerBooking(booking: BookingRecord) {
   };
 }
 
-export function getAdminBookingSlotsForDate(input: { date: string; priority: BookingPriority }) {
+export function getAdminBookingSlotsForDate(input: {
+  date: string;
+  priority: BookingPriority;
+}) {
   const db = loadDb();
   const date = String(input.date || "").trim();
   if (!isDateKeyValid(date)) {
@@ -924,14 +1252,26 @@ export function getAdminBookingSlotsForDate(input: { date: string; priority: Boo
   const slots = hours.map((hour) => {
     const slotId = buildSlotId(date, hour, input.priority);
     const actualBooking = db.bookings.find(
-      (booking) => booking.date === date && booking.hour === hour && booking.priority === input.priority && booking.status === "confirmed"
+      (booking) =>
+        booking.date === date &&
+        booking.hour === hour &&
+        booking.priority === input.priority &&
+        booking.status === "confirmed",
     );
     const blockedSlot = db.blockedSlots.find(
-      (slot) => slot.date === date && slot.hour === hour && slot.priority === input.priority
+      (slot) =>
+        slot.date === date &&
+        slot.hour === hour &&
+        slot.priority === input.priority,
     );
     const utcStart = new Date(getBookingUtcMs(date, hour)).toISOString();
-    const status: "booked" | "available" = actualBooking || blockedSlot ? "booked" : "available";
-    const source: "real" | "blocked" | "available" = actualBooking ? "real" : blockedSlot ? "blocked" : "available";
+    const status: "booked" | "available" =
+      actualBooking || blockedSlot ? "booked" : "available";
+    const source: "real" | "blocked" | "available" = actualBooking
+      ? "real"
+      : blockedSlot
+        ? "blocked"
+        : "available";
 
     return {
       id: slotId,
@@ -988,7 +1328,11 @@ export function blockBookingSlotByAdmin(input: {
 
   const slotId = buildSlotId(date, input.hour, input.priority);
   const actualBooking = db.bookings.find(
-    (booking) => booking.date === date && booking.hour === input.hour && booking.priority === input.priority && booking.status === "confirmed"
+    (booking) =>
+      booking.date === date &&
+      booking.hour === input.hour &&
+      booking.priority === input.priority &&
+      booking.status === "confirmed",
   );
   if (actualBooking) {
     throw new Error("This hour is already booked by a customer.");
@@ -997,7 +1341,10 @@ export function blockBookingSlotByAdmin(input: {
   const now = nowIso();
   const existing = db.blockedSlots.find((slot) => slot.id === slotId);
   if (existing) {
-    existing.reason = typeof input.reason === "string" && input.reason.trim() ? input.reason.trim() : null;
+    existing.reason =
+      typeof input.reason === "string" && input.reason.trim()
+        ? input.reason.trim()
+        : null;
     existing.updatedAt = now;
     saveDb(db);
     return existing;
@@ -1008,7 +1355,10 @@ export function blockBookingSlotByAdmin(input: {
     date,
     hour: input.hour,
     priority: input.priority,
-    reason: typeof input.reason === "string" && input.reason.trim() ? input.reason.trim() : null,
+    reason:
+      typeof input.reason === "string" && input.reason.trim()
+        ? input.reason.trim()
+        : null,
     createdByUserId: input.adminUserId?.trim() || null,
     createdAt: now,
     updatedAt: now,
@@ -1019,9 +1369,17 @@ export function blockBookingSlotByAdmin(input: {
   return slot;
 }
 
-export function unblockBookingSlotByAdmin(input: { date: string; hour: number; priority: BookingPriority }) {
+export function unblockBookingSlotByAdmin(input: {
+  date: string;
+  hour: number;
+  priority: BookingPriority;
+}) {
   const db = loadDb();
-  const slotId = buildSlotId(String(input.date || "").trim(), input.hour, input.priority);
+  const slotId = buildSlotId(
+    String(input.date || "").trim(),
+    input.hour,
+    input.priority,
+  );
   const before = db.blockedSlots.length;
   db.blockedSlots = db.blockedSlots.filter((slot) => slot.id !== slotId);
   if (db.blockedSlots.length === before) {

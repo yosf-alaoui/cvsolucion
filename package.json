@@ -17,6 +17,7 @@
     "check": "tsc --noEmit",
     "audit:prod": "pnpm audit --prod",
     "storage:migrate": "tsx scripts/migrate-json-to-sqlite.mjs",
+    "storage:rebuild": "tsx scripts/rebuild-structured-storage.mjs",
     "storage:health": "tsx scripts/storage-health.mjs",
     "format": "prettier --write ."
   },

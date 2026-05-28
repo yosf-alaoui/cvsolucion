@@ -9,7 +9,9 @@ import { ensureJsonFile, writeJsonFileAtomic } from "./jsonFile";
 let tempDir = "";
 
 function openTestDatabase() {
-  return new Database(path.join(tempDir, "cvsolucion.sqlite"), { fileMustExist: true });
+  return new Database(path.join(tempDir, "cvsolucion.sqlite"), {
+    fileMustExist: true,
+  });
 }
 
 beforeEach(() => {
@@ -32,7 +34,12 @@ afterEach(() => {
 describe("SQLite document storage", () => {
   it("mirrors auth documents into structured auth tables", () => {
     const authPath = path.join(tempDir, "auth-db.json");
-    ensureJsonFile(authPath, { users: [], sessions: [], tokens: [], events: [] });
+    ensureJsonFile(authPath, {
+      users: [],
+      sessions: [],
+      tokens: [],
+      events: [],
+    });
 
     writeJsonFileAtomic(authPath, {
       users: [
@@ -66,12 +73,20 @@ describe("SQLite document storage", () => {
     });
 
     const db = openTestDatabase();
-    expect(db.prepare("SELECT COUNT(*) AS count FROM auth_users").get()).toMatchObject({ count: 1 });
-    expect(db.prepare("SELECT email, role FROM auth_users WHERE id = ?").get("user_1")).toMatchObject({
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM auth_users").get(),
+    ).toMatchObject({ count: 1 });
+    expect(
+      db
+        .prepare("SELECT email, role FROM auth_users WHERE id = ?")
+        .get("user_1"),
+    ).toMatchObject({
       email: "test@example.com",
       role: "customer",
     });
-    expect(db.prepare("SELECT COUNT(*) AS count FROM auth_events").get()).toMatchObject({ count: 1 });
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM auth_events").get(),
+    ).toMatchObject({ count: 1 });
     db.close();
   });
 
@@ -96,15 +111,15 @@ describe("SQLite document storage", () => {
           country: "United States",
           countryCode: "US",
           company: null,
-          notes: null,
+          notes: "Keep CNC output attached",
           locale: "en",
           status: "confirmed",
-          designerUserId: null,
-          designerAssignedAt: null,
-          designerAssignedByUserId: null,
+          designerUserId: "designer_1",
+          designerAssignedAt: "2026-01-02T00:00:00.000Z",
+          designerAssignedByUserId: "admin_1",
           createdAt: "2026-01-01T00:00:00.000Z",
           updatedAt: "2026-01-01T00:00:00.000Z",
-          rescheduledFromBookingId: null,
+          rescheduledFromBookingId: "booking_previous",
           paymentStatus: "paid",
           paymentProvider: "stripe",
           paymentReference: "pi_test",
@@ -119,10 +134,23 @@ describe("SQLite document storage", () => {
     });
 
     const db = openTestDatabase();
-    expect(db.prepare("SELECT COUNT(*) AS count FROM bookings").get()).toMatchObject({ count: 1 });
-    expect(db.prepare("SELECT payment_reference, unit_amount FROM bookings WHERE id = ?").get("booking_1")).toMatchObject({
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM bookings").get(),
+    ).toMatchObject({ count: 1 });
+    expect(
+      db
+        .prepare(
+          "SELECT payment_reference, unit_amount, notes, designer_user_id, designer_assigned_at, designer_assigned_by_user_id, rescheduled_from_booking_id FROM bookings WHERE id = ?",
+        )
+        .get("booking_1"),
+    ).toMatchObject({
       payment_reference: "pi_test",
       unit_amount: 14000,
+      notes: "Keep CNC output attached",
+      designer_user_id: "designer_1",
+      designer_assigned_at: "2026-01-02T00:00:00.000Z",
+      designer_assigned_by_user_id: "admin_1",
+      rescheduled_from_booking_id: "booking_previous",
     });
     db.close();
   });

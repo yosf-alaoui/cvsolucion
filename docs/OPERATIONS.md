@@ -8,7 +8,7 @@
 - Default app port: `3000`
 - Storage driver: `APP_STORAGE_DRIVER=sqlite`
 - SQLite database: `/var/www/cvsolucion_shared/data/cvsolucion.sqlite`
-- JSON mirror: `APP_SQLITE_JSON_MIRROR=true`
+- JSON mirror: optional. Keep `APP_SQLITE_JSON_MIRROR=false` after SQLite is verified to avoid stale JSON files becoming a deploy source.
 
 ## Storage Commands
 
@@ -16,10 +16,13 @@ Run from the app directory:
 
 ```bash
 pnpm run storage:migrate
+pnpm run storage:rebuild
 pnpm run storage:health
 ```
 
-`storage:migrate` imports root JSON data files into SQLite documents and rebuilds structured tables.
+`storage:migrate` imports root JSON data files into SQLite documents and rebuilds structured tables. Use it for first-time import or a deliberate restore from JSON files.
+
+`storage:rebuild` rebuilds structured tables from the current SQLite `documents` table. Use it during normal deploys because SQLite is the production source of truth.
 
 `storage:health` validates stored JSON documents and prints structured table row counts.
 
@@ -44,7 +47,7 @@ pnpm test
 pnpm run check
 pnpm run audit:prod
 pnpm run build
-pnpm run storage:migrate
+pnpm run storage:rebuild
 pnpm run storage:health
 pm2 restart cvsolucion --update-env
 ```

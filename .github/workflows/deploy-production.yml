@@ -116,7 +116,7 @@ jobs:
 
           pm2 stop "$PM2_APP"
           STOPPED=1
-          MIGRATE_SQLITE_OVERWRITE=1 MIGRATE_SQLITE_PRUNE_UNSCANNED=1 pnpm run storage:migrate
+          pnpm run storage:rebuild
           pnpm run storage:health
           pm2 restart "$PM2_APP" --update-env
           STOPPED=0
