@@ -22,6 +22,7 @@
     "storage:rebuild": "tsx scripts/rebuild-structured-storage.mjs",
     "storage:health": "tsx scripts/storage-health.mjs",
     "backup:drive": "node scripts/google-drive-backup.mjs",
+    "backup:rclone": "node scripts/rclone-drive-backup.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

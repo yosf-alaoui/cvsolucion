@@ -28,13 +28,41 @@ pnpm run storage:health
 
 ## Off-Site Google Drive Backups
 
+Preferred production path uses rclone:
+
+```bash
+pnpm run backup:rclone
+```
+
+Required production environment:
+
+```bash
+RCLONE_CONFIG=/root/.config/rclone/rclone.conf
+RCLONE_BACKUP_REMOTE=cvsolucion-drive:cvsolucion-backups
+RCLONE_BACKUP_RETENTION_DAYS=30
+BACKUP_OUTPUT_DIR=/root/backups
+```
+
+`RCLONE_BACKUP_REMOTE` must point to an already configured rclone remote and folder path. For a personal Google Drive, configure the remote with OAuth as the Google user who owns the storage. A service account still needs a Workspace Shared Drive or OAuth delegation; rclone does not give service accounts personal Drive quota.
+
+Useful setup checks:
+
+```bash
+rclone version
+rclone listremotes
+rclone lsd cvsolucion-drive:
+rclone copy /root/backups/example.tar.gz cvsolucion-drive:cvsolucion-backups --dry-run
+```
+
+Legacy direct Google Drive API backup is still available:
+
 Run from the app directory:
 
 ```bash
 pnpm run backup:drive
 ```
 
-Required production environment:
+Direct API environment:
 
 ```bash
 GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/var/www/cvsolucion_shared/secrets/google-drive-service-account.json
@@ -62,7 +90,7 @@ Description=CVsolucion Google Drive backup
 Type=oneshot
 WorkingDirectory=/var/www/cvsolucion
 EnvironmentFile=/var/www/cvsolucion/.env
-ExecStart=/bin/bash -lc 'pnpm run backup:drive'
+ExecStart=/bin/bash -lc 'pnpm run backup:rclone'
 ```
 
 Recommended timer:
