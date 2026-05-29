@@ -52,10 +52,21 @@ async function createArchive() {
   const sqliteBackupPath = path.join(workDir, "cvsolucion.sqlite");
   const manifestPath = path.join(workDir, "manifest.json");
   const archivePath = path.join(backupRoot, `cvsolucion-backup-${timestamp}.tar.gz`);
+  const includedFiles = ["cvsolucion.sqlite"];
 
   const db = new Database(databasePath, { fileMustExist: true, readonly: true });
   await db.backup(sqliteBackupPath);
   db.close();
+
+  const uploadsPath = path.join(dataDir, "uploads");
+  if (fs.existsSync(uploadsPath) && fs.statSync(uploadsPath).isDirectory()) {
+    fs.cpSync(uploadsPath, path.join(workDir, "uploads"), {
+      recursive: true,
+      force: true,
+      dereference: false,
+    });
+    includedFiles.push("uploads/");
+  }
 
   fs.writeFileSync(
     manifestPath,
@@ -63,8 +74,9 @@ async function createArchive() {
       {
         createdAt: new Date().toISOString(),
         sourceDatabase: databasePath,
+        sourceUploads: fs.existsSync(uploadsPath) ? uploadsPath : null,
         hostname: os.hostname(),
-        files: ["cvsolucion.sqlite"],
+        files: includedFiles,
       },
       null,
       2,

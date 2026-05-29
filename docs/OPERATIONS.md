@@ -76,7 +76,7 @@ Prefer `GOOGLE_DRIVE_BACKUP_FOLDER_ID` because folder names are not unique. If u
 
 Google service accounts cannot upload into a normal personal Drive quota. Use a Google Workspace Shared Drive folder, or switch this backup to an OAuth user flow if the target account is a personal Google Drive.
 
-The backup command creates a safe SQLite backup with `better-sqlite3`, stores a local `.tar.gz` copy, uploads it to Drive, and prunes Drive backups older than `GOOGLE_DRIVE_BACKUP_RETENTION_DAYS`.
+The backup command creates a safe SQLite backup with `better-sqlite3`, includes the production `uploads/` directory when present, stores a local `.tar.gz` copy, uploads it to Drive, and prunes Drive backups older than the configured retention window.
 
 ## Scheduled Backup Timer
 
