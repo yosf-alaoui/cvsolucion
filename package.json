@@ -13,12 +13,15 @@
     "verify:prod": "pnpm run build && pnpm run serve:prod",
     "preview": "vite preview --host",
     "test": "vitest run --config vitest.config.ts",
+    "test:e2e": "node scripts/e2e-smoke.mjs",
     "test:modules": "tsx modules/tests/smoke.ts",
     "check": "tsc --noEmit",
+    "secrets:audit": "node scripts/secrets-audit.mjs",
     "audit:prod": "pnpm audit --prod",
     "storage:migrate": "tsx scripts/migrate-json-to-sqlite.mjs",
     "storage:rebuild": "tsx scripts/rebuild-structured-storage.mjs",
     "storage:health": "tsx scripts/storage-health.mjs",
+    "backup:drive": "node scripts/google-drive-backup.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

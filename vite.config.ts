@@ -18,24 +18,14 @@ export default defineConfig(({ mode }) => {
     envDir: path.resolve(import.meta.dirname),
     root: path.resolve(import.meta.dirname, "client"),
 
-    // ==========================================================================
-    // إعدادات البناء للإنتاج مع تحسينات الأمان والأداء
-    // ==========================================================================
     build: {
       outDir: path.resolve(import.meta.dirname, "dist/public"),
       emptyOutDir: true,
-
-      // ❌ تعطيل Source Maps في الإنتاج - مهم جداً للأمان
       sourcemap: false,
-
-      // تقسيم الكود لتحسين الأداء
       rollupOptions: {
         output: {
-          // تقسيم المكتبات إلى chunks منفصلة
           manualChunks: {
-            // مكتبات React الأساسية
             "react-vendor": ["react", "react-dom"],
-            // مكتبات Radix UI
             "radix-ui": [
               "@radix-ui/react-accordion",
               "@radix-ui/react-dialog",
@@ -43,37 +33,40 @@ export default defineConfig(({ mode }) => {
               "@radix-ui/react-tabs",
               "@radix-ui/react-tooltip",
             ],
-            // مكتبات الأيقونات
             icons: ["lucide-react"],
+            motion: ["framer-motion"],
+            forms: ["react-hook-form", "zod", "@hookform/resolvers"],
+            stripe: ["@stripe/react-stripe-js", "@stripe/stripe-js"],
+            tiptap: [
+              "@tiptap/core",
+              "@tiptap/extension-color",
+              "@tiptap/extension-image",
+              "@tiptap/extension-link",
+              "@tiptap/extension-placeholder",
+              "@tiptap/extension-text-style",
+              "@tiptap/extension-underline",
+              "@tiptap/react",
+              "@tiptap/starter-kit",
+            ],
           },
-          // تنسيق أسماء الملفات
           chunkFileNames: "assets/[name]-[hash].js",
           entryFileNames: "assets/[name]-[hash].js",
           assetFileNames: "assets/[name]-[hash].[ext]",
         },
       },
-
-      // تصغير الكود
       minify: "terser",
       terserOptions: {
         compress: {
-          // إزالة console.log في الإنتاج
           drop_console: isProduction,
           drop_debugger: isProduction,
         },
         format: {
-          // إزالة التعليقات
           comments: false,
         },
       },
-
-      // حد حجم التحذير (بالكيلوبايت)
       chunkSizeWarningLimit: 500,
     },
 
-    // ==========================================================================
-    // إعدادات الخادم للتطوير
-    // ==========================================================================
     server: {
       port: 3000,
       strictPort: false,
@@ -101,19 +94,12 @@ export default defineConfig(({ mode }) => {
       },
     },
 
-    // ==========================================================================
-    // إعدادات المعاينة
-    // ==========================================================================
     preview: {
       port: 4173,
       strictPort: true,
     },
 
-    // ==========================================================================
-    // تحسينات إضافية
-    // ==========================================================================
     esbuild: {
-      // إزالة console و debugger في الإنتاج
       drop: isProduction ? ["console", "debugger"] : [],
     },
   };

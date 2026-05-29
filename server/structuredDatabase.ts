@@ -3,6 +3,21 @@ import type Database from "better-sqlite3";
 type SqliteDatabase = Database.Database;
 type JsonObject = Record<string, any>;
 
+export const structuredSchemaMigrations = [
+  {
+    id: "2026-05-28-001-structured-storage-foundation",
+    description: "Create SQLite document storage mirror tables.",
+  },
+  {
+    id: "2026-05-28-002-booking-visitor-extended-columns",
+    description: "Add extended booking and visitor analytics columns.",
+  },
+  {
+    id: "2026-05-29-001-migration-ledger",
+    description: "Track applied structured schema migrations.",
+  },
+] as const;
+
 function text(value: unknown) {
   return typeof value === "string" ? value : null;
 }
@@ -47,6 +62,21 @@ function runMany(db: SqliteDatabase, statements: string[]) {
   db.exec(statements.join("\n"));
 }
 
+function recordStructuredSchemaMigrations(db: SqliteDatabase) {
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO schema_migrations (id, description, applied_at)
+     VALUES (@id, @description, @appliedAt)`,
+  );
+  const appliedAt = new Date().toISOString();
+  for (const migration of structuredSchemaMigrations) {
+    insert.run({
+      id: migration.id,
+      description: migration.description,
+      appliedAt,
+    });
+  }
+}
+
 function tableColumns(db: SqliteDatabase, tableName: string) {
   return new Set(
     (
@@ -70,6 +100,11 @@ function ensureColumn(
 
 export function ensureStructuredSchema(db: SqliteDatabase) {
   runMany(db, [
+    `CREATE TABLE IF NOT EXISTS schema_migrations (
+      id TEXT PRIMARY KEY,
+      description TEXT NOT NULL,
+      applied_at TEXT NOT NULL
+    );`,
     `CREATE TABLE IF NOT EXISTS auth_users (
       id TEXT PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
@@ -379,6 +414,7 @@ export function ensureStructuredSchema(db: SqliteDatabase) {
   ensureColumn(db, "visitors", "last_whatsapp_click_at", "TEXT");
   ensureColumn(db, "visitors", "last_email_click_at", "TEXT");
   ensureColumn(db, "visitors", "last_chat_at", "TEXT");
+  recordStructuredSchemaMigrations(db);
 }
 
 function replaceAuth(db: SqliteDatabase, data: JsonObject) {
@@ -952,6 +988,7 @@ export function syncStructuredDocument(
 }
 
 export const structuredTableNames = [
+  "schema_migrations",
   "auth_users",
   "auth_sessions",
   "auth_tokens",

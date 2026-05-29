@@ -1,5 +1,9 @@
 import path from "path";
 import { getAppDataDir } from "./dataDir";
+import {
+  isSqliteStorageEnabled,
+  withDocumentDatabase,
+} from "./documentDatabase";
 import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 
 export type CustomerProfileRecord = {
@@ -34,8 +38,64 @@ function ensureDbFile() {
   ensureJsonFile(DB_PATH, { profiles: [] });
 }
 
+function nullableText(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function loadStructuredDb(): CustomerProfileDb | null {
+  if (!isSqliteStorageEnabled()) return null;
+
+  return withDocumentDatabase((sqlite) => {
+    const rows = sqlite
+      .prepare(
+        `
+          SELECT
+            user_id AS userId,
+            email,
+            display_name AS name,
+            country,
+            country_code AS countryCode,
+            phone,
+            company,
+            created_at AS createdAt,
+            updated_at AS updatedAt
+          FROM customer_profiles
+          ORDER BY updated_at DESC
+        `,
+      )
+      .all() as Array<Record<string, unknown>>;
+
+    if (!rows.length) {
+      const document = sqlite
+        .prepare("SELECT value FROM documents WHERE key = ?")
+        .get("customer-profiles-db.json") as { value: string } | undefined;
+      if (document) {
+        const parsed = JSON.parse(document.value) as Partial<CustomerProfileDb>;
+        if ((parsed.profiles?.length ?? 0) > 0) return null;
+      }
+    }
+
+    return {
+      profiles: rows.map((row) => ({
+        userId: String(row.userId || ""),
+        email: String(row.email || "").toLowerCase(),
+        name: nullableText(row.name),
+        country: nullableText(row.country),
+        countryCode: normalizeCountryCode(nullableText(row.countryCode)),
+        phone: nullableText(row.phone),
+        company: nullableText(row.company),
+        createdAt: String(row.createdAt || nowIso()),
+        updatedAt: String(row.updatedAt || row.createdAt || nowIso()),
+      })),
+    };
+  });
+}
+
 function loadDb(): CustomerProfileDb {
   ensureDbFile();
+  const structured = loadStructuredDb();
+  if (structured) return structured;
+
   const parsed = readJsonFile<Partial<CustomerProfileDb>>(DB_PATH);
   return {
     profiles: parsed.profiles ?? [],

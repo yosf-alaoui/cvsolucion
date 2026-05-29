@@ -192,4 +192,79 @@ describe("structured SQLite reads", () => {
       },
     ]);
   });
+
+  it("reads contact leads and customer profiles from structured tables", async () => {
+    const { ensureJsonFile, writeJsonFileAtomic } = await import("./jsonFile");
+    const { listContactLeads } = await import("./contactStore");
+    const { getCustomerProfile } = await import("./customerProfileStore");
+
+    ensureJsonFile(path.join(tempDir, "contact-leads.json"), { leads: [] });
+    writeJsonFileAtomic(path.join(tempDir, "contact-leads.json"), {
+      leads: [
+        {
+          id: "lead_1",
+          name: "Lead User",
+          email: "LEAD@EXAMPLE.COM",
+          company: "Shop",
+          phone: "555",
+          interest: "training",
+          message: "Need workflow support",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+
+    ensureJsonFile(path.join(tempDir, "customer-profiles-db.json"), {
+      profiles: [],
+    });
+    writeJsonFileAtomic(path.join(tempDir, "customer-profiles-db.json"), {
+      profiles: [
+        {
+          userId: "user_1",
+          email: "CUSTOMER@EXAMPLE.COM",
+          name: "Customer User",
+          country: "Canada",
+          countryCode: "ca",
+          phone: "555",
+          company: "Millwork",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-02T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(listContactLeads()).toMatchObject([
+      {
+        id: "lead_1",
+        email: "lead@example.com",
+        interest: "training",
+      },
+    ]);
+    expect(getCustomerProfile("user_1")).toMatchObject({
+      userId: "user_1",
+      email: "customer@example.com",
+      name: "Customer User",
+      countryCode: "CA",
+    });
+  });
+
+  it("checks processed Stripe events from the structured table", async () => {
+    const { ensureJsonFile, writeJsonFileAtomic } = await import("./jsonFile");
+    const { hasProcessedStripeEvent } = await import("./stripeEventStore");
+    const stripeEventsPath = path.join(tempDir, "stripe-events-db.json");
+
+    ensureJsonFile(stripeEventsPath, { processed: [] });
+    writeJsonFileAtomic(stripeEventsPath, {
+      processed: [
+        {
+          id: "evt_1",
+          type: "payment_intent.succeeded",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(hasProcessedStripeEvent("evt_1")).toBe(true);
+    expect(hasProcessedStripeEvent("evt_missing")).toBe(false);
+  });
 });

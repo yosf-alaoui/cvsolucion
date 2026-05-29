@@ -87,6 +87,10 @@ describe("SQLite document storage", () => {
     expect(
       db.prepare("SELECT COUNT(*) AS count FROM auth_events").get(),
     ).toMatchObject({ count: 1 });
+    const migrations = db
+      .prepare("SELECT COUNT(*) AS count FROM schema_migrations")
+      .get() as { count: number };
+    expect(migrations.count).toBeGreaterThanOrEqual(3);
     db.close();
   });
 

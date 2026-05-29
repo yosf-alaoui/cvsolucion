@@ -4,6 +4,9 @@ dist/
 .env.*
 !.env.example
 .secrets/
+backup-cvsolucion-website-*.json
+*service-account*.json
+*google*credentials*.json
 
 .DS_Store
 Thumbs.db

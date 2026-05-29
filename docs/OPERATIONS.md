@@ -26,6 +26,59 @@ pnpm run storage:health
 
 `storage:health` validates stored JSON documents and prints structured table row counts.
 
+## Off-Site Google Drive Backups
+
+Run from the app directory:
+
+```bash
+pnpm run backup:drive
+```
+
+Required production environment:
+
+```bash
+GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/var/www/cvsolucion_shared/secrets/google-drive-service-account.json
+GOOGLE_DRIVE_BACKUP_FOLDER_ID=
+GOOGLE_DRIVE_BACKUP_FOLDER_NAME=CVsolucion production backups
+GOOGLE_DRIVE_BACKUP_RETENTION_DAYS=30
+BACKUP_OUTPUT_DIR=/root/backups
+```
+
+Prefer `GOOGLE_DRIVE_BACKUP_FOLDER_ID` because folder names are not unique. If using `GOOGLE_DRIVE_BACKUP_FOLDER_NAME`, the folder must already be shared with the service account email from the JSON key.
+
+Google service accounts cannot upload into a normal personal Drive quota. Use a Google Workspace Shared Drive folder, or switch this backup to an OAuth user flow if the target account is a personal Google Drive.
+
+The backup command creates a safe SQLite backup with `better-sqlite3`, stores a local `.tar.gz` copy, uploads it to Drive, and prunes Drive backups older than `GOOGLE_DRIVE_BACKUP_RETENTION_DAYS`.
+
+## Scheduled Backup Timer
+
+Recommended systemd unit:
+
+```ini
+[Unit]
+Description=CVsolucion Google Drive backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/cvsolucion
+EnvironmentFile=/var/www/cvsolucion/.env
+ExecStart=/bin/bash -lc 'pnpm run backup:drive'
+```
+
+Recommended timer:
+
+```ini
+[Unit]
+Description=Run CVsolucion Google Drive backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
 ## Required GitHub Secrets For Manual Deploy
 
 The `Deploy Production` workflow is manual and requires these repository or environment secrets:
@@ -43,10 +96,12 @@ The deploy workflow runs:
 
 ```bash
 pnpm install --frozen-lockfile
+pnpm run secrets:audit
 pnpm test
 pnpm run check
 pnpm run audit:prod
 pnpm run build
+pnpm run test:e2e
 pnpm run storage:rebuild
 pnpm run storage:health
 pm2 restart cvsolucion --update-env
@@ -74,6 +129,19 @@ Expected:
 - Missing static assets return HTTP `404`.
 - PM2 status is `online`.
 - `storage:health` prints the expected documents and structured table counts.
+
+## Security Headers
+
+Express sets the application CSP and core security headers. In production, Nginx should be the only public layer adding static-site security headers; hide duplicate upstream headers for proxied responses to avoid repeated `Content-Security-Policy`, `X-Content-Type-Options`, and related values.
+
+Quick checks:
+
+```bash
+curl -I https://cvsolucion.com/
+curl -I 'https://cvsolucion.com/assets/index-does-not-exist.js?cache-miss=1'
+```
+
+Expected: one public CSP header on HTML responses, one `X-Content-Type-Options` header, and missing assets returning `404`.
 
 ## Rollback Notes
 
