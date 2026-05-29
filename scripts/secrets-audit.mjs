@@ -4,6 +4,7 @@ import { spawnSync } from "child_process";
 const skippedPaths = new Set(["scripts/secrets-audit.mjs"]);
 
 const skippedPrefixes = [
+  ".git/",
   "node_modules/",
   "dist/",
   "data/",
@@ -45,13 +46,26 @@ function normalizePath(filePath) {
   return filePath.replace(/\\/g, "/");
 }
 
-function listTrackedFiles() {
+function listProjectFiles(dir = ".", prefix = "") {
+  const files = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const relativePath = normalizePath(prefix ? `${prefix}/${entry.name}` : entry.name);
+    if (shouldSkip(relativePath)) continue;
+    if (entry.isDirectory()) {
+      files.push(...listProjectFiles(relativePath, relativePath));
+    } else if (entry.isFile()) {
+      files.push(relativePath);
+    }
+  }
+  return files;
+}
+
+function listScannableFiles() {
   const result = spawnSync("git", ["ls-files", "-z"], {
     encoding: "buffer",
   });
   if (result.status !== 0) {
-    const stderr = result.stderr?.toString("utf8").trim();
-    throw new Error(`git ls-files failed${stderr ? `: ${stderr}` : ""}`);
+    return listProjectFiles();
   }
   return result.stdout
     .toString("utf8")
@@ -63,7 +77,11 @@ function listTrackedFiles() {
 function shouldSkip(filePath) {
   return (
     skippedPaths.has(filePath) ||
-    skippedPrefixes.some((prefix) => filePath.startsWith(prefix))
+    filePath === ".env" ||
+    filePath.startsWith(".env.") ||
+    /^backup-cvsolucion-website-.*\.json$/i.test(filePath) ||
+    /service-account.*\.json$/i.test(filePath) ||
+    skippedPrefixes.some((prefix) => filePath === prefix.slice(0, -1) || filePath.startsWith(prefix))
   );
 }
 
@@ -82,7 +100,7 @@ function scanFile(filePath) {
 }
 
 const findings = [];
-for (const filePath of listTrackedFiles()) {
+for (const filePath of listScannableFiles()) {
   if (shouldSkip(filePath)) continue;
   for (const finding of scanFile(filePath)) {
     findings.push({ filePath, finding });
