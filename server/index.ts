@@ -877,6 +877,10 @@ function isMissingStaticAssetRequest(pathname: string) {
   return /\.[a-z0-9]{2,8}$/i.test(pathname);
 }
 
+function isAdminShellRequest(pathname: string) {
+  return pathname === "/admin" || pathname.startsWith("/admin/");
+}
+
 async function sendLinkEmail(args: {
   email: string;
   locale?: string;
@@ -2904,6 +2908,7 @@ async function startServer() {
     (req, res) => {
       const email = String(req.body?.email || "").trim();
       const password = String(req.body?.password || "");
+      const adminOnly = req.body?.adminOnly === true;
       const user = getUserByEmail(email);
 
       if (!user || !verifyPassword(password, user)) {
@@ -2923,22 +2928,35 @@ async function startServer() {
           .json({ error: "Please confirm your email before signing in." });
       }
 
+      const role = getUserRole(user);
+      if (adminOnly && role !== "admin") {
+        recordEvent({
+          type: "admin_login_denied",
+          userId: user.id,
+          email: user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: req.get("user-agent") || null,
+        });
+        return res.status(403).json({ error: "Admin access only." });
+      }
+
       const session = createSession(user.id, ONE_YEAR_MS);
       setSessionCookie(req, res, session.id);
       recordEvent({
         type: "login",
         userId: user.id,
         email: user.email,
-        locale: null,
+        locale: adminOnly ? "admin" : null,
         ip: getRequestIp(req),
         userAgent: req.get("user-agent") || null,
       });
       return res.json({
         user: serializePublicUser(user),
-        role: getUserRole(user),
-        isAdmin: getUserRole(user) === "admin",
-        isDesigner: getUserRole(user) === "designer",
-        isTrainer: getUserRole(user) === "trainer",
+        role,
+        isAdmin: role === "admin",
+        isDesigner: role === "designer",
+        isTrainer: role === "trainer",
         csrfToken: createCsrfToken({ session, user }),
       });
     },
@@ -3000,9 +3018,13 @@ async function startServer() {
       try {
         const email = String(req.body?.email || "").trim();
         const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+        const target = req.body?.target === "admin" ? "admin" : "site";
         const user = getUserByEmail(email);
 
         if (!user) {
+          return res.json({ ok: true });
+        }
+        if (target === "admin" && getUserRole(user) !== "admin") {
           return res.json({ ok: true });
         }
 
@@ -3011,13 +3033,17 @@ async function startServer() {
           "reset_password",
           RESET_LINK_MS,
         );
-        const resetUrl = `${appOrigin(req)}${localePrefix(locale)}/login?recovery=1&token=${encodeURIComponent(rawToken)}`;
+        const resetPath =
+          target === "admin"
+            ? `/admin/login?recovery=1&token=${encodeURIComponent(rawToken)}`
+            : `${localePrefix(locale)}/login?recovery=1&token=${encodeURIComponent(rawToken)}`;
+        const resetUrl = `${appOrigin(req)}${resetPath}`;
 
         recordEvent({
           type: "password_reset_requested",
           userId: user.id,
           email: user.email,
-          locale,
+          locale: target === "admin" ? "admin" : locale,
           ip: getRequestIp(req),
           userAgent: req.get("user-agent") || null,
         });
@@ -5148,7 +5174,11 @@ async function startServer() {
       : path.resolve(__dirname, "..", "dist", "public");
 
   const indexPath = path.join(staticPath, "index.html");
+  const adminIndexPath = path.join(staticPath, "admin.html");
   const indexTemplate = fs.readFileSync(indexPath, "utf8");
+  const adminIndexTemplate = fs.existsSync(adminIndexPath)
+    ? fs.readFileSync(adminIndexPath, "utf8")
+    : indexTemplate;
 
   app.get("/robots.txt", (req, res) => {
     const body = buildRobotsTxt(canonicalOrigin(req));
@@ -5201,6 +5231,9 @@ async function startServer() {
         res.setHeader("X-Content-Type-Options", "nosniff");
         if (filePath.endsWith(".html")) {
           res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+          if (filePath.endsWith("admin.html")) {
+            res.setHeader("X-Robots-Tag", "noindex, nofollow");
+          }
         } else if (filePath.endsWith(".js")) {
           res.setHeader(
             "Content-Type",
@@ -5229,12 +5262,23 @@ async function startServer() {
     }
 
     try {
+      if (isAdminShellRequest(req.path)) {
+        res.setHeader("Content-Type", "text/html; charset=UTF-8");
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+        res.setHeader("X-Robots-Tag", "noindex, nofollow");
+        return res.status(200).send(adminIndexTemplate);
+      }
+
       const html = renderSeoHtml(indexTemplate, req.path, canonicalOrigin(req));
       res.setHeader("Content-Type", "text/html; charset=UTF-8");
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       return res.status(200).send(html);
     } catch {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      if (isAdminShellRequest(req.path) && fs.existsSync(adminIndexPath)) {
+        res.setHeader("X-Robots-Tag", "noindex, nofollow");
+        return res.sendFile(adminIndexPath);
+      }
       return res.sendFile(indexPath);
     }
   });

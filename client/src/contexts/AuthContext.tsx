@@ -4,6 +4,7 @@ import {
   CurrentUserResponse,
   getCurrentUser,
   loginWithPassword,
+  loginWithPasswordForAdmin,
   logout as logoutRequest,
   resetPassword as resetPasswordRequest,
   sendPasswordReset,
@@ -19,10 +20,10 @@ type AuthContextValue = {
   isTrainer: boolean;
   loading: boolean;
   refresh: () => Promise<AuthUser | null>;
-  login: (email: string, password: string) => Promise<AuthUser>;
+  login: (email: string, password: string, options?: { adminOnly?: boolean }) => Promise<AuthUser>;
   signup: (email: string, password: string, locale: string, termsAccepted: boolean, countryCode: string, country: string) => Promise<void>;
   logout: () => Promise<void>;
-  sendReset: (email: string, locale: string) => Promise<void>;
+  sendReset: (email: string, locale: string, target?: "site" | "admin") => Promise<void>;
   resetPassword: (token: string, password: string) => Promise<void>;
 };
 
@@ -61,8 +62,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isTrainer,
       loading,
       refresh,
-      login: async (email, password) => {
-        const response = await loginWithPassword(email, password);
+      login: async (email, password, options) => {
+        const response = options?.adminOnly ? await loginWithPasswordForAdmin(email, password) : await loginWithPassword(email, password);
         setCsrfToken(response.csrfToken);
         setUser(response.user);
         const nextRole = response.user.role || response.role || null;
@@ -84,8 +85,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsDesigner(false);
         setIsTrainer(false);
       },
-      sendReset: async (email, locale) => {
-        await sendPasswordReset(email, locale);
+      sendReset: async (email, locale, target) => {
+        await sendPasswordReset(email, locale, target);
       },
       resetPassword: async (token, password) => {
         await resetPasswordRequest(token, password);

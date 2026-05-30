@@ -1,7 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import Seo from "@/components/Seo";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
@@ -133,7 +131,7 @@ function StatPill({ label, value }: { label: string; value: string | number }) {
 
 export default function AdminDashboard() {
   const { locale } = useI18n();
-  const { loading, user, isAdmin } = useAuth();
+  const { loading, user, isAdmin, logout } = useAuth();
   const [data, setData] = useState<AdminDashboardResponse | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -556,7 +554,11 @@ export default function AdminDashboard() {
     };
   }, [locale]);
 
-  const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
+  const loginHref = "/admin/login";
+  const consoleLabel = locale === "ar" ? "لوحة الإدارة" : locale === "fr" ? "Console admin" : "Admin Console";
+  const publicSiteLabel = locale === "ar" ? "الموقع العام" : locale === "fr" ? "Site public" : "Public site";
+  const signOutLabel = locale === "ar" ? "خروج" : locale === "fr" ? "Deconnexion" : "Sign out";
+  const signedInLabel = locale === "ar" ? "متصل كـ" : locale === "fr" ? "Connecte en tant que" : "Signed in as";
 
   const load = useCallback(async (silent = false) => {
     if (!silent) {
@@ -907,6 +909,7 @@ export default function AdminDashboard() {
   const eventLabels: Record<string, string> = {
     signup: locale === "ar" ? "تسجيل" : locale === "fr" ? "Inscription" : "Signup",
     login: locale === "ar" ? "دخول" : locale === "fr" ? "Connexion" : "Login",
+    admin_login_denied: locale === "ar" ? "رفض دخول إداري" : locale === "fr" ? "Acces admin refuse" : "Admin login denied",
     logout: locale === "ar" ? "خروج" : locale === "fr" ? "Deconnexion" : "Logout",
     magic_link_requested: locale === "ar" ? "طلب رابط دخول" : locale === "fr" ? "Lien magique demande" : "Magic link requested",
     password_reset_requested:
@@ -957,17 +960,41 @@ export default function AdminDashboard() {
   }));
 
   const stats = data?.stats;
+  const handleLogout = async () => {
+    await logout();
+    window.location.href = "/admin/login";
+  };
 
   return (
-    <div className="site-page min-h-screen flex flex-col bg-transparent">
+    <div className="min-h-screen bg-slate-50 text-slate-950">
       <Seo
         title={`${copy.title} | CVsolucion`}
         description={copy.subtitle}
         robots="noindex, nofollow"
         type="website"
       />
-      <Header />
-      <main className="flex-1 pt-28 pb-16">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <a href="/admin" className="text-lg font-bold text-primary">
+              CVsolucion
+            </a>
+            <p className="text-sm font-medium text-slate-500">{consoleLabel}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {user?.email ? <span className="text-sm text-slate-500">{signedInLabel} {user.email}</span> : null}
+            <Button type="button" variant="outline" asChild>
+              <a href="/">{publicSiteLabel}</a>
+            </Button>
+            {user ? (
+              <Button type="button" variant="outline" onClick={() => void handleLogout()}>
+                {signOutLabel}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </header>
+      <main className="pb-16 pt-8">
         <div className="container mx-auto px-4">
           <div className="mx-auto max-w-7xl space-y-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -1433,7 +1460,6 @@ export default function AdminDashboard() {
           </div>
         </div>
       </main>
-      <Footer />
     </div>
   );
 }

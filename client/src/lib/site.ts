@@ -46,6 +46,9 @@ export function getDesignerDashboardHref(locale: "en" | "fr" | "ar" = "en") {
 }
 
 export function getAccountDashboardHref(locale: "en" | "fr" | "ar", role?: "customer" | "designer" | "trainer" | "admin" | null) {
+  if (role === "admin") {
+    return "/admin";
+  }
   if (role === "designer") {
     return getDesignerDashboardHref(locale);
   }

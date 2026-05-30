@@ -23,6 +23,10 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       sourcemap: false,
       rollupOptions: {
+        input: {
+          main: path.resolve(import.meta.dirname, "client", "index.html"),
+          admin: path.resolve(import.meta.dirname, "client", "admin.html"),
+        },
         output: {
           manualChunks: {
             "react-vendor": ["react", "react-dom"],

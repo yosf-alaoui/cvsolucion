@@ -51,6 +51,20 @@ export function loginWithPassword(email: string, password: string) {
   });
 }
 
+export function loginWithPasswordForAdmin(email: string, password: string) {
+  return request<{
+    user: AuthUser;
+    role?: AuthUser["role"];
+    isAdmin?: boolean;
+    isDesigner?: boolean;
+    isTrainer?: boolean;
+    csrfToken?: string | null;
+  }>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password, adminOnly: true }),
+  });
+}
+
 export function signUp(
   email: string,
   password: string,
@@ -66,10 +80,10 @@ export function signUp(
   });
 }
 
-export function sendPasswordReset(email: string, locale: string) {
+export function sendPasswordReset(email: string, locale: string, target?: "site" | "admin") {
   return request<{ ok: true }>("/api/auth/forgot-password", {
     method: "POST",
-    body: JSON.stringify({ email, locale }),
+    body: JSON.stringify({ email, locale, target }),
   });
 }
 

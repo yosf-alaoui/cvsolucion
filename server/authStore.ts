@@ -42,6 +42,7 @@ export type AuthEventType =
   | "signup"
   | "login"
   | "login_failed"
+  | "admin_login_denied"
   | "logout"
   | "magic_link_requested"
   | "password_reset_requested"
