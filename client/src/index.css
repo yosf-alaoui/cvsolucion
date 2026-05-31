@@ -129,6 +129,10 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  #root {
+    isolation: isolate;
+    min-height: 100vh;
+  }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   [type="button"]:not(:disabled),
@@ -226,6 +230,7 @@
 
   .site-page {
     position: relative;
+    z-index: 1;
     background: transparent;
     overflow-x: clip;
   }
