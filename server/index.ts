@@ -97,7 +97,12 @@ import {
   updateBookingScheduleSettings,
 } from "./bookingSettingsStore";
 import { listContactLeads, storeContactLead } from "./contactStore";
-import { buildRobotsTxt, buildSitemapXml, renderSeoHtml } from "./seo";
+import {
+  buildRobotsTxt,
+  buildSitemapXml,
+  isKnownPublicSeoPath,
+  renderSeoHtml,
+} from "./seo";
 import {
   getCustomerProfile,
   updateCustomerProfile,
@@ -5269,10 +5274,14 @@ async function startServer() {
         return res.status(200).send(adminIndexTemplate);
       }
 
+      const knownPublicPath = isKnownPublicSeoPath(req.path);
       const html = renderSeoHtml(indexTemplate, req.path, canonicalOrigin(req));
       res.setHeader("Content-Type", "text/html; charset=UTF-8");
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-      return res.status(200).send(html);
+      if (!knownPublicPath) {
+        res.setHeader("X-Robots-Tag", "noindex, nofollow");
+      }
+      return res.status(knownPublicPath ? 200 : 404).send(html);
     } catch {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       if (isAdminShellRequest(req.path) && fs.existsSync(adminIndexPath)) {

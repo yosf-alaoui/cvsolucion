@@ -860,6 +860,78 @@ function articleFallback(locale: ArticleLocale, slug: string) {
   `;
 }
 
+function notFoundFallback(locale: ArticleLocale) {
+  const copy = {
+    en: {
+      title: "Page not found",
+      body: "The requested page is not available on CVsolucion. Use the links below to reach current Cabinet Vision consulting, training, and support content.",
+    },
+    fr: {
+      title: "Page introuvable",
+      body: "La page demandee n'est pas disponible sur CVsolucion. Utilisez les liens ci-dessous pour acceder au contenu actuel de consulting, formation et support Cabinet Vision.",
+    },
+    ar: {
+      title: "الصفحة غير موجودة",
+      body: "الصفحة المطلوبة غير متاحة على CVsolucion. استخدم الروابط التالية للوصول إلى محتوى استشارات وتدريب ودعم Cabinet Vision الحالي.",
+    },
+  } as const;
+
+  return `
+    <main id="seo-fallback">
+      <section>
+        <h1>${escapeHtml(copy[locale].title)}</h1>
+        <p>${escapeHtml(copy[locale].body)}</p>
+        <nav class="seo-links">
+          <a href="${escapeHtml(localizePath("/", locale))}">CVsolucion</a>
+          <a href="${escapeHtml(localizePath("/articles", locale))}">Articles</a>
+          <a href="${escapeHtml(localizePath("/guides", locale))}">Guides</a>
+          <a href="${escapeHtml(localizePath("/book", locale))}">Book</a>
+        </nav>
+      </section>
+    </main>
+  `;
+}
+
+function getPublishedArticleAnyLocale(slug: string) {
+  return getArticleBySlug(slug, "en") || getArticleBySlug(slug, "fr") || getArticleBySlug(slug, "ar");
+}
+
+function isKnownCleanPath(cleanPath: string) {
+  const staticPaths = new Set([
+    "/",
+    "/training",
+    "/design-pricing",
+    "/articles",
+    "/guides",
+    "/about",
+    "/book",
+    "/book/cart",
+    "/book/checkout",
+    "/privacy",
+    "/terms",
+    "/login",
+    "/dashboard",
+    "/designer",
+    "/trainer",
+    "/404",
+  ]);
+
+  if (staticPaths.has(cleanPath)) return true;
+  if (getSeoServicePageByCanonicalPath(cleanPath)) return true;
+  if (getSeoKnowledgePageByCanonicalPath(cleanPath)) return true;
+  if (cleanPath.startsWith("/articles/")) {
+    const slug = cleanPath.slice("/articles/".length);
+    return Boolean(slug && getPublishedArticleAnyLocale(slug));
+  }
+
+  return false;
+}
+
+export function isKnownPublicSeoPath(pathname: string) {
+  const cleanPath = stripLocale(pathname.replace(/\/+$/, "") || "/");
+  return isKnownCleanPath(cleanPath);
+}
+
 function alternatesHtml(origin: string, canonicalPath: string) {
   const links = [
     { hreflang: "en", path: localizePath(canonicalPath, "en") },
@@ -953,6 +1025,20 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
   if (cleanPath.startsWith("/articles/")) {
     const slug = cleanPath.slice("/articles/".length);
     const article = getArticleBySlug(slug, locale);
+    if (!article && !getPublishedArticleAnyLocale(slug)) {
+      return {
+        lang,
+        dir,
+        title: "404 | CVsolucion",
+        description: "The requested page could not be found.",
+        canonicalPath: cleanPath,
+        ogType: "website",
+        robots: "noindex, nofollow",
+        image: DEFAULT_IMAGE,
+        fallbackHtml: notFoundFallback(locale),
+        structuredData: null,
+      };
+    }
     const articleTitle = article?.title || routeTitle(locale, "/articles");
     const articleDescription = article ? summarizeText(article.body, 180) : routeDescription(locale, "/articles");
     return {
@@ -1047,18 +1133,19 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
   }
 
   const noindexPaths = new Set(["/login", "/dashboard", "/designer", "/trainer", "/book/cart", "/book/checkout"]);
-  const robots = noindexPaths.has(cleanPath) ? "noindex, nofollow" : "index, follow";
+  const knownPath = isKnownCleanPath(cleanPath);
+  const robots = noindexPaths.has(cleanPath) || !knownPath ? "noindex, nofollow" : "index, follow";
 
   return {
     lang,
     dir,
-    title: routeTitle(locale, cleanPath),
-    description: routeDescription(locale, cleanPath),
+    title: knownPath ? routeTitle(locale, cleanPath) : "404 | CVsolucion",
+    description: knownPath ? routeDescription(locale, cleanPath) : "The requested page could not be found.",
     canonicalPath: cleanPath,
     ogType: "website",
     robots,
     image: DEFAULT_IMAGE,
-    fallbackHtml: routeFallback(locale, cleanPath),
+    fallbackHtml: knownPath ? routeFallback(locale, cleanPath) : notFoundFallback(locale),
     structuredData: null,
   };
 }
