@@ -1046,7 +1046,8 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
     };
   }
 
-  const robots = cleanPath === "/login" || cleanPath === "/dashboard" ? "noindex, nofollow" : "index, follow";
+  const noindexPaths = new Set(["/login", "/dashboard", "/designer", "/trainer", "/book/cart", "/book/checkout"]);
+  const robots = noindexPaths.has(cleanPath) ? "noindex, nofollow" : "index, follow";
 
   return {
     lang,
@@ -1203,14 +1204,20 @@ export function buildRobotsTxt(origin: string) {
     "Allow: /",
     "Disallow: /admin",
     "Disallow: /dashboard",
+    "Disallow: /designer",
+    "Disallow: /trainer",
     "Disallow: /login",
     "Disallow: /book/cart",
     "Disallow: /book/checkout",
     "Disallow: /fr/dashboard",
+    "Disallow: /fr/designer",
+    "Disallow: /fr/trainer",
     "Disallow: /fr/login",
     "Disallow: /fr/book/cart",
     "Disallow: /fr/book/checkout",
     "Disallow: /ar/dashboard",
+    "Disallow: /ar/designer",
+    "Disallow: /ar/trainer",
     "Disallow: /ar/login",
     "Disallow: /ar/book/cart",
     "Disallow: /ar/book/checkout",

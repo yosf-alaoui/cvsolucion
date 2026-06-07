@@ -424,7 +424,7 @@ export default function BookingCheckout() {
 
   return (
     <div className="site-page min-h-screen bg-transparent">
-      <Seo title={copy.seoTitle} description={copy.subtitle} type="website" />
+      <Seo title={copy.seoTitle} description={copy.subtitle} type="website" robots="noindex, nofollow" />
       <Header />
       <main className="pt-32 pb-20">
         <section className="container">
@@ -502,7 +502,9 @@ export default function BookingCheckout() {
                     <div className="mt-6 space-y-4">
                       <p className="text-base leading-7 text-slate-600">{copy.signInRequired}</p>
                       <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90">
-                        <a href={loginHref}>{copy.signIn}</a>
+                        <a href={loginHref} rel="nofollow">
+                          {copy.signIn}
+                        </a>
                       </Button>
                     </div>
                   ) : (

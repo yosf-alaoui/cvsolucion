@@ -495,7 +495,9 @@ export default function Training() {
                   <p className="mt-4 text-sm leading-7 text-slate-600">{selected.project}</p>
                   {!authLoading && !user ? (
                     <Button asChild className="mt-6 w-full rounded-full bg-primary text-white hover:bg-primary/90">
-                      <a href={loginHref}>{copy.signIn}</a>
+                      <a href={loginHref} rel="nofollow">
+                        {copy.signIn}
+                      </a>
                     </Button>
                   ) : null}
                 </GlassCard>

@@ -202,7 +202,7 @@ export default function BookingCart() {
 
   return (
     <div className="site-page min-h-screen bg-transparent">
-      <Seo title={copy.seoTitle} description={copy.subtitle} type="website" />
+      <Seo title={copy.seoTitle} description={copy.subtitle} type="website" robots="noindex, nofollow" />
       <Header />
       <main className="pt-32 pb-20">
         <section className="container">
@@ -263,7 +263,9 @@ export default function BookingCart() {
                     <a href={bookingHref}>{copy.back}</a>
                   </Button>
                   <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90" disabled={unavailableSlotIds.length > 0}>
-                    <a href={user ? checkoutHref : loginHref}>{user ? copy.checkout : copy.signIn}</a>
+                    <a href={user ? checkoutHref : loginHref} rel="nofollow">
+                      {user ? copy.checkout : copy.signIn}
+                    </a>
                   </Button>
                 </div>
               </div>

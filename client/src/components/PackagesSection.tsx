@@ -108,6 +108,7 @@ export default function PackagesSection() {
                   ) : (
                     <a
                       href={loginHref}
+                      rel="nofollow"
                       className="mt-3 inline-flex text-sm font-semibold text-primary transition-colors hover:text-primary/80"
                     >
                       {t("packages.priceHidden")}

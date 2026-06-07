@@ -607,7 +607,7 @@ export default function Header() {
                   visibleCartCount > 0 ? "bg-primary text-white shadow-sm hover:bg-primary/90" : "border-slate-200 bg-white/75"
                 }`}
               >
-                <a href={cartHref}>
+                <a href={cartHref} rel="nofollow">
                   <ShoppingCart className="h-4 w-4" />
                   {visibleCartCount > 0 ? (
                     <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-primary">
@@ -619,7 +619,7 @@ export default function Header() {
 
               {!isAuthed ? (
                 <Button asChild variant="outline" size="icon" className="h-9 w-9 rounded-full border-slate-200 bg-white/70 backdrop-blur" aria-label={t("auth.signInUp")}>
-                  <a href={loginHref}>
+                  <a href={loginHref} rel="nofollow">
                     <UserRound className="h-4 w-4" />
                   </a>
                 </Button>
@@ -636,13 +636,13 @@ export default function Header() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52 rounded-2xl border-slate-200 bg-white/95 p-2 backdrop-blur-xl">
                     <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
-                      <a href={dashboardHref}>
+                      <a href={dashboardHref} rel="nofollow">
                         <UserRound className="h-4 w-4" />
                         {accountLabel}
                       </a>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 font-semibold">
-                      <a href={cartHref}>
+                      <a href={cartHref} rel="nofollow">
                         <ShoppingCart className="h-4 w-4" />
                         {cartButtonLabel}
                       </a>
@@ -742,7 +742,7 @@ export default function Header() {
                   variant={visibleCartCount > 0 ? "default" : "outline"}
                   className={`relative w-full rounded-full ${visibleCartCount > 0 ? "bg-primary text-white hover:bg-primary/90" : "bg-white/80"}`}
                 >
-                  <a href={cartHref} onClick={() => setIsMenuOpen(false)}>
+                  <a href={cartHref} rel="nofollow" onClick={() => setIsMenuOpen(false)}>
                     <ShoppingCart className="h-4 w-4" />
                     {cartButtonLabel}
                     {visibleCartCount > 0 ? (
@@ -758,6 +758,7 @@ export default function Header() {
                 {!isAuthed ? (
                   <a
                     href={loginHref}
+                    rel="nofollow"
                     className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm font-semibold text-foreground backdrop-blur"
                     onClick={() => setIsMenuOpen(false)}
                   >
@@ -767,6 +768,7 @@ export default function Header() {
                 ) : (
                   <a
                     href={dashboardHref}
+                    rel="nofollow"
                     className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm font-semibold text-foreground backdrop-blur"
                     onClick={() => setIsMenuOpen(false)}
                   >

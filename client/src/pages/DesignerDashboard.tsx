@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, CheckCircle2, Clock3, LayoutList, LogOut, Mail, Phone, UserRound } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "wouter";
 import Seo from "@/components/Seo";
 import GlassCard from "@/components/GlassCard";
 import { Badge } from "@/components/ui/badge";
@@ -200,7 +199,9 @@ export default function DesignerDashboard() {
             <h1 className="text-3xl font-bold text-slate-950">{copy.title}</h1>
             <p className="mt-4 text-slate-600">{copy.signInRequired}</p>
             <Button asChild className="mt-6 rounded-full">
-              <Link href={locale === "en" ? "/login" : `/${locale}/login`}>{copy.login}</Link>
+              <a href={locale === "en" ? "/login" : `/${locale}/login`} rel="nofollow">
+                {copy.login}
+              </a>
             </Button>
           </GlassCard>
         </div>
@@ -223,7 +224,7 @@ export default function DesignerDashboard() {
 
   return (
     <div className="site-page min-h-screen bg-transparent">
-      <Seo title={`${copy.title} | CVsolucion`} description={copy.subtitle} type="website" />
+      <Seo title={`${copy.title} | CVsolucion`} description={copy.subtitle} type="website" robots="noindex, nofollow" />
       <main className="px-4 pb-16 pt-6">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-[30px] border border-white/35 bg-white/85 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl">

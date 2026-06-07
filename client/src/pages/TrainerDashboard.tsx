@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, ClipboardList, GraduationCap, Loader2, LogOut, Mail, UserRound } from "lucide-react";
-import { Link } from "wouter";
 import { toast } from "sonner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -370,7 +369,9 @@ export default function TrainerDashboard() {
             <h1 className="text-3xl font-bold text-slate-950">{copy.title}</h1>
             <p className="mt-4 text-slate-600">{copy.signInRequired}</p>
             <Button asChild className="mt-6 rounded-full">
-              <Link href={locale === "en" ? "/login" : `/${locale}/login`}>{copy.login}</Link>
+              <a href={locale === "en" ? "/login" : `/${locale}/login`} rel="nofollow">
+                {copy.login}
+              </a>
             </Button>
           </GlassCard>
         </div>
@@ -393,7 +394,7 @@ export default function TrainerDashboard() {
 
   return (
     <div className="site-page min-h-screen bg-transparent">
-      <Seo title={`${copy.title} | CVsolucion`} description={copy.subtitle} type="website" />
+      <Seo title={`${copy.title} | CVsolucion`} description={copy.subtitle} type="website" robots="noindex, nofollow" />
       <Header />
       <main className="pb-20 pt-32">
         <section className="container">

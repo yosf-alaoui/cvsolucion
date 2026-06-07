@@ -1,10 +1,23 @@
 User-agent: *
 Allow: /
 Disallow: /admin
-Disallow: /private
+Disallow: /dashboard
+Disallow: /designer
+Disallow: /trainer
+Disallow: /login
+Disallow: /book/cart
+Disallow: /book/checkout
+Disallow: /fr/dashboard
+Disallow: /fr/designer
+Disallow: /fr/trainer
+Disallow: /fr/login
+Disallow: /fr/book/cart
+Disallow: /fr/book/checkout
+Disallow: /ar/dashboard
+Disallow: /ar/designer
+Disallow: /ar/trainer
+Disallow: /ar/login
+Disallow: /ar/book/cart
+Disallow: /ar/book/checkout
 
-# Sitemaps
 Sitemap: https://cvsolucion.com/sitemap.xml
-
-# Crawl delay
-Crawl-delay: 1

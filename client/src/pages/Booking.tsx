@@ -497,7 +497,9 @@ export default function Booking() {
                   <div className="mt-8 rounded-[24px] border border-slate-200 bg-white/70 p-6 text-center">
                     <p className="text-base leading-7 text-slate-600">{signInText}</p>
                     <Button asChild className="mt-5 rounded-full bg-primary text-white hover:bg-primary/90">
-                      <a href={loginHref}>{signInLabel}</a>
+                      <a href={loginHref} rel="nofollow">
+                        {signInLabel}
+                      </a>
                     </Button>
                   </div>
                 ) : (
