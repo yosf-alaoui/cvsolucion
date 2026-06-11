@@ -1079,7 +1079,7 @@ async function startServer() {
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https:",
       "style-src 'self' 'unsafe-inline'",
-      `script-src 'unsafe-inline' ${scriptAssetsSource} https://js.stripe.com`,
+      `script-src 'unsafe-inline' ${scriptAssetsSource} https://js.stripe.com https://analytics.ahrefs.com`,
       "connect-src 'self' https: wss:",
       "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
       "worker-src 'self' blob:",
