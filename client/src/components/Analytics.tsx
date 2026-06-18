@@ -15,13 +15,23 @@ function getSessionState() {
   const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as { id: string; startedAt: number; pageCount: number; startedEventSent?: boolean };
+    return JSON.parse(raw) as {
+      id: string;
+      startedAt: number;
+      pageCount: number;
+      startedEventSent?: boolean;
+    };
   } catch {
     return null;
   }
 }
 
-function setSessionState(value: { id: string; startedAt: number; pageCount: number; startedEventSent?: boolean }) {
+function setSessionState(value: {
+  id: string;
+  startedAt: number;
+  pageCount: number;
+  startedEventSent?: boolean;
+}) {
   if (typeof window === "undefined") return;
   window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(value));
 }
@@ -39,9 +49,16 @@ function ensureSessionState() {
   return next;
 }
 
-function sendVisitorEvent(payload: Record<string, unknown>, preferBeacon = false) {
+function sendVisitorEvent(
+  payload: Record<string, unknown>,
+  preferBeacon = false,
+) {
   const body = JSON.stringify(payload);
-  if (preferBeacon && typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+  if (
+    preferBeacon &&
+    typeof navigator !== "undefined" &&
+    typeof navigator.sendBeacon === "function"
+  ) {
     const blob = new Blob([body], { type: "application/json" });
     if (navigator.sendBeacon("/api/visitor/event", blob)) {
       return;
@@ -57,6 +74,19 @@ function sendVisitorEvent(payload: Record<string, unknown>, preferBeacon = false
     body,
     keepalive: preferBeacon,
   }).catch(() => {});
+}
+
+function getNavigationType() {
+  if (
+    typeof performance === "undefined" ||
+    typeof performance.getEntriesByType !== "function"
+  ) {
+    return null;
+  }
+  const navigation = performance.getEntriesByType("navigation")[0] as
+    | PerformanceNavigationTiming
+    | undefined;
+  return navigation?.type || null;
 }
 
 function getAnalyticsWindow() {
@@ -117,8 +147,13 @@ export default function Analytics() {
       (navigator.doNotTrack === "1" || (window as any).doNotTrack === "1");
     if (dnt) return;
 
-    const gtmEnabled = ((import.meta.env.VITE_ENABLE_GTM as string | undefined)?.trim() || "").toLowerCase() === "true";
-    const gtmId = gtmEnabled ? (import.meta.env.VITE_GTM_ID as string | undefined)?.trim() : "";
+    const gtmEnabled =
+      (
+        (import.meta.env.VITE_ENABLE_GTM as string | undefined)?.trim() || ""
+      ).toLowerCase() === "true";
+    const gtmId = gtmEnabled
+      ? (import.meta.env.VITE_GTM_ID as string | undefined)?.trim()
+      : "";
     const ga4Id = (import.meta.env.VITE_GA4_ID as string | undefined)?.trim();
     const umamiUrl = (
       (import.meta.env.VITE_UMAMI_URL as string | undefined) ||
@@ -134,7 +169,9 @@ export default function Analytics() {
     const markLoaded = () => {
       if (loaded) return false;
       loaded = true;
-      events.forEach((eventName) => window.removeEventListener(eventName, loadExternalAnalytics));
+      events.forEach((eventName) =>
+        window.removeEventListener(eventName, loadExternalAnalytics),
+      );
       return true;
     };
 
@@ -165,7 +202,9 @@ export default function Analytics() {
 
       const gtmAlreadyLoaded =
         !!document.querySelector(`script[data-gtm-id="${gtmId}"]`) ||
-        !!document.querySelector(`script[src*="googletagmanager.com/gtm.js?id=${gtmId}"]`);
+        !!document.querySelector(
+          `script[src*="googletagmanager.com/gtm.js?id=${gtmId}"]`,
+        );
 
       if (gtmId && !gtmAlreadyLoaded) {
         (window as any).dataLayer = (window as any).dataLayer || [];
@@ -181,7 +220,11 @@ export default function Analytics() {
         document.head.appendChild(gtmScript);
       }
 
-      if (umamiUrl && umamiWebsiteId && !document.querySelector(`script[data-website-id="${umamiWebsiteId}"]`)) {
+      if (
+        umamiUrl &&
+        umamiWebsiteId &&
+        !document.querySelector(`script[data-website-id="${umamiWebsiteId}"]`)
+      ) {
         const base = umamiUrl.replace(/\/+$/, "");
         const src = base.endsWith(".js") ? base : `${base}/script.js`;
         const s = document.createElement("script");
@@ -193,10 +236,17 @@ export default function Analytics() {
       }
     };
 
-    events.forEach((eventName) => window.addEventListener(eventName, loadExternalAnalytics, { passive: true, once: true }));
+    events.forEach((eventName) =>
+      window.addEventListener(eventName, loadExternalAnalytics, {
+        passive: true,
+        once: true,
+      }),
+    );
 
     return () => {
-      events.forEach((eventName) => window.removeEventListener(eventName, loadExternalAnalytics));
+      events.forEach((eventName) =>
+        window.removeEventListener(eventName, loadExternalAnalytics),
+      );
     };
   }, []);
 
@@ -216,6 +266,11 @@ export default function Analytics() {
       utm_content: params.get("utm_content"),
       gclid: params.get("gclid"),
       fbclid: params.get("fbclid"),
+      msclkid: params.get("msclkid"),
+      ttclid: params.get("ttclid"),
+      li_fat_id: params.get("li_fat_id"),
+      wbraid: params.get("wbraid"),
+      gbraid: params.get("gbraid"),
     };
 
     if (!dnt) {
@@ -267,7 +322,10 @@ export default function Analytics() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        path: window.location.pathname + window.location.search + window.location.hash,
+        path:
+          window.location.pathname +
+          window.location.search +
+          window.location.hash,
         search,
         locale,
         title: document.title,
@@ -278,8 +336,10 @@ export default function Analytics() {
           typeof window !== "undefined"
             ? `${window.screen?.width || 0}x${window.screen?.height || 0}`
             : null,
+        navigationType: getNavigationType(),
         userId: user?.id ?? null,
         sessionId: session.id,
+        ...campaign,
       }),
       signal: controller.signal,
     }).catch(() => {});
@@ -298,13 +358,16 @@ export default function Analytics() {
           page_path: window.location.pathname,
           locale,
         });
-        sendVisitorEvent({
-          type: "whatsapp_click",
-          path: window.location.pathname,
-          href,
-          label,
-          sessionId: session.id,
-        }, true);
+        sendVisitorEvent(
+          {
+            type: "whatsapp_click",
+            path: window.location.pathname,
+            href,
+            label,
+            sessionId: session.id,
+          },
+          true,
+        );
       } else if (href.startsWith("mailto:")) {
         trackGa4Event("email_click", {
           link_url: href,
@@ -312,27 +375,36 @@ export default function Analytics() {
           page_path: window.location.pathname,
           locale,
         });
-        sendVisitorEvent({
-          type: "email_click",
-          path: window.location.pathname,
-          href,
-          label,
-          sessionId: session.id,
-        }, true);
-      } else if (link.dataset.cta === "true" || link.getAttribute("data-track") === "cta") {
+        sendVisitorEvent(
+          {
+            type: "email_click",
+            path: window.location.pathname,
+            href,
+            label,
+            sessionId: session.id,
+          },
+          true,
+        );
+      } else if (
+        link.dataset.cta === "true" ||
+        link.getAttribute("data-track") === "cta"
+      ) {
         trackGa4Event("cta_click", {
           link_url: href,
           link_text: label,
           page_path: window.location.pathname,
           locale,
         });
-        sendVisitorEvent({
-          type: "cta_click",
-          path: window.location.pathname,
-          href,
-          label,
-          sessionId: session.id,
-        }, true);
+        sendVisitorEvent(
+          {
+            type: "cta_click",
+            path: window.location.pathname,
+            href,
+            label,
+            sessionId: session.id,
+          },
+          true,
+        );
       }
     };
 
@@ -347,7 +419,7 @@ export default function Analytics() {
           durationMs: Date.now() - current.startedAt,
           pageCount: current.pageCount,
         },
-        true
+        true,
       );
     };
 

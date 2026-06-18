@@ -1191,11 +1191,9 @@ async function startServer() {
       !providedToken ||
       !timingSafeStringEqual(providedToken, expectedToken)
     ) {
-      return res
-        .status(403)
-        .json({
-          error: "Security token expired. Refresh the page and try again.",
-        });
+      return res.status(403).json({
+        error: "Security token expired. Refresh the page and try again.",
+      });
     }
 
     return next();
@@ -1666,6 +1664,17 @@ async function startServer() {
         screen: typeof payload.screen === "string" ? payload.screen : null,
         userId: auth?.user?.id ?? null,
         email: auth?.user?.email ?? null,
+        msclkid: typeof payload.msclkid === "string" ? payload.msclkid : null,
+        ttclid: typeof payload.ttclid === "string" ? payload.ttclid : null,
+        liFatId:
+          typeof payload.li_fat_id === "string" ? payload.li_fat_id : null,
+        wbraid: typeof payload.wbraid === "string" ? payload.wbraid : null,
+        gbraid: typeof payload.gbraid === "string" ? payload.gbraid : null,
+        navigationType:
+          typeof payload.navigationType === "string"
+            ? payload.navigationType
+            : null,
+        secFetchSite: req.get("sec-fetch-site") || null,
       });
 
       if (!existingVisitorId) {
@@ -2120,11 +2129,9 @@ async function startServer() {
           return res.status(400).json({ error: "A valid email is required." });
         }
         if (message.length < 10) {
-          return res
-            .status(400)
-            .json({
-              error: "Please provide a little more context in your message.",
-            });
+          return res.status(400).json({
+            error: "Please provide a little more context in your message.",
+          });
         }
 
         const lead = storeContactLead({
@@ -2457,11 +2464,9 @@ async function startServer() {
         const countryCode = getPricingCountryCode(req);
 
         if (!slots.length) {
-          return res
-            .status(400)
-            .json({
-              error: "Please choose at least one valid appointment time.",
-            });
+          return res.status(400).json({
+            error: "Please choose at least one valid appointment time.",
+          });
         }
         if (!isBookingScheduleOpen(priority as BookingPriority)) {
           return res.status(400).json({
@@ -2551,11 +2556,9 @@ async function startServer() {
             .json({ error: "Please describe the issue or request." });
         }
         if (!slots.length) {
-          return res
-            .status(400)
-            .json({
-              error: "Please choose at least one valid appointment time.",
-            });
+          return res.status(400).json({
+            error: "Please choose at least one valid appointment time.",
+          });
         }
         if (!isBookingScheduleOpen(priority as BookingPriority)) {
           return res.status(400).json({
@@ -2572,11 +2575,9 @@ async function startServer() {
         > | null = null;
         if (stripeConfig.enabled) {
           if (!paymentIntentId) {
-            return res
-              .status(400)
-              .json({
-                error: "Payment is required before confirming this booking.",
-              });
+            return res.status(400).json({
+              error: "Payment is required before confirming this booking.",
+            });
           }
 
           verifiedPayment = await verifyBookingPayment({
@@ -2604,13 +2605,11 @@ async function startServer() {
               company,
             });
 
-            return res
-              .status(201)
-              .json({
-                ok: true,
-                bookings: existingBookings,
-                booking: existingBookings[0],
-              });
+            return res.status(201).json({
+              ok: true,
+              bookings: existingBookings,
+              booking: existingBookings[0],
+            });
           }
         }
 
@@ -2835,12 +2834,10 @@ async function startServer() {
           return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
         }
         if (!termsAccepted) {
-          return res
-            .status(400)
-            .json({
-              error:
-                "You must accept the Terms and Conditions before creating an account.",
-            });
+          return res.status(400).json({
+            error:
+              "You must accept the Terms and Conditions before creating an account.",
+          });
         }
         if (!countryCode || !countryRecord) {
           return res
@@ -2874,17 +2871,13 @@ async function startServer() {
         } catch (error) {
           if (error instanceof RecipientEmailRejectedError) {
             deleteUserById(user.id);
-            return res
-              .status(400)
-              .json({
-                error: authEmailDeliveryMessage(locale, "recipient_rejected"),
-              });
-          }
-          return res
-            .status(502)
-            .json({
-              error: authEmailDeliveryMessage(locale, "delivery_failed"),
+            return res.status(400).json({
+              error: authEmailDeliveryMessage(locale, "recipient_rejected"),
             });
+          }
+          return res.status(502).json({
+            error: authEmailDeliveryMessage(locale, "delivery_failed"),
+          });
         }
 
         upsertCustomerProfile({
@@ -3001,12 +2994,10 @@ async function startServer() {
         ip: getRequestIp(req),
         userAgent: req.get("user-agent") || null,
       });
-      return res
-        .status(410)
-        .json({
-          error:
-            "Magic link sign-in has been removed. Use your password or reset it if needed.",
-        });
+      return res.status(410).json({
+        error:
+          "Magic link sign-in has been removed. Use your password or reset it if needed.",
+      });
     },
   );
 
@@ -3061,17 +3052,13 @@ async function startServer() {
           });
         } catch (error) {
           if (error instanceof RecipientEmailRejectedError) {
-            return res
-              .status(400)
-              .json({
-                error: authEmailDeliveryMessage(locale, "recipient_rejected"),
-              });
-          }
-          return res
-            .status(502)
-            .json({
-              error: authEmailDeliveryMessage(locale, "delivery_failed"),
+            return res.status(400).json({
+              error: authEmailDeliveryMessage(locale, "recipient_rejected"),
             });
+          }
+          return res.status(502).json({
+            error: authEmailDeliveryMessage(locale, "delivery_failed"),
+          });
         }
         return res.json({ ok: true });
       } catch (error) {
@@ -4223,13 +4210,11 @@ async function startServer() {
           translations: req.body?.translations,
         });
 
-        return res
-          .status(201)
-          .json({
-            ok: true,
-            trainingProgram: record,
-            trainingPrograms: getCatalogSnapshot().trainingPrograms,
-          });
+        return res.status(201).json({
+          ok: true,
+          trainingProgram: record,
+          trainingPrograms: getCatalogSnapshot().trainingPrograms,
+        });
       } catch (error) {
         return next(error);
       }
@@ -4580,18 +4565,14 @@ async function startServer() {
           });
         } catch (error) {
           if (error instanceof RecipientEmailRejectedError) {
-            return res
-              .status(400)
-              .json({
-                error:
-                  "This email address cannot receive messages. Update the address and try again.",
-              });
-          }
-          return res
-            .status(502)
-            .json({
-              error: "Unable to send the verification email right now.",
+            return res.status(400).json({
+              error:
+                "This email address cannot receive messages. Update the address and try again.",
             });
+          }
+          return res.status(502).json({
+            error: "Unable to send the verification email right now.",
+          });
         }
 
         recordEvent({

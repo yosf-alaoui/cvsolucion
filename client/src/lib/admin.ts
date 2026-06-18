@@ -1,4 +1,9 @@
-import type { BookingPriority, BookingRecord, BookingStatus, BookingPaymentStatus } from "@/lib/bookings";
+import type {
+  BookingPriority,
+  BookingRecord,
+  BookingStatus,
+  BookingPaymentStatus,
+} from "@/lib/bookings";
 import { withCsrfHeaders } from "@/lib/csrf";
 
 export type AdminDashboardStats = {
@@ -61,8 +66,22 @@ export type AdminDashboardVisitorPageView = {
   locale: string;
   title: string | null;
   referrer: string | null;
+  navigationType: string | null;
+  secFetchSite: string | null;
+  trafficSource: AdminDashboardVisitorTrafficSource;
   occurredAt: string;
   sessionId: string | null;
+};
+
+export type AdminDashboardVisitorTrafficSource = {
+  category: string;
+  source: string;
+  medium: string;
+  confidence: "high" | "medium" | "low";
+  detail: string;
+  referrerHost: string | null;
+  clickIdType: string | null;
+  clickId: string | null;
 };
 
 export type AdminDashboardVisitorInteraction = {
@@ -108,6 +127,14 @@ export type AdminDashboardVisitor = {
   utmContent: string | null;
   gclid: string | null;
   fbclid: string | null;
+  msclkid: string | null;
+  ttclid: string | null;
+  liFatId: string | null;
+  wbraid: string | null;
+  gbraid: string | null;
+  navigationType: string | null;
+  secFetchSite: string | null;
+  trafficSource: AdminDashboardVisitorTrafficSource;
   totalSessions: number;
   totalPageViews: number;
   totalDurationMs: number;
@@ -278,23 +305,19 @@ export type AdminBookingSlotView = {
   priority: BookingPriority;
   status: "booked" | "available";
   source: "real" | "blocked" | "available";
-  booking:
-    | {
-        id: string;
-        name: string;
-        email: string;
-        status: BookingStatus;
-        paymentStatus: BookingPaymentStatus;
-      }
-    | null;
-  block:
-    | {
-        id: string;
-        reason: string | null;
-        createdAt: string;
-        updatedAt: string;
-      }
-    | null;
+  booking: {
+    id: string;
+    name: string;
+    email: string;
+    status: BookingStatus;
+    paymentStatus: BookingPaymentStatus;
+  } | null;
+  block: {
+    id: string;
+    reason: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
 };
 
 export type AdminBookingSlotsResponse = {
@@ -345,13 +368,11 @@ export type AdminDesignerTask = {
   createdAt: string;
   updatedAt: string;
   booking: BookingRecord | null;
-  designer:
-    | {
-        userId: string;
-        email: string;
-        displayName: string;
-      }
-    | null;
+  designer: {
+    userId: string;
+    email: string;
+    displayName: string;
+  } | null;
 };
 
 export type AdminDesignersResponse = {
@@ -376,7 +397,9 @@ async function adminRequest<T>(input: string, init?: RequestInit): Promise<T> {
     }),
   });
 
-  const data = (await response.json().catch(() => ({}))) as { error?: string } & T;
+  const data = (await response.json().catch(() => ({}))) as {
+    error?: string;
+  } & T;
   if (!response.ok) {
     throw new Error(data.error || "Admin request failed.");
   }
@@ -384,15 +407,24 @@ async function adminRequest<T>(input: string, init?: RequestInit): Promise<T> {
 }
 
 export async function getAdminDashboard() {
-  return adminRequest<AdminDashboardResponse>("/api/admin/dashboard", { method: "GET" });
+  return adminRequest<AdminDashboardResponse>("/api/admin/dashboard", {
+    method: "GET",
+  });
 }
 
 export async function getAdminCatalog() {
-  return adminRequest<AdminCatalogResponse>("/api/admin/catalog", { method: "GET" });
+  return adminRequest<AdminCatalogResponse>("/api/admin/catalog", {
+    method: "GET",
+  });
 }
 
-export function updateAdminCatalogPricing(payload: AdminCatalogResponse["bookingPrices"]) {
-  return adminRequest<{ ok: true; bookingPrices: AdminCatalogResponse["bookingPrices"] }>("/api/admin/catalog/pricing", {
+export function updateAdminCatalogPricing(
+  payload: AdminCatalogResponse["bookingPrices"],
+) {
+  return adminRequest<{
+    ok: true;
+    bookingPrices: AdminCatalogResponse["bookingPrices"];
+  }>("/api/admin/catalog/pricing", {
     method: "PUT",
     body: JSON.stringify(payload),
   });
@@ -404,10 +436,13 @@ export function createAdminCatalogPackage(payload: {
   order?: number;
   translations: AdminCatalogPackage["translations"];
 }) {
-  return adminRequest<{ ok: true; package: AdminCatalogPackage }>("/api/admin/catalog/packages", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return adminRequest<{ ok: true; package: AdminCatalogPackage }>(
+    "/api/admin/catalog/packages",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function updateAdminCatalogPackage(
@@ -417,18 +452,24 @@ export function updateAdminCatalogPackage(
     highlight?: boolean;
     order?: number;
     translations?: Partial<AdminCatalogPackage["translations"]>;
-  }
+  },
 ) {
-  return adminRequest<{ ok: true; package: AdminCatalogPackage }>(`/api/admin/catalog/packages/${packageId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  return adminRequest<{ ok: true; package: AdminCatalogPackage }>(
+    `/api/admin/catalog/packages/${packageId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function deleteAdminCatalogPackage(packageId: string) {
-  return adminRequest<{ ok: true }>(`/api/admin/catalog/packages/${packageId}`, {
-    method: "DELETE",
-  });
+  return adminRequest<{ ok: true }>(
+    `/api/admin/catalog/packages/${packageId}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export function updateAdminUser(
@@ -442,7 +483,7 @@ export function updateAdminUser(
     title?: string;
     notes?: string;
     active?: boolean;
-  }
+  },
 ) {
   return adminRequest<{ ok: true }>(`/api/admin/users/${userId}`, {
     method: "PATCH",
@@ -451,16 +492,21 @@ export function updateAdminUser(
 }
 
 export function getAdminDesigners() {
-  return adminRequest<AdminDesignersResponse>("/api/admin/designers", { method: "GET" });
+  return adminRequest<AdminDesignersResponse>("/api/admin/designers", {
+    method: "GET",
+  });
 }
 
-export function assignAdminBookingDesigner(bookingId: string, designerUserId: string | null) {
+export function assignAdminBookingDesigner(
+  bookingId: string,
+  designerUserId: string | null,
+) {
   return adminRequest<{ ok: true; booking: BookingRecord }>(
     `/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-designer`,
     {
       method: "POST",
       body: JSON.stringify({ designerUserId }),
-    }
+    },
   );
 }
 
@@ -473,10 +519,13 @@ export function createAdminDesignerTask(payload: {
   dueAt?: string | null;
   bookingId?: string | null;
 }) {
-  return adminRequest<{ ok: true; task: AdminDesignerTask }>("/api/admin/designer-tasks", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return adminRequest<{ ok: true; task: AdminDesignerTask }>(
+    "/api/admin/designer-tasks",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function updateAdminDesignerTask(
@@ -489,18 +538,24 @@ export function updateAdminDesignerTask(
     priority?: AdminDesignerTaskPriority;
     dueAt?: string | null;
     bookingId?: string | null;
-  }
+  },
 ) {
-  return adminRequest<{ ok: true; task: AdminDesignerTask }>(`/api/admin/designer-tasks/${encodeURIComponent(taskId)}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  return adminRequest<{ ok: true; task: AdminDesignerTask }>(
+    `/api/admin/designer-tasks/${encodeURIComponent(taskId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function deleteAdminDesignerTask(taskId: string) {
-  return adminRequest<{ ok: true }>(`/api/admin/designer-tasks/${encodeURIComponent(taskId)}`, {
-    method: "DELETE",
-  });
+  return adminRequest<{ ok: true }>(
+    `/api/admin/designer-tasks/${encodeURIComponent(taskId)}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export function deleteAdminUser(userId: string) {
@@ -510,10 +565,13 @@ export function deleteAdminUser(userId: string) {
 }
 
 export function resendAdminVerification(userId: string, locale: string) {
-  return adminRequest<{ ok: true }>(`/api/admin/users/${userId}/send-verification`, {
-    method: "POST",
-    body: JSON.stringify({ locale }),
-  });
+  return adminRequest<{ ok: true }>(
+    `/api/admin/users/${userId}/send-verification`,
+    {
+      method: "POST",
+      body: JSON.stringify({ locale }),
+    },
+  );
 }
 
 export function revokeAdminSession(sessionId: string) {
@@ -523,22 +581,33 @@ export function revokeAdminSession(sessionId: string) {
 }
 
 export function revokeAdminUserSessions(userId: string) {
-  return adminRequest<{ ok: true; revoked: number }>(`/api/admin/users/${userId}/sessions`, {
-    method: "DELETE",
-  });
+  return adminRequest<{ ok: true; revoked: number }>(
+    `/api/admin/users/${userId}/sessions`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export function cancelAdminBooking(bookingId: string) {
-  return adminRequest<{ ok: true; booking: BookingRecord }>(`/api/admin/bookings/${encodeURIComponent(bookingId)}/cancel`, {
-    method: "POST",
-  });
+  return adminRequest<{ ok: true; booking: BookingRecord }>(
+    `/api/admin/bookings/${encodeURIComponent(bookingId)}/cancel`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 export function refundAdminBooking(bookingId: string) {
   return adminRequest<{
     ok: true;
     booking: BookingRecord;
-    refund: { id: string; status: string | null; amount: number; currency: string | null };
+    refund: {
+      id: string;
+      status: string | null;
+      amount: number;
+      currency: string | null;
+    };
   }>(`/api/admin/bookings/${encodeURIComponent(bookingId)}/refund`, {
     method: "POST",
   });
@@ -561,15 +630,21 @@ export function updateAdminBookingSchedule(payload: {
   });
 }
 
-export function getAdminBookingSlots(payload: { date: string; priority: BookingPriority }) {
+export function getAdminBookingSlots(payload: {
+  date: string;
+  priority: BookingPriority;
+}) {
   const params = new URLSearchParams({
     date: payload.date,
     priority: payload.priority,
   });
 
-  return adminRequest<AdminBookingSlotsResponse>(`/api/admin/bookings/slots?${params.toString()}`, {
-    method: "GET",
-  });
+  return adminRequest<AdminBookingSlotsResponse>(
+    `/api/admin/bookings/slots?${params.toString()}`,
+    {
+      method: "GET",
+    },
+  );
 }
 
 export function blockAdminBookingSlot(payload: {
@@ -583,7 +658,7 @@ export function blockAdminBookingSlot(payload: {
     {
       method: "POST",
       body: JSON.stringify(payload),
-    }
+    },
   );
 }
 
@@ -597,6 +672,6 @@ export function unblockAdminBookingSlot(payload: {
     {
       method: "POST",
       body: JSON.stringify(payload),
-    }
+    },
   );
 }

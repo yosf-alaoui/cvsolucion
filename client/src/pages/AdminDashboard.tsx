@@ -1,4 +1,11 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import Seo from "@/components/Seo";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,25 +34,47 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const ConversationsPanel = lazy(() => import("@/components/admin/ConversationsPanel"));
-const ArticlesManager = lazy(() => import("@/components/admin/ArticlesManager"));
-const BookingsManager = lazy(() => import("@/components/admin/BookingsManager"));
+const ConversationsPanel = lazy(
+  () => import("@/components/admin/ConversationsPanel"),
+);
+const ArticlesManager = lazy(
+  () => import("@/components/admin/ArticlesManager"),
+);
+const BookingsManager = lazy(
+  () => import("@/components/admin/BookingsManager"),
+);
 const CatalogManager = lazy(() => import("@/components/admin/CatalogManager"));
-const RequestsManager = lazy(() => import("@/components/admin/RequestsManager"));
-const DesignersManager = lazy(() => import("@/components/admin/DesignersManager"));
-const TrainingOperationsManager = lazy(() => import("@/components/admin/TrainingOperationsManager"));
+const RequestsManager = lazy(
+  () => import("@/components/admin/RequestsManager"),
+);
+const DesignersManager = lazy(
+  () => import("@/components/admin/DesignersManager"),
+);
+const TrainingOperationsManager = lazy(
+  () => import("@/components/admin/TrainingOperationsManager"),
+);
 
 function formatDate(value: string | null, locale: string) {
   if (!value) return "-";
-  return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return new Intl.DateTimeFormat(
+    locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA",
+    {
+      dateStyle: "medium",
+      timeStyle: "short",
+    },
+  ).format(new Date(value));
 }
 
 function formatDuration(ms: number | null) {
@@ -59,7 +88,10 @@ function formatDuration(ms: number | null) {
   return `${hours}h ${minutes % 60}m`;
 }
 
-function exportCsv(filename: string, rows: Array<Record<string, string | number | null>>) {
+function exportCsv(
+  filename: string,
+  rows: Array<Record<string, string | number | null>>,
+) {
   if (!rows.length || typeof window === "undefined") return;
   const headers = Object.keys(rows[0]);
   const csv = [
@@ -67,7 +99,7 @@ function exportCsv(filename: string, rows: Array<Record<string, string | number 
     ...rows.map((row) =>
       headers
         .map((header) => `"${String(row[header] ?? "").replace(/"/g, '""')}"`)
-        .join(",")
+        .join(","),
     ),
   ].join("\n");
 
@@ -88,19 +120,36 @@ function localeBadge(locale: string | null) {
   return "EN";
 }
 
-function MetricCard({ title, value }: { title: string; value: string | number }) {
+function MetricCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: string | number;
+}) {
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm text-slate-600">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="text-3xl font-bold text-slate-900">{value}</CardContent>
+      <CardContent className="text-3xl font-bold text-slate-900">
+        {value}
+      </CardContent>
     </Card>
   );
 }
 
-function ProgressRow({ label, value, total }: { label: string; value: number; total: number }) {
-  const percentage = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
+function ProgressRow({
+  label,
+  value,
+  total,
+}: {
+  label: string;
+  value: number;
+  total: number;
+}) {
+  const percentage =
+    total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between text-sm">
@@ -110,20 +159,27 @@ function ProgressRow({ label, value, total }: { label: string; value: number; to
         </span>
       </div>
       <div className="h-2 rounded-full bg-slate-100">
-        <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${percentage}%` }} />
+        <div
+          className="h-2 rounded-full bg-primary transition-all"
+          style={{ width: `${percentage}%` }}
+        />
       </div>
     </div>
   );
 }
 
 function PanelFallback() {
-  return <div className="min-h-48 rounded-xl border border-slate-200 bg-white/70" />;
+  return (
+    <div className="min-h-48 rounded-xl border border-slate-200 bg-white/70" />
+  );
 }
 
 function StatPill({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-slate-500">
+        {label}
+      </div>
       <div className="mt-1 text-base font-semibold text-slate-900">{value}</div>
     </div>
   );
@@ -141,10 +197,16 @@ export default function AdminDashboard() {
   const [editVerified, setEditVerified] = useState(false);
   const [savingUser, setSavingUser] = useState(false);
   const [query, setQuery] = useState("");
-  const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "pending">("all");
+  const [verificationFilter, setVerificationFilter] = useState<
+    "all" | "verified" | "pending"
+  >("all");
   const [eventFilter, setEventFilter] = useState("all");
-  const [selectedVisitorId, setSelectedVisitorId] = useState<string | null>(null);
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [selectedVisitorId, setSelectedVisitorId] = useState<string | null>(
+    null,
+  );
+  const [selectedConversationId, setSelectedConversationId] = useState<
+    string | null
+  >(null);
 
   const copy = useMemo(() => {
     if (locale === "fr") {
@@ -179,7 +241,8 @@ export default function AdminDashboard() {
         resendVerification: "Renvoyer la verification",
         revokeUserSessions: "Fermer les sessions",
         deleteConfirm: "Supprimer ce compte definitivement ?",
-        revokeConfirm: "Fermer toutes les sessions actives pour cet utilisateur ?",
+        revokeConfirm:
+          "Fermer toutes les sessions actives pour cet utilisateur ?",
         yes: "Verifie",
         no: "En attente",
         eventType: "Evenement",
@@ -211,6 +274,14 @@ export default function AdminDashboard() {
         timezone: "Fuseau",
         pageHistory: "Historique des pages",
         campaignData: "Acquisition",
+        trafficSource: "Traffic source",
+        trafficCategory: "Category",
+        trafficConfidence: "Confidence",
+        sourceDetail: "Source detail",
+        referrerHost: "Referrer host",
+        navigationType: "Navigation",
+        secFetchSite: "Fetch site",
+        clickId: "Click ID",
         source: "Source",
         medium: "Medium",
         campaign: "Campaign",
@@ -307,6 +378,14 @@ export default function AdminDashboard() {
         timezone: "المنطقة الزمنية",
         pageHistory: "سجل الصفحات",
         campaignData: "بيانات الاكتساب",
+        trafficSource: "مصدر الزيارة",
+        trafficCategory: "التصنيف",
+        trafficConfidence: "درجة الثقة",
+        sourceDetail: "تفاصيل المصدر",
+        referrerHost: "مضيف الإحالة",
+        navigationType: "نوع التنقل",
+        secFetchSite: "Sec-Fetch-Site",
+        clickId: "معرف النقرة",
         source: "المصدر",
         medium: "الوسيط",
         campaign: "الحملة",
@@ -402,6 +481,14 @@ export default function AdminDashboard() {
       timezone: "Timezone",
       pageHistory: "Page history",
       campaignData: "Acquisition data",
+      trafficSource: "Traffic source",
+      trafficCategory: "Category",
+      trafficConfidence: "Confidence",
+      sourceDetail: "Source detail",
+      referrerHost: "Referrer host",
+      navigationType: "Navigation",
+      secFetchSite: "Fetch site",
+      clickId: "Click ID",
       source: "Source",
       medium: "Medium",
       campaign: "Campaign",
@@ -434,7 +521,8 @@ export default function AdminDashboard() {
     };
   }, [locale]);
 
-  const articlesLabel = locale === "ar" ? "المقالات" : locale === "fr" ? "Articles" : "Articles";
+  const articlesLabel =
+    locale === "ar" ? "المقالات" : locale === "fr" ? "Articles" : "Articles";
 
   const ga4Copy = useMemo(() => {
     if (locale === "fr") {
@@ -555,27 +643,46 @@ export default function AdminDashboard() {
   }, [locale]);
 
   const loginHref = "/admin/login";
-  const consoleLabel = locale === "ar" ? "لوحة الإدارة" : locale === "fr" ? "Console admin" : "Admin Console";
-  const publicSiteLabel = locale === "ar" ? "الموقع العام" : locale === "fr" ? "Site public" : "Public site";
-  const signOutLabel = locale === "ar" ? "خروج" : locale === "fr" ? "Deconnexion" : "Sign out";
-  const signedInLabel = locale === "ar" ? "متصل كـ" : locale === "fr" ? "Connecte en tant que" : "Signed in as";
+  const consoleLabel =
+    locale === "ar"
+      ? "لوحة الإدارة"
+      : locale === "fr"
+        ? "Console admin"
+        : "Admin Console";
+  const publicSiteLabel =
+    locale === "ar"
+      ? "الموقع العام"
+      : locale === "fr"
+        ? "Site public"
+        : "Public site";
+  const signOutLabel =
+    locale === "ar" ? "خروج" : locale === "fr" ? "Deconnexion" : "Sign out";
+  const signedInLabel =
+    locale === "ar"
+      ? "متصل كـ"
+      : locale === "fr"
+        ? "Connecte en tant que"
+        : "Signed in as";
 
-  const load = useCallback(async (silent = false) => {
-    if (!silent) {
-      setBusy(true);
-    }
-    setError(null);
-    try {
-      const response = await getAdminDashboard();
-      setData(response);
-    } catch (err: any) {
-      setError(err?.message || copy.dashboardLoadError);
-    } finally {
+  const load = useCallback(
+    async (silent = false) => {
       if (!silent) {
-        setBusy(false);
+        setBusy(true);
       }
-    }
-  }, [copy.dashboardLoadError]);
+      setError(null);
+      try {
+        const response = await getAdminDashboard();
+        setData(response);
+      } catch (err: any) {
+        setError(err?.message || copy.dashboardLoadError);
+      } finally {
+        if (!silent) {
+          setBusy(false);
+        }
+      }
+    },
+    [copy.dashboardLoadError],
+  );
 
   useEffect(() => {
     if (!loading && user && isAdmin) {
@@ -615,7 +722,10 @@ export default function AdminDashboard() {
       setSelectedUserId(null);
       return;
     }
-    if (!selectedUserId || !data.users.some((item) => item.id === selectedUserId)) {
+    if (
+      !selectedUserId ||
+      !data.users.some((item) => item.id === selectedUserId)
+    ) {
       const next = data?.users[0];
       if (next) {
         setSelectedUserId(next.id);
@@ -631,7 +741,10 @@ export default function AdminDashboard() {
       setSelectedVisitorId(null);
       return;
     }
-    if (!selectedVisitorId || !data.visitors.some((item) => item.id === selectedVisitorId)) {
+    if (
+      !selectedVisitorId ||
+      !data.visitors.some((item) => item.id === selectedVisitorId)
+    ) {
       setSelectedVisitorId(data.visitors[0].id);
     }
   }, [data, selectedVisitorId]);
@@ -641,17 +754,22 @@ export default function AdminDashboard() {
       setSelectedConversationId(null);
       return;
     }
-    if (!selectedConversationId || !data.conversations.some((item) => item.id === selectedConversationId)) {
+    if (
+      !selectedConversationId ||
+      !data.conversations.some((item) => item.id === selectedConversationId)
+    ) {
       setSelectedConversationId(data.conversations[0].id);
     }
   }, [data, selectedConversationId]);
 
-  const trainingTabLabel = locale === "ar" ? "التكوين" : locale === "fr" ? "Formations" : "Training";
+  const trainingTabLabel =
+    locale === "ar" ? "التكوين" : locale === "fr" ? "Formations" : "Training";
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return (data?.users ?? []).filter((item) => {
-      const matchesQuery = !normalizedQuery || item.email.toLowerCase().includes(normalizedQuery);
+      const matchesQuery =
+        !normalizedQuery || item.email.toLowerCase().includes(normalizedQuery);
       const matchesVerification =
         verificationFilter === "all" ||
         (verificationFilter === "verified" && Boolean(item.emailVerifiedAt)) ||
@@ -663,7 +781,9 @@ export default function AdminDashboard() {
   const filteredEvents = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return (data?.events ?? []).filter((item) => {
-      const matchesQuery = !normalizedQuery || (item.email || "").toLowerCase().includes(normalizedQuery);
+      const matchesQuery =
+        !normalizedQuery ||
+        (item.email || "").toLowerCase().includes(normalizedQuery);
       const matchesEvent = eventFilter === "all" || item.type === eventFilter;
       return matchesQuery && matchesEvent;
     });
@@ -671,14 +791,29 @@ export default function AdminDashboard() {
 
   const filteredSessions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return (data?.sessions ?? []).filter((item) => !normalizedQuery || (item.email || "").toLowerCase().includes(normalizedQuery));
+    return (data?.sessions ?? []).filter(
+      (item) =>
+        !normalizedQuery ||
+        (item.email || "").toLowerCase().includes(normalizedQuery),
+    );
   }, [data?.sessions, query]);
 
   const filteredVisitors = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return (data?.visitors ?? []).filter((item) => {
       if (!normalizedQuery) return true;
-      return [item.email, item.ip, item.lastPath, item.landingPath, item.userAgent]
+      return [
+        item.email,
+        item.ip,
+        item.lastPath,
+        item.landingPath,
+        item.userAgent,
+        item.trafficSource?.source,
+        item.trafficSource?.category,
+        item.trafficSource?.medium,
+        item.trafficSource?.detail,
+        item.trafficSource?.referrerHost,
+      ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedQuery));
     });
@@ -687,7 +822,11 @@ export default function AdminDashboard() {
   const filteredBookings = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return [...(data?.bookings ?? [])]
-      .sort((a, b) => `${b.date}-${String(b.hour).padStart(2, "0")}`.localeCompare(`${a.date}-${String(a.hour).padStart(2, "0")}`))
+      .sort((a, b) =>
+        `${b.date}-${String(b.hour).padStart(2, "0")}`.localeCompare(
+          `${a.date}-${String(a.hour).padStart(2, "0")}`,
+        ),
+      )
       .filter((booking) => {
         if (!normalizedQuery) return true;
         return [
@@ -702,7 +841,9 @@ export default function AdminDashboard() {
           booking.date,
         ]
           .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+          .some((value) =>
+            String(value).toLowerCase().includes(normalizedQuery),
+          );
       });
   }, [data?.bookings, query]);
 
@@ -712,9 +853,18 @@ export default function AdminDashboard() {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .filter((lead) => {
         if (!normalizedQuery) return true;
-        return [lead.name, lead.email, lead.phone, lead.company, lead.interest, lead.message]
+        return [
+          lead.name,
+          lead.email,
+          lead.phone,
+          lead.company,
+          lead.interest,
+          lead.message,
+        ]
           .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+          .some((value) =>
+            String(value).toLowerCase().includes(normalizedQuery),
+          );
       });
   }, [data?.leads, query]);
 
@@ -737,24 +887,30 @@ export default function AdminDashboard() {
   }, [data?.conversations, query]);
 
   const selectedUser = useMemo(
-    () => (data?.users ?? []).find((item) => item.id === selectedUserId) ?? null,
-    [data?.users, selectedUserId]
+    () =>
+      (data?.users ?? []).find((item) => item.id === selectedUserId) ?? null,
+    [data?.users, selectedUserId],
   );
   const selectedUserSessions = useMemo(
-    () => filteredSessions.filter((session) => session.userId === selectedUserId),
-    [filteredSessions, selectedUserId]
+    () =>
+      filteredSessions.filter((session) => session.userId === selectedUserId),
+    [filteredSessions, selectedUserId],
   );
   const selectedUserEvents = useMemo(
-    () => filteredEvents.filter((event) => event.userId === selectedUserId).slice(0, 20),
-    [filteredEvents, selectedUserId]
+    () =>
+      filteredEvents
+        .filter((event) => event.userId === selectedUserId)
+        .slice(0, 20),
+    [filteredEvents, selectedUserId],
   );
   const selectedVisitor = useMemo(
-    () => filteredVisitors.find((item) => item.id === selectedVisitorId) ?? null,
-    [filteredVisitors, selectedVisitorId]
+    () =>
+      filteredVisitors.find((item) => item.id === selectedVisitorId) ?? null,
+    [filteredVisitors, selectedVisitorId],
   );
   const eventTypes = useMemo(
     () => Array.from(new Set((data?.events ?? []).map((item) => item.type))),
-    [data?.events]
+    [data?.events],
   );
 
   const handleSelectUser = (next: AdminDashboardUser) => {
@@ -764,16 +920,29 @@ export default function AdminDashboard() {
     setEditVerified(Boolean(next.emailVerifiedAt));
   };
 
-  const handleUpdateBookingSchedule = async (payload: { standardOpen?: boolean; expressOpen?: boolean }) => {
+  const handleUpdateBookingSchedule = async (payload: {
+    standardOpen?: boolean;
+    expressOpen?: boolean;
+  }) => {
     setError(null);
     try {
       await updateAdminBookingSchedule(payload);
-      toast.success(locale === "ar" ? "تم تحديث جدول المواعيد." : locale === "fr" ? "Le planning a ete mis a jour." : "Booking schedule updated.");
+      toast.success(
+        locale === "ar"
+          ? "تم تحديث جدول المواعيد."
+          : locale === "fr"
+            ? "Le planning a ete mis a jour."
+            : "Booking schedule updated.",
+      );
       await load();
     } catch (err: any) {
       const message =
         err?.message ||
-        (locale === "ar" ? "تعذر تحديث جدول المواعيد." : locale === "fr" ? "Impossible de mettre a jour le planning." : "Failed to update booking schedule.");
+        (locale === "ar"
+          ? "تعذر تحديث جدول المواعيد."
+          : locale === "fr"
+            ? "Impossible de mettre a jour le planning."
+            : "Failed to update booking schedule.");
       setError(message);
       toast.error(message);
     }
@@ -802,7 +971,8 @@ export default function AdminDashboard() {
 
   const handleDeleteUser = async () => {
     if (!selectedUser) return;
-    if (typeof window !== "undefined" && !window.confirm(copy.deleteConfirm)) return;
+    if (typeof window !== "undefined" && !window.confirm(copy.deleteConfirm))
+      return;
     setSavingUser(true);
     setError(null);
     try {
@@ -838,7 +1008,8 @@ export default function AdminDashboard() {
 
   const handleRevokeUserSessions = async () => {
     if (!selectedUser) return;
-    if (typeof window !== "undefined" && !window.confirm(copy.revokeConfirm)) return;
+    if (typeof window !== "undefined" && !window.confirm(copy.revokeConfirm))
+      return;
     setSavingUser(true);
     setError(null);
     try {
@@ -887,55 +1058,132 @@ export default function AdminDashboard() {
       setError(null);
       return getAdminBookingSlots(payload);
     },
-    []
+    [],
   );
 
   const handleBlockBookingSlot = useCallback(
-    async (payload: { date: string; hour: number; priority: "standard" | "express"; reason?: string | null }) => {
+    async (payload: {
+      date: string;
+      hour: number;
+      priority: "standard" | "express";
+      reason?: string | null;
+    }) => {
       setError(null);
       return blockAdminBookingSlot(payload);
     },
-    []
+    [],
   );
 
   const handleUnblockBookingSlot = useCallback(
-    async (payload: { date: string; hour: number; priority: "standard" | "express" }) => {
+    async (payload: {
+      date: string;
+      hour: number;
+      priority: "standard" | "express";
+    }) => {
       setError(null);
       return unblockAdminBookingSlot(payload);
     },
-    []
+    [],
   );
 
   const eventLabels: Record<string, string> = {
-    signup: locale === "ar" ? "تسجيل" : locale === "fr" ? "Inscription" : "Signup",
+    signup:
+      locale === "ar" ? "تسجيل" : locale === "fr" ? "Inscription" : "Signup",
     login: locale === "ar" ? "دخول" : locale === "fr" ? "Connexion" : "Login",
-    admin_login_denied: locale === "ar" ? "رفض دخول إداري" : locale === "fr" ? "Acces admin refuse" : "Admin login denied",
-    logout: locale === "ar" ? "خروج" : locale === "fr" ? "Deconnexion" : "Logout",
-    magic_link_requested: locale === "ar" ? "طلب رابط دخول" : locale === "fr" ? "Lien magique demande" : "Magic link requested",
+    admin_login_denied:
+      locale === "ar"
+        ? "رفض دخول إداري"
+        : locale === "fr"
+          ? "Acces admin refuse"
+          : "Admin login denied",
+    logout:
+      locale === "ar" ? "خروج" : locale === "fr" ? "Deconnexion" : "Logout",
+    magic_link_requested:
+      locale === "ar"
+        ? "طلب رابط دخول"
+        : locale === "fr"
+          ? "Lien magique demande"
+          : "Magic link requested",
     password_reset_requested:
-      locale === "ar" ? "طلب استرجاع كلمة المرور" : locale === "fr" ? "Reset mot de passe demande" : "Password reset requested",
+      locale === "ar"
+        ? "طلب استرجاع كلمة المرور"
+        : locale === "fr"
+          ? "Reset mot de passe demande"
+          : "Password reset requested",
     password_reset_completed:
-      locale === "ar" ? "إكمال استرجاع كلمة المرور" : locale === "fr" ? "Reset mot de passe termine" : "Password reset completed",
-    email_verified: locale === "ar" ? "تأكيد البريد" : locale === "fr" ? "Email verifie" : "Email verified",
+      locale === "ar"
+        ? "إكمال استرجاع كلمة المرور"
+        : locale === "fr"
+          ? "Reset mot de passe termine"
+          : "Password reset completed",
+    email_verified:
+      locale === "ar"
+        ? "تأكيد البريد"
+        : locale === "fr"
+          ? "Email verifie"
+          : "Email verified",
     magic_login_completed:
-      locale === "ar" ? "دخول عبر الرابط" : locale === "fr" ? "Connexion par lien terminee" : "Magic login completed",
-    admin_user_updated: locale === "ar" ? "تعديل إداري" : locale === "fr" ? "Modification admin" : "Admin user updated",
-    admin_user_deleted: locale === "ar" ? "حذف إداري" : locale === "fr" ? "Suppression admin" : "Admin user deleted",
+      locale === "ar"
+        ? "دخول عبر الرابط"
+        : locale === "fr"
+          ? "Connexion par lien terminee"
+          : "Magic login completed",
+    admin_user_updated:
+      locale === "ar"
+        ? "تعديل إداري"
+        : locale === "fr"
+          ? "Modification admin"
+          : "Admin user updated",
+    admin_user_deleted:
+      locale === "ar"
+        ? "حذف إداري"
+        : locale === "fr"
+          ? "Suppression admin"
+          : "Admin user deleted",
     admin_verification_sent:
-      locale === "ar" ? "إعادة إرسال التحقق" : locale === "fr" ? "Verification renvoyee" : "Admin verification sent",
-    admin_session_revoked: locale === "ar" ? "إلغاء جلسة" : locale === "fr" ? "Session revoquee" : "Admin session revoked",
+      locale === "ar"
+        ? "إعادة إرسال التحقق"
+        : locale === "fr"
+          ? "Verification renvoyee"
+          : "Admin verification sent",
+    admin_session_revoked:
+      locale === "ar"
+        ? "إلغاء جلسة"
+        : locale === "fr"
+          ? "Session revoquee"
+          : "Admin session revoked",
     admin_all_sessions_revoked:
-      locale === "ar" ? "إلغاء كل الجلسات" : locale === "fr" ? "Toutes les sessions revoquees" : "All sessions revoked",
+      locale === "ar"
+        ? "إلغاء كل الجلسات"
+        : locale === "fr"
+          ? "Toutes les sessions revoquees"
+          : "All sessions revoked",
   };
 
   eventLabels.admin_booking_cancelled =
-    locale === "ar" ? "إلغاء موعد" : locale === "fr" ? "Booking annule par admin" : "Admin booking cancelled";
+    locale === "ar"
+      ? "إلغاء موعد"
+      : locale === "fr"
+        ? "Booking annule par admin"
+        : "Admin booking cancelled";
   eventLabels.admin_booking_refund_requested =
-    locale === "ar" ? "طلب استرجاع إداري" : locale === "fr" ? "Remboursement demande par admin" : "Admin booking refund requested";
+    locale === "ar"
+      ? "طلب استرجاع إداري"
+      : locale === "fr"
+        ? "Remboursement demande par admin"
+        : "Admin booking refund requested";
   eventLabels.admin_booking_slot_blocked =
-    locale === "ar" ? "إغلاق ساعة من الإدارة" : locale === "fr" ? "Heure bloquee par admin" : "Admin slot blocked";
+    locale === "ar"
+      ? "إغلاق ساعة من الإدارة"
+      : locale === "fr"
+        ? "Heure bloquee par admin"
+        : "Admin slot blocked";
   eventLabels.admin_booking_slot_unblocked =
-    locale === "ar" ? "فتح ساعة من الإدارة" : locale === "fr" ? "Heure reouverte par admin" : "Admin slot reopened";
+    locale === "ar"
+      ? "فتح ساعة من الإدارة"
+      : locale === "fr"
+        ? "Heure reouverte par admin"
+        : "Admin slot reopened";
 
   const usersCsv = filteredUsers.map((item) => ({
     email: item.email,
@@ -982,12 +1230,20 @@ export default function AdminDashboard() {
             <p className="text-sm font-medium text-slate-500">{consoleLabel}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {user?.email ? <span className="text-sm text-slate-500">{signedInLabel} {user.email}</span> : null}
+            {user?.email ? (
+              <span className="text-sm text-slate-500">
+                {signedInLabel} {user.email}
+              </span>
+            ) : null}
             <Button type="button" variant="outline" asChild>
               <a href="/">{publicSiteLabel}</a>
             </Button>
             {user ? (
-              <Button type="button" variant="outline" onClick={() => void handleLogout()}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleLogout()}
+              >
                 {signOutLabel}
               </Button>
             ) : null}
@@ -999,19 +1255,41 @@ export default function AdminDashboard() {
           <div className="mx-auto max-w-7xl space-y-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-primary">{copy.title}</h1>
-                <p className="mt-2 max-w-3xl text-muted-foreground">{copy.subtitle}</p>
-                {data?.admin?.email ? <p className="mt-2 text-sm text-slate-500">{data.admin.email}</p> : null}
+                <h1 className="text-3xl font-bold text-primary">
+                  {copy.title}
+                </h1>
+                <p className="mt-2 max-w-3xl text-muted-foreground">
+                  {copy.subtitle}
+                </p>
+                {data?.admin?.email ? (
+                  <p className="mt-2 text-sm text-slate-500">
+                    {data.admin.email}
+                  </p>
+                ) : null}
               </div>
               {user && isAdmin ? (
                 <div className="flex flex-wrap gap-3">
-                  <Button type="button" variant="outline" onClick={() => exportCsv("cvsolucion-users.csv", usersCsv)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => exportCsv("cvsolucion-users.csv", usersCsv)}
+                  >
                     {copy.exportUsers}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => exportCsv("cvsolucion-events.csv", eventsCsv)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      exportCsv("cvsolucion-events.csv", eventsCsv)
+                    }
+                  >
                     {copy.exportEvents}
                   </Button>
-                  <Button type="button" onClick={() => void load()} disabled={busy || savingUser}>
+                  <Button
+                    type="button"
+                    onClick={() => void load()}
+                    disabled={busy || savingUser}
+                  >
                     {copy.refresh}
                   </Button>
                 </div>
@@ -1022,7 +1300,10 @@ export default function AdminDashboard() {
               <Card>
                 <CardContent className="p-6">
                   <p className="mb-4 text-slate-700">{copy.signInRequired}</p>
-                  <a href={loginHref} className="text-primary font-semibold hover:underline">
+                  <a
+                    href={loginHref}
+                    className="text-primary font-semibold hover:underline"
+                  >
                     {loginHref}
                   </a>
                 </CardContent>
@@ -1031,7 +1312,9 @@ export default function AdminDashboard() {
 
             {!loading && user && !isAdmin ? (
               <Card>
-                <CardContent className="p-6 text-slate-700">{copy.adminOnly}</CardContent>
+                <CardContent className="p-6 text-slate-700">
+                  {copy.adminOnly}
+                </CardContent>
               </Card>
             ) : null}
 
@@ -1044,44 +1327,99 @@ export default function AdminDashboard() {
             {user && isAdmin ? (
               <>
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-                  <MetricCard title={copy.totalUsers} value={stats?.totalUsers ?? 0} />
-                  <MetricCard title={copy.verifiedUsers} value={stats?.verifiedUsers ?? 0} />
-                  <MetricCard title={copy.pendingUsers} value={stats?.unverifiedUsers ?? 0} />
-                  <MetricCard title={copy.activeSessions} value={stats?.activeSessions ?? 0} />
-                  <MetricCard title={copy.pendingLinks} value={stats?.pendingTokens ?? 0} />
-                  <MetricCard title={copy.users7d} value={stats?.usersLast7Days ?? 0} />
-                  <MetricCard title={copy.logins7d} value={stats?.loginsLast7Days ?? 0} />
-                  <MetricCard title={copy.verificationRate} value={`${stats?.verificationRate ?? 0}%`} />
+                  <MetricCard
+                    title={copy.totalUsers}
+                    value={stats?.totalUsers ?? 0}
+                  />
+                  <MetricCard
+                    title={copy.verifiedUsers}
+                    value={stats?.verifiedUsers ?? 0}
+                  />
+                  <MetricCard
+                    title={copy.pendingUsers}
+                    value={stats?.unverifiedUsers ?? 0}
+                  />
+                  <MetricCard
+                    title={copy.activeSessions}
+                    value={stats?.activeSessions ?? 0}
+                  />
+                  <MetricCard
+                    title={copy.pendingLinks}
+                    value={stats?.pendingTokens ?? 0}
+                  />
+                  <MetricCard
+                    title={copy.users7d}
+                    value={stats?.usersLast7Days ?? 0}
+                  />
+                  <MetricCard
+                    title={copy.logins7d}
+                    value={stats?.loginsLast7Days ?? 0}
+                  />
+                  <MetricCard
+                    title={copy.verificationRate}
+                    value={`${stats?.verificationRate ?? 0}%`}
+                  />
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-3">
                   <Card>
-                    <CardHeader><CardTitle>{copy.funnel}</CardTitle></CardHeader>
+                    <CardHeader>
+                      <CardTitle>{copy.funnel}</CardTitle>
+                    </CardHeader>
                     <CardContent className="space-y-4">
-                      <ProgressRow label={copy.totalUsers} value={stats?.totalUsers ?? 0} total={stats?.totalUsers ?? 1} />
-                      <ProgressRow label={copy.verifiedUsers} value={stats?.verifiedUsers ?? 0} total={stats?.totalUsers ?? 1} />
-                      <ProgressRow label={copy.activeSessions} value={stats?.activeSessions ?? 0} total={stats?.totalUsers ?? 1} />
-                      <ProgressRow label={copy.resets30d} value={stats?.resetRequestsLast30Days ?? 0} total={Math.max(stats?.usersLast30Days ?? 1, 1)} />
+                      <ProgressRow
+                        label={copy.totalUsers}
+                        value={stats?.totalUsers ?? 0}
+                        total={stats?.totalUsers ?? 1}
+                      />
+                      <ProgressRow
+                        label={copy.verifiedUsers}
+                        value={stats?.verifiedUsers ?? 0}
+                        total={stats?.totalUsers ?? 1}
+                      />
+                      <ProgressRow
+                        label={copy.activeSessions}
+                        value={stats?.activeSessions ?? 0}
+                        total={stats?.totalUsers ?? 1}
+                      />
+                      <ProgressRow
+                        label={copy.resets30d}
+                        value={stats?.resetRequestsLast30Days ?? 0}
+                        total={Math.max(stats?.usersLast30Days ?? 1, 1)}
+                      />
                     </CardContent>
                   </Card>
 
                   <Card>
-                    <CardHeader><CardTitle>{copy.localeDemand}</CardTitle></CardHeader>
+                    <CardHeader>
+                      <CardTitle>{copy.localeDemand}</CardTitle>
+                    </CardHeader>
                     <CardContent className="space-y-3">
                       {data?.insights.localeBreakdown.map((item) => (
-                        <div key={item.locale} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                        <div
+                          key={item.locale}
+                          className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3"
+                        >
                           <div className="flex items-center gap-3">
-                            <Badge variant="outline">{localeBadge(item.locale)}</Badge>
-                            <span className="font-medium text-slate-700">{item.locale.toUpperCase()}</span>
+                            <Badge variant="outline">
+                              {localeBadge(item.locale)}
+                            </Badge>
+                            <span className="font-medium text-slate-700">
+                              {item.locale.toUpperCase()}
+                            </span>
                           </div>
-                          <span className="text-lg font-semibold text-slate-900">{item.count}</span>
+                          <span className="text-lg font-semibold text-slate-900">
+                            {item.count}
+                          </span>
                         </div>
                       ))}
                     </CardContent>
                   </Card>
 
                   <Card>
-                    <CardHeader><CardTitle>{copy.stalePending}</CardTitle></CardHeader>
+                    <CardHeader>
+                      <CardTitle>{copy.stalePending}</CardTitle>
+                    </CardHeader>
                     <CardContent className="space-y-3">
                       {data?.insights.stalePendingUsers.length ? (
                         data.insights.stalePendingUsers.map((item) => (
@@ -1092,14 +1430,20 @@ export default function AdminDashboard() {
                             className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-left transition hover:border-primary/40 hover:bg-slate-50"
                           >
                             <div>
-                              <div className="font-medium text-slate-900">{item.email}</div>
-                              <div className="text-xs text-slate-500">{formatDate(item.createdAt, locale)}</div>
+                              <div className="font-medium text-slate-900">
+                                {item.email}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {formatDate(item.createdAt, locale)}
+                              </div>
                             </div>
                             <Badge variant="secondary">{copy.no}</Badge>
                           </button>
                         ))
                       ) : (
-                        <div className="text-sm text-slate-500">{copy.noResults}</div>
+                        <div className="text-sm text-slate-500">
+                          {copy.noResults}
+                        </div>
                       )}
                     </CardContent>
                   </Card>
@@ -1110,11 +1454,16 @@ export default function AdminDashboard() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <CardTitle>{ga4Copy.title}</CardTitle>
                       <div className="flex items-center gap-2">
-                        <Badge variant={data?.ga4?.enabled ? "default" : "secondary"}>
+                        <Badge
+                          variant={data?.ga4?.enabled ? "default" : "secondary"}
+                        >
                           {data?.ga4?.enabled ? ga4Copy.ready : ga4Copy.missing}
                         </Badge>
                         <span className="text-xs text-slate-500">
-                          {ga4Copy.fetchedAt}: {data?.ga4?.fetchedAt ? formatDate(data.ga4.fetchedAt, locale) : "-"}
+                          {ga4Copy.fetchedAt}:{" "}
+                          {data?.ga4?.fetchedAt
+                            ? formatDate(data.ga4.fetchedAt, locale)
+                            : "-"}
                         </span>
                       </div>
                     </div>
@@ -1127,68 +1476,160 @@ export default function AdminDashboard() {
                     ) : null}
 
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                      <MetricCard title={ga4Copy.activeUsersToday} value={data?.ga4?.overview.activeUsers1d ?? 0} />
-                      <MetricCard title={ga4Copy.activeUsers7d} value={data?.ga4?.overview.activeUsers7d ?? 0} />
-                      <MetricCard title={ga4Copy.sessions7d} value={data?.ga4?.overview.sessions7d ?? 0} />
-                      <MetricCard title={ga4Copy.pageViews7d} value={data?.ga4?.overview.pageViews7d ?? 0} />
-                      <MetricCard title={ga4Copy.avgSession} value={formatDuration(Math.round((data?.ga4?.overview.avgSessionDuration7d ?? 0) * 1000))} />
+                      <MetricCard
+                        title={ga4Copy.activeUsersToday}
+                        value={data?.ga4?.overview.activeUsers1d ?? 0}
+                      />
+                      <MetricCard
+                        title={ga4Copy.activeUsers7d}
+                        value={data?.ga4?.overview.activeUsers7d ?? 0}
+                      />
+                      <MetricCard
+                        title={ga4Copy.sessions7d}
+                        value={data?.ga4?.overview.sessions7d ?? 0}
+                      />
+                      <MetricCard
+                        title={ga4Copy.pageViews7d}
+                        value={data?.ga4?.overview.pageViews7d ?? 0}
+                      />
+                      <MetricCard
+                        title={ga4Copy.avgSession}
+                        value={formatDuration(
+                          Math.round(
+                            (data?.ga4?.overview.avgSessionDuration7d ?? 0) *
+                              1000,
+                          ),
+                        )}
+                      />
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      <StatPill label="page_view" value={data?.ga4?.events7d.pageViews ?? 0} />
-                      <StatPill label="whatsapp_click" value={data?.ga4?.events7d.whatsappClicks ?? 0} />
-                      <StatPill label="email_click" value={data?.ga4?.events7d.emailClicks ?? 0} />
-                      <StatPill label="cta_click" value={data?.ga4?.events7d.ctaClicks ?? 0} />
+                      <StatPill
+                        label="page_view"
+                        value={data?.ga4?.events7d.pageViews ?? 0}
+                      />
+                      <StatPill
+                        label="whatsapp_click"
+                        value={data?.ga4?.events7d.whatsappClicks ?? 0}
+                      />
+                      <StatPill
+                        label="email_click"
+                        value={data?.ga4?.events7d.emailClicks ?? 0}
+                      />
+                      <StatPill
+                        label="cta_click"
+                        value={data?.ga4?.events7d.ctaClicks ?? 0}
+                      />
                     </div>
 
                     <div className="grid gap-4 xl:grid-cols-2">
                       <Card>
-                        <CardHeader><CardTitle>{ga4Copy.topPages}</CardTitle></CardHeader>
+                        <CardHeader>
+                          <CardTitle>{ga4Copy.topPages}</CardTitle>
+                        </CardHeader>
                         <CardContent className="space-y-3">
-                          {data?.ga4?.topPages?.length ? data.ga4.topPages.map((item) => (
-                            <div key={item.pagePath} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
-                              <span className="truncate text-sm text-slate-700">{item.pagePath}</span>
-                              <span className="text-base font-semibold text-slate-900">{item.views}</span>
+                          {data?.ga4?.topPages?.length ? (
+                            data.ga4.topPages.map((item) => (
+                              <div
+                                key={item.pagePath}
+                                className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3"
+                              >
+                                <span className="truncate text-sm text-slate-700">
+                                  {item.pagePath}
+                                </span>
+                                <span className="text-base font-semibold text-slate-900">
+                                  {item.views}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-sm text-slate-500">
+                              {copy.noResults}
                             </div>
-                          )) : <div className="text-sm text-slate-500">{copy.noResults}</div>}
+                          )}
                         </CardContent>
                       </Card>
 
                       <Card>
-                        <CardHeader><CardTitle>{ga4Copy.sources}</CardTitle></CardHeader>
+                        <CardHeader>
+                          <CardTitle>{ga4Copy.sources}</CardTitle>
+                        </CardHeader>
                         <CardContent className="space-y-3">
-                          {data?.ga4?.trafficSources?.length ? data.ga4.trafficSources.map((item) => (
-                            <div key={item.sourceMedium} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
-                              <span className="truncate text-sm text-slate-700">{item.sourceMedium}</span>
-                              <span className="text-base font-semibold text-slate-900">{item.users}</span>
+                          {data?.ga4?.trafficSources?.length ? (
+                            data.ga4.trafficSources.map((item) => (
+                              <div
+                                key={item.sourceMedium}
+                                className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3"
+                              >
+                                <span className="truncate text-sm text-slate-700">
+                                  {item.sourceMedium}
+                                </span>
+                                <span className="text-base font-semibold text-slate-900">
+                                  {item.users}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-sm text-slate-500">
+                              {copy.noResults}
                             </div>
-                          )) : <div className="text-sm text-slate-500">{copy.noResults}</div>}
+                          )}
                         </CardContent>
                       </Card>
                     </div>
 
                     <div className="grid gap-4 xl:grid-cols-2">
                       <Card>
-                        <CardHeader><CardTitle>{ga4Copy.countries}</CardTitle></CardHeader>
+                        <CardHeader>
+                          <CardTitle>{ga4Copy.countries}</CardTitle>
+                        </CardHeader>
                         <CardContent className="space-y-3">
-                          {data?.ga4?.countries?.length ? data.ga4.countries.map((item) => (
-                            <div key={item.country} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
-                              <span className="truncate text-sm text-slate-700">{item.country}</span>
-                              <span className="text-base font-semibold text-slate-900">{item.users}</span>
+                          {data?.ga4?.countries?.length ? (
+                            data.ga4.countries.map((item) => (
+                              <div
+                                key={item.country}
+                                className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3"
+                              >
+                                <span className="truncate text-sm text-slate-700">
+                                  {item.country}
+                                </span>
+                                <span className="text-base font-semibold text-slate-900">
+                                  {item.users}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-sm text-slate-500">
+                              {copy.noResults}
                             </div>
-                          )) : <div className="text-sm text-slate-500">{copy.noResults}</div>}
+                          )}
                         </CardContent>
                       </Card>
 
                       <Card>
-                        <CardHeader><CardTitle>{ga4Copy.devices}</CardTitle></CardHeader>
+                        <CardHeader>
+                          <CardTitle>{ga4Copy.devices}</CardTitle>
+                        </CardHeader>
                         <CardContent className="space-y-3">
-                          {data?.ga4?.devices?.length ? data.ga4.devices.map((item) => (
-                            <div key={item.deviceCategory} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
-                              <span className="truncate text-sm capitalize text-slate-700">{item.deviceCategory}</span>
-                              <span className="text-base font-semibold text-slate-900">{item.users}</span>
+                          {data?.ga4?.devices?.length ? (
+                            data.ga4.devices.map((item) => (
+                              <div
+                                key={item.deviceCategory}
+                                className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3"
+                              >
+                                <span className="truncate text-sm capitalize text-slate-700">
+                                  {item.deviceCategory}
+                                </span>
+                                <span className="text-base font-semibold text-slate-900">
+                                  {item.users}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-sm text-slate-500">
+                              {copy.noResults}
                             </div>
-                          )) : <div className="text-sm text-slate-500">{copy.noResults}</div>}
+                          )}
                         </CardContent>
                       </Card>
                     </div>
@@ -1198,16 +1639,30 @@ export default function AdminDashboard() {
                 <Tabs defaultValue="overview" className="space-y-6">
                   <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
                     <TabsTrigger value="overview">{copy.overview}</TabsTrigger>
-                    <TabsTrigger value="customer-ops">{copy.customerOps}</TabsTrigger>
-                    <TabsTrigger value="designers">{copy.designersHub}</TabsTrigger>
-                    <TabsTrigger value="commercial">{copy.commercial}</TabsTrigger>
-                    <TabsTrigger value="training-prices">{trainingTabLabel}</TabsTrigger>
+                    <TabsTrigger value="customer-ops">
+                      {copy.customerOps}
+                    </TabsTrigger>
+                    <TabsTrigger value="designers">
+                      {copy.designersHub}
+                    </TabsTrigger>
+                    <TabsTrigger value="commercial">
+                      {copy.commercial}
+                    </TabsTrigger>
+                    <TabsTrigger value="training-prices">
+                      {trainingTabLabel}
+                    </TabsTrigger>
                     <TabsTrigger value="content">{copy.contentHub}</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="overview" className="space-y-6">
                     <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                      <UsersTable copy={copy} locale={locale} users={filteredUsers} selectedUserId={selectedUserId} onSelect={handleSelectUser} />
+                      <UsersTable
+                        copy={copy}
+                        locale={locale}
+                        users={filteredUsers}
+                        selectedUserId={selectedUserId}
+                        onSelect={handleSelectUser}
+                      />
                       <UserDetailPanel
                         copy={copy}
                         locale={locale}
@@ -1235,10 +1690,21 @@ export default function AdminDashboard() {
                     <Card>
                       <CardContent className="p-5">
                         <div className="grid gap-4 md:grid-cols-[1fr_180px_180px]">
-                          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.search} />
+                          <Input
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                            placeholder={copy.search}
+                          />
                           <select
                             value={verificationFilter}
-                            onChange={(event) => setVerificationFilter(event.target.value as "all" | "verified" | "pending")}
+                            onChange={(event) =>
+                              setVerificationFilter(
+                                event.target.value as
+                                  | "all"
+                                  | "verified"
+                                  | "pending",
+                              )
+                            }
                             className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm"
                           >
                             <option value="all">{copy.verified}</option>
@@ -1247,7 +1713,9 @@ export default function AdminDashboard() {
                           </select>
                           <select
                             value={eventFilter}
-                            onChange={(event) => setEventFilter(event.target.value)}
+                            onChange={(event) =>
+                              setEventFilter(event.target.value)
+                            }
                             className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm"
                           >
                             <option value="all">{copy.eventType}</option>
@@ -1264,17 +1732,29 @@ export default function AdminDashboard() {
                     <Tabs defaultValue="users" className="space-y-6">
                       <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
                         <TabsTrigger value="users">{copy.users}</TabsTrigger>
-                        <TabsTrigger value="visitors">{copy.visitors}</TabsTrigger>
-                        <TabsTrigger value="conversations">{conversationCopy.conversations}</TabsTrigger>
+                        <TabsTrigger value="visitors">
+                          {copy.visitors}
+                        </TabsTrigger>
+                        <TabsTrigger value="conversations">
+                          {conversationCopy.conversations}
+                        </TabsTrigger>
                         <TabsTrigger value="bookings">Bookings</TabsTrigger>
                         <TabsTrigger value="requests">Requests</TabsTrigger>
-                        <TabsTrigger value="sessions">{copy.sessions}</TabsTrigger>
+                        <TabsTrigger value="sessions">
+                          {copy.sessions}
+                        </TabsTrigger>
                         <TabsTrigger value="events">{copy.events}</TabsTrigger>
                       </TabsList>
 
                       <TabsContent value="users">
                         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                          <UsersTable copy={copy} locale={locale} users={filteredUsers} selectedUserId={selectedUserId} onSelect={handleSelectUser} />
+                          <UsersTable
+                            copy={copy}
+                            locale={locale}
+                            users={filteredUsers}
+                            selectedUserId={selectedUserId}
+                            onSelect={handleSelectUser}
+                          />
                           <UserDetailPanel
                             copy={copy}
                             locale={locale}
@@ -1307,7 +1787,11 @@ export default function AdminDashboard() {
                             selectedVisitorId={selectedVisitorId}
                             onSelect={setSelectedVisitorId}
                           />
-                          <VisitorDetailPanel copy={copy} locale={locale} visitor={selectedVisitor} />
+                          <VisitorDetailPanel
+                            copy={copy}
+                            locale={locale}
+                            visitor={selectedVisitor}
+                          />
                         </div>
                       </TabsContent>
 
@@ -1347,13 +1831,18 @@ export default function AdminDashboard() {
 
                       <TabsContent value="requests">
                         <Suspense fallback={<PanelFallback />}>
-                          <RequestsManager locale={locale} leads={filteredLeads} />
+                          <RequestsManager
+                            locale={locale}
+                            leads={filteredLeads}
+                          />
                         </Suspense>
                       </TabsContent>
 
                       <TabsContent value="sessions">
                         <Card>
-                          <CardHeader><CardTitle>{copy.sessions}</CardTitle></CardHeader>
+                          <CardHeader>
+                            <CardTitle>{copy.sessions}</CardTitle>
+                          </CardHeader>
                           <CardContent>
                             <ScrollArea className="w-full">
                               <Table>
@@ -1369,11 +1858,30 @@ export default function AdminDashboard() {
                                   {filteredSessions.length ? (
                                     filteredSessions.map((session) => (
                                       <TableRow key={session.id}>
-                                        <TableCell className="font-medium">{session.email || session.userId}</TableCell>
-                                        <TableCell>{formatDate(session.createdAt, locale)}</TableCell>
-                                        <TableCell>{formatDate(session.expiresAt, locale)}</TableCell>
+                                        <TableCell className="font-medium">
+                                          {session.email || session.userId}
+                                        </TableCell>
                                         <TableCell>
-                                          <Button type="button" size="sm" variant="outline" onClick={() => handleRevokeSession(session)}>
+                                          {formatDate(
+                                            session.createdAt,
+                                            locale,
+                                          )}
+                                        </TableCell>
+                                        <TableCell>
+                                          {formatDate(
+                                            session.expiresAt,
+                                            locale,
+                                          )}
+                                        </TableCell>
+                                        <TableCell>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() =>
+                                              handleRevokeSession(session)
+                                            }
+                                          >
                                             {copy.revokeSession}
                                           </Button>
                                         </TableCell>
@@ -1381,7 +1889,12 @@ export default function AdminDashboard() {
                                     ))
                                   ) : (
                                     <TableRow>
-                                      <TableCell colSpan={4} className="text-center text-slate-500">{copy.noResults}</TableCell>
+                                      <TableCell
+                                        colSpan={4}
+                                        className="text-center text-slate-500"
+                                      >
+                                        {copy.noResults}
+                                      </TableCell>
                                     </TableRow>
                                   )}
                                 </TableBody>
@@ -1393,7 +1906,9 @@ export default function AdminDashboard() {
 
                       <TabsContent value="events">
                         <Card>
-                          <CardHeader><CardTitle>{copy.events}</CardTitle></CardHeader>
+                          <CardHeader>
+                            <CardTitle>{copy.events}</CardTitle>
+                          </CardHeader>
                           <CardContent>
                             <ScrollArea className="w-full">
                               <Table>
@@ -1410,16 +1925,30 @@ export default function AdminDashboard() {
                                   {filteredEvents.length ? (
                                     filteredEvents.map((event) => (
                                       <TableRow key={event.id}>
-                                        <TableCell className="font-medium">{eventLabels[event.type] || event.type}</TableCell>
-                                        <TableCell>{event.email || "-"}</TableCell>
-                                        <TableCell>{event.locale || "-"}</TableCell>
+                                        <TableCell className="font-medium">
+                                          {eventLabels[event.type] ||
+                                            event.type}
+                                        </TableCell>
+                                        <TableCell>
+                                          {event.email || "-"}
+                                        </TableCell>
+                                        <TableCell>
+                                          {event.locale || "-"}
+                                        </TableCell>
                                         <TableCell>{event.ip || "-"}</TableCell>
-                                        <TableCell>{formatDate(event.createdAt, locale)}</TableCell>
+                                        <TableCell>
+                                          {formatDate(event.createdAt, locale)}
+                                        </TableCell>
                                       </TableRow>
                                     ))
                                   ) : (
                                     <TableRow>
-                                      <TableCell colSpan={5} className="text-center text-slate-500">{copy.noResults}</TableCell>
+                                      <TableCell
+                                        colSpan={5}
+                                        className="text-center text-slate-500"
+                                      >
+                                        {copy.noResults}
+                                      </TableCell>
                                     </TableRow>
                                   )}
                                 </TableBody>
@@ -1445,7 +1974,9 @@ export default function AdminDashboard() {
 
                   <TabsContent value="training-prices">
                     <Suspense fallback={<PanelFallback />}>
-                      <TrainingOperationsManager locale={locale as "en" | "fr" | "ar"} />
+                      <TrainingOperationsManager
+                        locale={locale as "en" | "fr" | "ar"}
+                      />
                     </Suspense>
                   </TabsContent>
 
@@ -1479,7 +2010,9 @@ function UsersTable({
 }) {
   return (
     <Card>
-      <CardHeader><CardTitle>{copy.users}</CardTitle></CardHeader>
+      <CardHeader>
+        <CardTitle>{copy.users}</CardTitle>
+      </CardHeader>
       <CardContent>
         <ScrollArea className="w-full">
           <Table>
@@ -1499,20 +2032,35 @@ function UsersTable({
                     <TableCell className="font-medium">
                       <div>{item.email}</div>
                       <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
-                        <span>{copy.eventCount}: {item.eventCount}</span>
-                        <span>{copy.pendingTokens}: {item.pendingTokens}</span>
-                        <span>{copy.signupLocale}: {localeBadge(item.signupLocale)}</span>
+                        <span>
+                          {copy.eventCount}: {item.eventCount}
+                        </span>
+                        <span>
+                          {copy.pendingTokens}: {item.pendingTokens}
+                        </span>
+                        <span>
+                          {copy.signupLocale}: {localeBadge(item.signupLocale)}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={item.emailVerifiedAt ? "default" : "secondary"}>
+                      <Badge
+                        variant={item.emailVerifiedAt ? "default" : "secondary"}
+                      >
                         {item.emailVerifiedAt ? copy.yes : copy.no}
                       </Badge>
                     </TableCell>
                     <TableCell>{formatDate(item.createdAt, locale)}</TableCell>
                     <TableCell>{formatDate(item.lastSeenAt, locale)}</TableCell>
                     <TableCell>
-                      <Button type="button" size="sm" variant={selectedUserId === item.id ? "default" : "outline"} onClick={() => onSelect(item)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={
+                          selectedUserId === item.id ? "default" : "outline"
+                        }
+                        onClick={() => onSelect(item)}
+                      >
                         {copy.select}
                       </Button>
                     </TableCell>
@@ -1520,7 +2068,9 @@ function UsersTable({
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500">{copy.noResults}</TableCell>
+                  <TableCell colSpan={5} className="text-center text-slate-500">
+                    {copy.noResults}
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -1572,72 +2122,166 @@ function UserDetailPanel({
 }) {
   return (
     <Card>
-      <CardHeader><CardTitle>{copy.editor}</CardTitle></CardHeader>
+      <CardHeader>
+        <CardTitle>{copy.editor}</CardTitle>
+      </CardHeader>
       <CardContent className="space-y-6">
         {selectedUser ? (
           <>
             <div className="grid gap-3 sm:grid-cols-2">
-              <StatPill label={copy.created} value={formatDate(selectedUser.createdAt, locale)} />
-              <StatPill label={copy.updated} value={formatDate(selectedUser.updatedAt, locale)} />
-              <StatPill label={copy.lastSeen} value={formatDate(selectedUser.lastSeenAt, locale)} />
-              <StatPill label={copy.signupLocale} value={localeBadge(selectedUser.signupLocale)} />
+              <StatPill
+                label={copy.created}
+                value={formatDate(selectedUser.createdAt, locale)}
+              />
+              <StatPill
+                label={copy.updated}
+                value={formatDate(selectedUser.updatedAt, locale)}
+              />
+              <StatPill
+                label={copy.lastSeen}
+                value={formatDate(selectedUser.lastSeenAt, locale)}
+              />
+              <StatPill
+                label={copy.signupLocale}
+                value={localeBadge(selectedUser.signupLocale)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="admin-user-email">{copy.email}</Label>
-              <Input id="admin-user-email" value={editEmail} onChange={(event) => onEditEmail(event.target.value)} />
+              <Input
+                id="admin-user-email"
+                value={editEmail}
+                onChange={(event) => onEditEmail(event.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="admin-user-password">{copy.newPassword}</Label>
-              <Input id="admin-user-password" type="password" value={editPassword} onChange={(event) => onEditPassword(event.target.value)} placeholder={copy.passwordHint} />
+              <Input
+                id="admin-user-password"
+                type="password"
+                value={editPassword}
+                onChange={(event) => onEditPassword(event.target.value)}
+                placeholder={copy.passwordHint}
+              />
             </div>
             <label className="flex items-center gap-2 text-sm font-medium">
-              <input type="checkbox" checked={editVerified} onChange={(event) => onEditVerified(event.target.checked)} />
+              <input
+                type="checkbox"
+                checked={editVerified}
+                onChange={(event) => onEditVerified(event.target.checked)}
+              />
               {copy.verified}
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Button type="button" onClick={onSave} disabled={savingUser}>{copy.save}</Button>
-              <Button type="button" variant="outline" onClick={onRevokeUserSessions} disabled={savingUser || selectedUser.activeSessions === 0}>{copy.revokeUserSessions}</Button>
-              <Button type="button" variant="outline" onClick={onResendVerification} disabled={savingUser || Boolean(selectedUser.emailVerifiedAt)}>{copy.resendVerification}</Button>
-              <Button type="button" variant="destructive" onClick={onDelete} disabled={savingUser}>{copy.delete}</Button>
+              <Button type="button" onClick={onSave} disabled={savingUser}>
+                {copy.save}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onRevokeUserSessions}
+                disabled={savingUser || selectedUser.activeSessions === 0}
+              >
+                {copy.revokeUserSessions}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onResendVerification}
+                disabled={savingUser || Boolean(selectedUser.emailVerifiedAt)}
+              >
+                {copy.resendVerification}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={onDelete}
+                disabled={savingUser}
+              >
+                {copy.delete}
+              </Button>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-sm font-semibold text-slate-900">{copy.accountHealth}</h3>
+              <h3 className="text-sm font-semibold text-slate-900">
+                {copy.accountHealth}
+              </h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <StatPill label={copy.activeSessions} value={selectedUser.activeSessions} />
-                <StatPill label={copy.pendingTokens} value={selectedUser.pendingTokens} />
-                <StatPill label={copy.eventCount} value={selectedUser.eventCount} />
+                <StatPill
+                  label={copy.activeSessions}
+                  value={selectedUser.activeSessions}
+                />
+                <StatPill
+                  label={copy.pendingTokens}
+                  value={selectedUser.pendingTokens}
+                />
+                <StatPill
+                  label={copy.eventCount}
+                  value={selectedUser.eventCount}
+                />
               </div>
             </div>
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-900">{copy.activeForUser}</h3>
+              <h3 className="text-sm font-semibold text-slate-900">
+                {copy.activeForUser}
+              </h3>
               {selectedUserSessions.length ? (
                 selectedUserSessions.map((session) => (
-                  <div key={session.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-sm">
+                  <div
+                    key={session.id}
+                    className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                  >
                     <div>
-                      <div className="font-medium text-slate-800">{formatDate(session.createdAt, locale)}</div>
-                      <div className="text-slate-500">{copy.sessionExpiry}: {formatDate(session.expiresAt, locale)}</div>
+                      <div className="font-medium text-slate-800">
+                        {formatDate(session.createdAt, locale)}
+                      </div>
+                      <div className="text-slate-500">
+                        {copy.sessionExpiry}:{" "}
+                        {formatDate(session.expiresAt, locale)}
+                      </div>
                     </div>
-                    <Button type="button" size="sm" variant="outline" onClick={() => onRevokeSession(session)}>{copy.revokeSession}</Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onRevokeSession(session)}
+                    >
+                      {copy.revokeSession}
+                    </Button>
                   </div>
                 ))
-              ) : <div className="text-sm text-slate-500">{copy.noResults}</div>}
+              ) : (
+                <div className="text-sm text-slate-500">{copy.noResults}</div>
+              )}
             </div>
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-900">{copy.recentUserEvents}</h3>
+              <h3 className="text-sm font-semibold text-slate-900">
+                {copy.recentUserEvents}
+              </h3>
               {selectedUserEvents.length ? (
                 selectedUserEvents.map((event) => (
-                  <div key={event.id} className="rounded-xl border border-slate-200 px-4 py-3 text-sm">
+                  <div
+                    key={event.id}
+                    className="rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                  >
                     <div className="flex items-center justify-between gap-4">
-                      <span className="font-medium text-slate-800">{eventLabels[event.type] || event.type}</span>
+                      <span className="font-medium text-slate-800">
+                        {eventLabels[event.type] || event.type}
+                      </span>
                       <Badge variant="outline">{event.locale || "-"}</Badge>
                     </div>
-                    <div className="mt-2 text-slate-500">{formatDate(event.createdAt, locale)}</div>
+                    <div className="mt-2 text-slate-500">
+                      {formatDate(event.createdAt, locale)}
+                    </div>
                   </div>
                 ))
-              ) : <div className="text-sm text-slate-500">{copy.noResults}</div>}
+              ) : (
+                <div className="text-sm text-slate-500">{copy.noResults}</div>
+              )}
             </div>
           </>
-        ) : <div className="text-sm text-slate-500">-</div>}
+        ) : (
+          <div className="text-sm text-slate-500">-</div>
+        )}
       </CardContent>
     </Card>
   );
@@ -1658,7 +2302,9 @@ function VisitorsTable({
 }) {
   return (
     <Card>
-      <CardHeader><CardTitle>{copy.visitors}</CardTitle></CardHeader>
+      <CardHeader>
+        <CardTitle>{copy.visitors}</CardTitle>
+      </CardHeader>
       <CardContent>
         <ScrollArea className="w-full">
           <Table>
@@ -1676,43 +2322,66 @@ function VisitorsTable({
                 visitors.map((visitor) => {
                   const isSelected = selectedVisitorId === visitor.id;
                   return (
-                  <TableRow
-                    key={visitor.id}
-                    className={`cursor-pointer transition-colors ${isSelected ? "bg-primary/5" : "hover:bg-slate-50"}`}
-                    onClick={() => onSelect(visitor.id)}
-                  >
-                    <TableCell className="font-medium">
-                      <div>{visitor.email || visitor.ip || visitor.id.slice(0, 12)}</div>
-                      <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
-                        <span>{copy.lastPage}: {visitor.lastPath}</span>
-                        <span>{copy.locale}: {localeBadge(visitor.locale)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={visitor.isRegistered ? "default" : "secondary"}>
-                        {visitor.isRegistered ? copy.registeredYes : copy.registeredNo}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{visitor.deviceType}</TableCell>
-                    <TableCell>{formatDate(visitor.lastSeenAt, locale)}</TableCell>
-                    <TableCell>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={isSelected ? "default" : "outline"}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onSelect(visitor.id);
-                        }}
-                      >
-                        {copy.select}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                )})
+                    <TableRow
+                      key={visitor.id}
+                      className={`cursor-pointer transition-colors ${isSelected ? "bg-primary/5" : "hover:bg-slate-50"}`}
+                      onClick={() => onSelect(visitor.id)}
+                    >
+                      <TableCell className="font-medium">
+                        <div>
+                          {visitor.email ||
+                            visitor.ip ||
+                            visitor.id.slice(0, 12)}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                          <span>
+                            {copy.lastPage}: {visitor.lastPath}
+                          </span>
+                          <span>
+                            {copy.locale}: {localeBadge(visitor.locale)}
+                          </span>
+                          <span>
+                            {copy.trafficSource}:{" "}
+                            {visitor.trafficSource?.source || "-"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            visitor.isRegistered ? "default" : "secondary"
+                          }
+                        >
+                          {visitor.isRegistered
+                            ? copy.registeredYes
+                            : copy.registeredNo}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{visitor.deviceType}</TableCell>
+                      <TableCell>
+                        {formatDate(visitor.lastSeenAt, locale)}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isSelected ? "default" : "outline"}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onSelect(visitor.id);
+                          }}
+                        >
+                          {copy.select}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500">{copy.noResults}</TableCell>
+                  <TableCell colSpan={5} className="text-center text-slate-500">
+                    {copy.noResults}
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -1734,17 +2403,36 @@ function VisitorDetailPanel({
 }) {
   return (
     <Card>
-      <CardHeader><CardTitle>{copy.visitorDetail}</CardTitle></CardHeader>
+      <CardHeader>
+        <CardTitle>{copy.visitorDetail}</CardTitle>
+      </CardHeader>
       <CardContent className="space-y-6">
         {visitor ? (
           <>
             <div className="grid gap-3 sm:grid-cols-2">
-              <StatPill label={copy.registeredState} value={visitor.isRegistered ? copy.registeredYes : copy.registeredNo} />
+              <StatPill
+                label={copy.registeredState}
+                value={
+                  visitor.isRegistered ? copy.registeredYes : copy.registeredNo
+                }
+              />
               <StatPill label={copy.deviceType} value={visitor.deviceType} />
-              <StatPill label={copy.created} value={formatDate(visitor.firstSeenAt, locale)} />
-              <StatPill label={copy.lastSeen} value={formatDate(visitor.lastSeenAt, locale)} />
-              <StatPill label={copy.locale} value={localeBadge(visitor.locale)} />
-              <StatPill label={copy.browserLanguage} value={visitor.browserLanguage || "-"} />
+              <StatPill
+                label={copy.created}
+                value={formatDate(visitor.firstSeenAt, locale)}
+              />
+              <StatPill
+                label={copy.lastSeen}
+                value={formatDate(visitor.lastSeenAt, locale)}
+              />
+              <StatPill
+                label={copy.locale}
+                value={localeBadge(visitor.locale)}
+              />
+              <StatPill
+                label={copy.browserLanguage}
+                value={visitor.browserLanguage || "-"}
+              />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <StatPill label={copy.email} value={visitor.email || "-"} />
@@ -1755,53 +2443,162 @@ function VisitorDetailPanel({
               <StatPill label={copy.lastPage} value={visitor.lastPath} />
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">{copy.campaignData}</div>
+              <div className="text-sm font-semibold text-slate-900">
+                {copy.trafficSource}
+              </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <StatPill label={copy.source} value={visitor.utmSource || "-"} />
-                <StatPill label={copy.medium} value={visitor.utmMedium || "-"} />
-                <StatPill label={copy.campaign} value={visitor.utmCampaign || "-"} />
+                <StatPill
+                  label={copy.source}
+                  value={visitor.trafficSource?.source || "-"}
+                />
+                <StatPill
+                  label={copy.medium}
+                  value={visitor.trafficSource?.medium || "-"}
+                />
+                <StatPill
+                  label={copy.trafficCategory}
+                  value={visitor.trafficSource?.category || "-"}
+                />
+                <StatPill
+                  label={copy.trafficConfidence}
+                  value={visitor.trafficSource?.confidence || "-"}
+                />
+                <StatPill
+                  label={copy.referrerHost}
+                  value={visitor.trafficSource?.referrerHost || "-"}
+                />
+                <StatPill
+                  label={copy.clickId}
+                  value={
+                    visitor.trafficSource?.clickIdType
+                      ? `${visitor.trafficSource.clickIdType}: ${visitor.trafficSource.clickId}`
+                      : "-"
+                  }
+                />
+                <StatPill
+                  label={copy.navigationType}
+                  value={visitor.navigationType || "-"}
+                />
+                <StatPill
+                  label={copy.secFetchSite}
+                  value={visitor.secFetchSite || "-"}
+                />
+              </div>
+              <div className="mt-3 break-words text-sm text-slate-600">
+                {visitor.trafficSource?.detail || "-"}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">
+                {copy.campaignData}
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <StatPill
+                  label={copy.source}
+                  value={visitor.utmSource || "-"}
+                />
+                <StatPill
+                  label={copy.medium}
+                  value={visitor.utmMedium || "-"}
+                />
+                <StatPill
+                  label={copy.campaign}
+                  value={visitor.utmCampaign || "-"}
+                />
                 <StatPill label="gclid" value={visitor.gclid || "-"} />
                 <StatPill label="fbclid" value={visitor.fbclid || "-"} />
+                <StatPill label="msclkid" value={visitor.msclkid || "-"} />
+                <StatPill label="ttclid" value={visitor.ttclid || "-"} />
+                <StatPill label="li_fat_id" value={visitor.liFatId || "-"} />
+                <StatPill label="wbraid" value={visitor.wbraid || "-"} />
+                <StatPill label="gbraid" value={visitor.gbraid || "-"} />
                 <StatPill label="utm_term" value={visitor.utmTerm || "-"} />
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">{copy.engagement}</div>
+              <div className="text-sm font-semibold text-slate-900">
+                {copy.engagement}
+              </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <StatPill label={copy.totalSessions} value={visitor.totalSessions} />
-                <StatPill label={copy.totalPageViews} value={visitor.totalPageViews} />
+                <StatPill
+                  label={copy.totalSessions}
+                  value={visitor.totalSessions}
+                />
+                <StatPill
+                  label={copy.totalPageViews}
+                  value={visitor.totalPageViews}
+                />
                 <StatPill
                   label={copy.avgDuration}
-                  value={formatDuration(visitor.totalSessions ? Math.round(visitor.totalDurationMs / visitor.totalSessions) : null)}
+                  value={formatDuration(
+                    visitor.totalSessions
+                      ? Math.round(
+                          visitor.totalDurationMs / visitor.totalSessions,
+                        )
+                      : null,
+                  )}
                 />
-                <StatPill label={copy.lastSessionDuration} value={formatDuration(visitor.lastSessionDurationMs)} />
-                <StatPill label={copy.whatsappClicks} value={visitor.whatsappClicks} />
-                <StatPill label={copy.emailClicks} value={visitor.emailClicks} />
+                <StatPill
+                  label={copy.lastSessionDuration}
+                  value={formatDuration(visitor.lastSessionDurationMs)}
+                />
+                <StatPill
+                  label={copy.whatsappClicks}
+                  value={visitor.whatsappClicks}
+                />
+                <StatPill
+                  label={copy.emailClicks}
+                  value={visitor.emailClicks}
+                />
                 <StatPill label={copy.ctaClicks} value={visitor.ctaClicks} />
                 <StatPill label="Chat opens" value={visitor.chatOpens} />
                 <StatPill label="Chat messages" value={visitor.chatMessages} />
-                <StatPill label="pages/session" value={visitor.lastSessionPageCount ?? "-"} />
+                <StatPill
+                  label="pages/session"
+                  value={visitor.lastSessionPageCount ?? "-"}
+                />
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">User agent</div>
-              <div className="mt-2 break-all text-sm text-slate-600">{visitor.userAgent || "-"}</div>
+              <div className="text-sm font-semibold text-slate-900">
+                User agent
+              </div>
+              <div className="mt-2 break-all text-sm text-slate-600">
+                {visitor.userAgent || "-"}
+              </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">Referrer</div>
-              <div className="mt-2 break-all text-sm text-slate-600">{visitor.referrer || "-"}</div>
+              <div className="text-sm font-semibold text-slate-900">
+                Referrer
+              </div>
+              <div className="mt-2 break-all text-sm text-slate-600">
+                {visitor.referrer || "-"}
+              </div>
             </div>
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-900">{copy.pageHistory}</h3>
+              <h3 className="text-sm font-semibold text-slate-900">
+                {copy.pageHistory}
+              </h3>
               {visitor.pageViews.length ? (
                 visitor.pageViews.map((pageView, index) => (
-                  <div key={`${pageView.occurredAt}-${index}`} className="rounded-xl border border-slate-200 px-4 py-3 text-sm">
-                    <div className="font-medium text-slate-800">{pageView.title || pageView.path}</div>
-                    <div className="mt-1 break-all text-slate-500">{pageView.path}</div>
+                  <div
+                    key={`${pageView.occurredAt}-${index}`}
+                    className="rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                  >
+                    <div className="font-medium text-slate-800">
+                      {pageView.title || pageView.path}
+                    </div>
+                    <div className="mt-1 break-all text-slate-500">
+                      {pageView.path}
+                    </div>
                     <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
                       <span>{formatDate(pageView.occurredAt, locale)}</span>
                       <span>{localeBadge(pageView.locale)}</span>
                       <span>{pageView.referrer || "-"}</span>
+                      <span>{pageView.trafficSource?.source || "-"}</span>
+                      <span>{pageView.trafficSource?.category || "-"}</span>
+                      <span>{pageView.navigationType || "-"}</span>
+                      <span>{pageView.secFetchSite || "-"}</span>
                     </div>
                   </div>
                 ))
@@ -1810,15 +2607,26 @@ function VisitorDetailPanel({
               )}
             </div>
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-900">{copy.interactionHistory}</h3>
+              <h3 className="text-sm font-semibold text-slate-900">
+                {copy.interactionHistory}
+              </h3>
               {visitor.interactions.length ? (
                 visitor.interactions.map((interaction, index) => (
-                  <div key={`${interaction.occurredAt}-${index}`} className="rounded-xl border border-slate-200 px-4 py-3 text-sm">
+                  <div
+                    key={`${interaction.occurredAt}-${index}`}
+                    className="rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                  >
                     <div className="flex items-center justify-between gap-4">
-                      <span className="font-medium text-slate-800">{interaction.type}</span>
-                      <span className="text-xs text-slate-500">{formatDate(interaction.occurredAt, locale)}</span>
+                      <span className="font-medium text-slate-800">
+                        {interaction.type}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {formatDate(interaction.occurredAt, locale)}
+                      </span>
                     </div>
-                    <div className="mt-2 break-all text-slate-600">{interaction.href || interaction.path}</div>
+                    <div className="mt-2 break-all text-slate-600">
+                      {interaction.href || interaction.path}
+                    </div>
                     <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
                       <span>{interaction.label || "-"}</span>
                       <span>{formatDuration(interaction.durationMs)}</span>
@@ -1831,7 +2639,9 @@ function VisitorDetailPanel({
               )}
             </div>
           </>
-        ) : <div className="text-sm text-slate-500">-</div>}
+        ) : (
+          <div className="text-sm text-slate-500">-</div>
+        )}
       </CardContent>
     </Card>
   );

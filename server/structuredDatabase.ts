@@ -235,6 +235,13 @@ export function ensureStructuredSchema(db: SqliteDatabase) {
       utm_content TEXT,
       gclid TEXT,
       fbclid TEXT,
+      msclkid TEXT,
+      ttclid TEXT,
+      li_fat_id TEXT,
+      wbraid TEXT,
+      gbraid TEXT,
+      navigation_type TEXT,
+      sec_fetch_site TEXT,
       total_sessions INTEGER NOT NULL,
       total_page_views INTEGER NOT NULL,
       total_duration_ms INTEGER NOT NULL,
@@ -259,6 +266,8 @@ export function ensureStructuredSchema(db: SqliteDatabase) {
       locale TEXT,
       title TEXT,
       referrer TEXT,
+      navigation_type TEXT,
+      sec_fetch_site TEXT,
       occurred_at TEXT NOT NULL,
       session_id TEXT
     );`,
@@ -409,6 +418,15 @@ export function ensureStructuredSchema(db: SqliteDatabase) {
   ensureColumn(db, "visitors", "utm_content", "TEXT");
   ensureColumn(db, "visitors", "gclid", "TEXT");
   ensureColumn(db, "visitors", "fbclid", "TEXT");
+  ensureColumn(db, "visitors", "msclkid", "TEXT");
+  ensureColumn(db, "visitors", "ttclid", "TEXT");
+  ensureColumn(db, "visitors", "li_fat_id", "TEXT");
+  ensureColumn(db, "visitors", "wbraid", "TEXT");
+  ensureColumn(db, "visitors", "gbraid", "TEXT");
+  ensureColumn(db, "visitors", "navigation_type", "TEXT");
+  ensureColumn(db, "visitors", "sec_fetch_site", "TEXT");
+  ensureColumn(db, "visitor_page_views", "navigation_type", "TEXT");
+  ensureColumn(db, "visitor_page_views", "sec_fetch_site", "TEXT");
   ensureColumn(db, "visitors", "last_session_duration_ms", "INTEGER");
   ensureColumn(db, "visitors", "last_session_page_count", "INTEGER");
   ensureColumn(db, "visitors", "last_whatsapp_click_at", "TEXT");
@@ -604,14 +622,16 @@ function replaceVisitors(db: SqliteDatabase, data: JsonObject) {
       INSERT INTO visitors (
         id, first_seen_at, last_seen_at, visit_count, landing_path, last_path, locale, referrer, ip,
         user_agent, browser_language, timezone, screen, device_type, is_registered, user_id, email,
-        utm_source, utm_medium, utm_campaign, utm_term, utm_content, gclid, fbclid, total_sessions,
+        utm_source, utm_medium, utm_campaign, utm_term, utm_content, gclid, fbclid, msclkid,
+        ttclid, li_fat_id, wbraid, gbraid, navigation_type, sec_fetch_site, total_sessions,
         total_page_views, total_duration_ms, last_session_duration_ms, last_session_page_count,
         whatsapp_clicks, email_clicks, cta_clicks, chat_opens, chat_messages, last_whatsapp_click_at,
         last_email_click_at, last_chat_at
       ) VALUES (
         @id, @firstSeenAt, @lastSeenAt, @visitCount, @landingPath, @lastPath, @locale, @referrer, @ip,
         @userAgent, @browserLanguage, @timezone, @screen, @deviceType, @isRegistered, @userId, @email,
-        @utmSource, @utmMedium, @utmCampaign, @utmTerm, @utmContent, @gclid, @fbclid, @totalSessions,
+        @utmSource, @utmMedium, @utmCampaign, @utmTerm, @utmContent, @gclid, @fbclid, @msclkid,
+        @ttclid, @liFatId, @wbraid, @gbraid, @navigationType, @secFetchSite, @totalSessions,
         @totalPageViews, @totalDurationMs, @lastSessionDurationMs, @lastSessionPageCount, @whatsappClicks,
         @emailClicks, @ctaClicks, @chatOpens, @chatMessages, @lastWhatsappClickAt, @lastEmailClickAt,
         @lastChatAt
@@ -619,9 +639,9 @@ function replaceVisitors(db: SqliteDatabase, data: JsonObject) {
     `);
     const insertPageView = db.prepare(`
       INSERT INTO visitor_page_views (
-        visitor_id, sort_index, path, locale, title, referrer, occurred_at, session_id
+        visitor_id, sort_index, path, locale, title, referrer, navigation_type, sec_fetch_site, occurred_at, session_id
       ) VALUES (
-        @visitorId, @sortIndex, @path, @locale, @title, @referrer, @occurredAt, @sessionId
+        @visitorId, @sortIndex, @path, @locale, @title, @referrer, @navigationType, @secFetchSite, @occurredAt, @sessionId
       )
     `);
     const insertInteraction = db.prepare(`
@@ -658,6 +678,13 @@ function replaceVisitors(db: SqliteDatabase, data: JsonObject) {
         utmContent: text(visitor.utmContent),
         gclid: text(visitor.gclid),
         fbclid: text(visitor.fbclid),
+        msclkid: text(visitor.msclkid),
+        ttclid: text(visitor.ttclid),
+        liFatId: text(visitor.liFatId),
+        wbraid: text(visitor.wbraid),
+        gbraid: text(visitor.gbraid),
+        navigationType: text(visitor.navigationType),
+        secFetchSite: text(visitor.secFetchSite),
         totalSessions: integerValue(visitor.totalSessions),
         totalPageViews: integerValue(visitor.totalPageViews),
         totalDurationMs: integerValue(visitor.totalDurationMs),
@@ -684,6 +711,8 @@ function replaceVisitors(db: SqliteDatabase, data: JsonObject) {
           locale: text(pageView.locale),
           title: text(pageView.title),
           referrer: text(pageView.referrer),
+          navigationType: text(pageView.navigationType),
+          secFetchSite: text(pageView.secFetchSite),
           occurredAt: requiredText(pageView.occurredAt),
           sessionId: text(pageView.sessionId),
         });
