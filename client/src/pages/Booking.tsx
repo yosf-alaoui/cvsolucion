@@ -104,7 +104,6 @@ function getCopy(locale: string) {
       loading: "جارٍ تحميل المواعيد...",
       reviewCart: "مراجعة السلة",
       chooseSlot: "اختر موعداً صالحاً أولاً.",
-      tooManySlots: "يمكن اختيار حتى 3 مواعيد فقط.",
       service: "الخدمة",
       priority: "الأولوية",
       package: "الباقة",
@@ -140,7 +139,6 @@ function getCopy(locale: string) {
       loading: "Chargement des horaires...",
       reviewCart: "Reviser le panier",
       chooseSlot: "Choisissez d'abord un horaire valide.",
-      tooManySlots: "Vous pouvez choisir jusqu'a 3 horaires seulement.",
       service: "Service",
       priority: "Priorite",
       package: "Forfait",
@@ -175,7 +173,6 @@ function getCopy(locale: string) {
     loading: "Loading schedule...",
     reviewCart: "Review cart",
       chooseSlot: "Choose a valid slot first.",
-      tooManySlots: "You can choose up to 3 time slots only.",
       service: "Service",
       priority: "Priority",
       package: "Package",
@@ -381,10 +378,6 @@ export default function Booking() {
     setSelectedSlots((current) => {
       const exists = current.some((item) => item.id === slot.id);
       if (exists) return current.filter((item) => item.id !== slot.id);
-      if (current.length >= 3) {
-        setStatus({ tone: "error", text: copy.tooManySlots });
-        return current;
-      }
       return [...current, slot];
     });
   }
