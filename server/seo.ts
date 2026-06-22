@@ -34,42 +34,45 @@ const SITE_NAME = "CVsolucion";
 
 const TRAINING_CAREER_COPY = {
   en: {
-    seoTitle: "Cabinet Vision Career Training | CVsolucion",
+    seoTitle: "From Shop Floor to Design Office | Cabinet Vision Career Training | CVsolucion",
     metaDescription:
-      "Career-focused Cabinet Vision training for designers, engineers, CNC operators, and production teams with secure online enrollment and payment.",
-    h1: "Build the Cabinet Vision skills factories actually need.",
+      "Already working in a cabinet shop? Learn Cabinet Vision and move from production to design. Live training with a real instructor, full software access, schedule set around your availability.",
+    h1: "Same shop floor. Different paycheck.",
     intro:
-      "This career training path helps students and shop teams move from basic Cabinet Vision use to production-ready workflows: room setup, libraries, reports, S2M, CNC handoff, labels, and implementation habits that reduce errors.",
+      "You already work in the industry. This training takes you from the shop floor to the design office on the exact software cabinet shops across Canada and the US run on.",
     points: [
-      "Live remote Cabinet Vision training with practical production cases.",
-      "A clear path from Core Designer to production and consulting-level workflows.",
-      "Secure enrollment and payment connected to the customer account.",
+      "Shop floor to design office.",
+      "No license or computer required.",
+      "Live expert, not pre-recorded videos.",
+      "Schedule set around your work hours.",
     ],
   },
   fr: {
-    seoTitle: "Formation carriere Cabinet Vision | CVsolucion",
+    seoTitle: "From Shop Floor to Design Office | Cabinet Vision Career Training | CVsolucion",
     metaDescription:
-      "Formation Cabinet Vision axee carriere pour designers, ingenieurs, operateurs CNC et equipes de production avec inscription et paiement securises.",
-    h1: "Construisez les competences Cabinet Vision recherchees en atelier.",
+      "Already working in a cabinet shop? Learn Cabinet Vision and move from production to design. Live training with a real instructor, full software access, schedule set around your availability.",
+    h1: "Same shop floor. Different paycheck.",
     intro:
-      "Ce parcours carriere aide les etudiants et les equipes atelier a passer d'une utilisation de base de Cabinet Vision a des workflows prets pour la production: pieces, bibliotheques, rapports, S2M, CNC, etiquettes et bonnes habitudes de deploiement.",
+      "You already work in the industry. This training takes you from the shop floor to the design office on the exact software cabinet shops across Canada and the US run on.",
     points: [
-      "Formation Cabinet Vision en direct avec cas de production pratiques.",
-      "Parcours clair de Core Designer vers production et workflows niveau consultant.",
-      "Inscription et paiement securises lies au compte client.",
+      "Shop floor to design office.",
+      "No license or computer required.",
+      "Live expert, not pre-recorded videos.",
+      "Schedule set around your work hours.",
     ],
   },
   ar: {
-    seoTitle: "تكوين مهني في Cabinet Vision | CVsolucion",
+    seoTitle: "From Shop Floor to Design Office | Cabinet Vision Career Training | CVsolucion",
     metaDescription:
-      "تكوين مهني في Cabinet Vision للمصممين والمهندسين ومشغلي CNC وفرق الإنتاج مع تسجيل ودفع آمن داخل الموقع.",
-    h1: "ابن المهارات التي تحتاجها المصانع فعليا في Cabinet Vision.",
+      "Already working in a cabinet shop? Learn Cabinet Vision and move from production to design. Live training with a real instructor, full software access, schedule set around your availability.",
+    h1: "Same shop floor. Different paycheck.",
     intro:
-      "يساعد هذا المسار المهني المتعلمين وفرق الورشة على الانتقال من استعمال أساسي لـ Cabinet Vision إلى سير عمل جاهز للإنتاج: إعداد الغرف، المكتبات، التقارير، S2M، CNC، الملصقات، وعادات تنفيذ تقلل الأخطاء.",
+      "You already work in the industry. This training takes you from the shop floor to the design office on the exact software cabinet shops across Canada and the US run on.",
     points: [
-      "تكوين مباشر عن بعد في Cabinet Vision على حالات إنتاج عملية.",
-      "مسار واضح من Core Designer إلى الإنتاج وسير عمل بمستوى استشاري.",
-      "تسجيل ودفع آمن مرتبط بحساب العميل.",
+      "Shop floor to design office.",
+      "No license or computer required.",
+      "Live expert, not pre-recorded videos.",
+      "Schedule set around your work hours.",
     ],
   },
 } as const;

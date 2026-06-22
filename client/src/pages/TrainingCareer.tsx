@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
-  BadgeCheck,
   BriefcaseBusiness,
+  CalendarDays,
   CheckCircle2,
   CreditCard,
   GraduationCap,
+  Laptop,
   Lock,
   MessageCircle,
+  MonitorUp,
+  PlayCircle,
   ShieldCheck,
-  Target,
+  Wrench,
 } from "lucide-react";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
@@ -41,332 +44,247 @@ type ProgramView = {
   featured: boolean;
 };
 
-const fallbackPrograms: Record<TrainingPriceKey, Record<PageLocale, ProgramView>> = {
+type FaqItem = {
+  question: string;
+  answer: string;
+};
+
+type TextPair = [string, string];
+type ModuleItem = [string, string[]];
+
+const fallbackPrograms: Record<TrainingPriceKey, ProgramView> = {
+  bundle: {
+    id: "bundle",
+    badge: "Career package",
+    title: "Full shop-to-design path",
+    hours: "115 hours",
+    duration: "4 levels",
+    project: "The complete route from shop-floor experience to Cabinet Vision design and production confidence.",
+    featured: true,
+  },
   level1: {
-    en: {
-      id: "level1",
-      badge: "Level 1",
-      title: "Core Designer",
-      hours: "25 hours",
-      duration: "2-3 weeks",
-      project: "Start with room setup, cabinet placement, 3D presentation, cut lists, and print-ready documentation.",
-      featured: false,
-    },
-    fr: {
-      id: "level1",
-      badge: "Niveau 1",
-      title: "Core Designer",
-      hours: "25 heures",
-      duration: "2-3 semaines",
-      project: "Demarrer avec la piece, le placement des cabinets, la presentation 3D, les cut lists et les documents d'impression.",
-      featured: false,
-    },
-    ar: {
-      id: "level1",
-      badge: "المستوى 1",
-      title: "Core Designer",
-      hours: "25 ساعة",
-      duration: "2-3 أسابيع",
-      project: "البداية من إعداد الغرفة، وضع الخزائن، العرض ثلاثي الأبعاد، قوائم القطع، ووثائق الطباعة.",
-      featured: false,
-    },
+    id: "level1",
+    badge: "Foundation",
+    title: "Getting started in Cabinet Vision",
+    hours: "25 hours",
+    duration: "2-3 weeks",
+    project: "Job, room, and cabinet setup from scratch with clean modeling habits used in real shops.",
+    featured: false,
   },
   level2: {
-    en: {
-      id: "level2",
-      badge: "Level 2",
-      title: "Catalog Engineer",
-      hours: "30 hours",
-      duration: "3-4 weeks",
-      project: "Build stronger catalogs, assemblies, doors, hardware logic, pricing, and reporting workflows.",
-      featured: false,
-    },
-    fr: {
-      id: "level2",
-      badge: "Niveau 2",
-      title: "Catalog Engineer",
-      hours: "30 heures",
-      duration: "3-4 semaines",
-      project: "Construire des catalogues, assemblies, portes, logique hardware, prix et rapports plus solides.",
-      featured: false,
-    },
-    ar: {
-      id: "level2",
-      badge: "المستوى 2",
-      title: "Catalog Engineer",
-      hours: "30 ساعة",
-      duration: "3-4 أسابيع",
-      project: "بناء كتالوجات أقوى، assemblies، أبواب، hardware، التسعير، وتقارير الإنتاج.",
-      featured: false,
-    },
+    id: "level2",
+    badge: "Workflow",
+    title: "Catalog and shop standards",
+    hours: "30 hours",
+    duration: "3-4 weeks",
+    project: "Build stronger cabinets, assemblies, hardware logic, pricing habits, and reporting workflows.",
+    featured: false,
   },
   level3: {
-    en: {
-      id: "level3",
-      badge: "Level 3",
-      title: "Production Specialist",
-      hours: "35 hours",
-      duration: "4-5 weeks",
-      project: "Move from design to production with S2M, CNC outputs, nesting, labels, and shop-ready files.",
-      featured: false,
-    },
-    fr: {
-      id: "level3",
-      badge: "Niveau 3",
-      title: "Production Specialist",
-      hours: "35 heures",
-      duration: "4-5 semaines",
-      project: "Passer du design a la production avec S2M, sorties CNC, nesting, etiquettes et fichiers atelier.",
-      featured: false,
-    },
-    ar: {
-      id: "level3",
-      badge: "المستوى 3",
-      title: "Production Specialist",
-      hours: "35 ساعة",
-      duration: "4-5 أسابيع",
-      project: "الانتقال من التصميم إلى الإنتاج عبر S2M، ملفات CNC، nesting، الملصقات، وملفات الورشة.",
-      featured: false,
-    },
+    id: "level3",
+    badge: "Production",
+    title: "From design to shop-ready files",
+    hours: "35 hours",
+    duration: "4-5 weeks",
+    project: "Learn reports, cut lists, labels, S2M logic, CNC handoff, and the habits that earn shop trust.",
+    featured: false,
   },
   level4: {
-    en: {
-      id: "level4",
-      badge: "Level 4",
-      title: "CV Consultant",
-      hours: "25 hours",
-      duration: "3-4 weeks",
-      project: "Master UCS automation, catalog automation, implementation planning, and consulting-level troubleshooting.",
-      featured: false,
-    },
-    fr: {
-      id: "level4",
-      badge: "Niveau 4",
-      title: "CV Consultant",
-      hours: "25 heures",
-      duration: "3-4 semaines",
-      project: "Maitriser UCS, automatisation catalogue, plan de deploiement et depannage niveau consultant.",
-      featured: false,
-    },
-    ar: {
-      id: "level4",
-      badge: "المستوى 4",
-      title: "CV Consultant",
-      hours: "25 ساعة",
-      duration: "3-4 أسابيع",
-      project: "إتقان UCS، أتمتة الكتالوج، تخطيط التطبيق، وحل المشاكل بمستوى استشاري.",
-      featured: false,
-    },
-  },
-  bundle: {
-    en: {
-      id: "bundle",
-      badge: "Career path",
-      title: "Complete CV Professional Path",
-      hours: "115 hours",
-      duration: "4 levels",
-      project: "The complete route from beginner designer to production-ready Cabinet Vision professional.",
-      featured: true,
-    },
-    fr: {
-      id: "bundle",
-      badge: "Parcours carriere",
-      title: "Parcours CV Professionnel Complet",
-      hours: "115 heures",
-      duration: "4 niveaux",
-      project: "Le parcours complet du designer debutant au professionnel Cabinet Vision pret pour la production.",
-      featured: true,
-    },
-    ar: {
-      id: "bundle",
-      badge: "مسار مهني",
-      title: "المسار الكامل لاحتراف Cabinet Vision",
-      hours: "115 ساعة",
-      duration: "4 مستويات",
-      project: "المسار الكامل من مصمم مبتدئ إلى محترف Cabinet Vision جاهز للإنتاج.",
-      featured: true,
-    },
+    id: "level4",
+    badge: "Advanced",
+    title: "Automation and consultant-level practice",
+    hours: "25 hours",
+    duration: "3-4 weeks",
+    project: "Practice higher-level troubleshooting, automation thinking, and implementation planning.",
+    featured: false,
   },
 };
 
-function getCopy(locale: PageLocale) {
-  return {
-    en: {
-      seoTitle: "Cabinet Vision Career Training | CVsolucion",
-      seoDescription:
-        "A career-focused Cabinet Vision training path with live remote instruction, production workflows, CNC integration, and secure online payment.",
-      eyebrow: "Career training for Cabinet Vision",
-      h1: "Build the Cabinet Vision skills factories actually need.",
-      intro:
-        "A practical training path for designers, engineers, CNC operators, and production teams who need to work faster, fix errors, and deliver clean shop output.",
-      primaryCta: "Choose a program",
-      secondaryCta: "Ask before enrolling",
-      proof: ["Live remote training", "Real Cabinet Vision workflows", "Payment secured by Stripe"],
-      outcomesTitle: "What this page is built to sell",
-      outcomesIntro:
-        "This offer is designed for ad traffic: it explains the result clearly and moves the visitor directly to secure enrollment.",
-      outcomes: [
-        ["Design confidence", "Set rooms, place cabinets, control presentation output, and avoid basic production mistakes."],
-        ["Library control", "Understand catalog structure, assemblies, hardware, bidding, reports, and reusable standards."],
-        ["Production readiness", "Move from design to S2M, CNC, nesting, labels, and clean files for the shop floor."],
-        ["Career value", "Build a portfolio-style final project that proves the skill level, not just attendance."],
+const copy = {
+  seoTitle: "From Shop Floor to Design Office | Cabinet Vision Career Training | CVsolucion",
+  seoDescription:
+    "Already working in a cabinet shop? Learn Cabinet Vision and move from production to design. Live training with a real instructor, full software access, schedule set around your availability.",
+  heroHeadlineTop: "Same shop floor.",
+  heroHeadlineBottom: "Different paycheck.",
+  heroSubheading:
+    "You already work in the industry. This training takes you from the shop floor to the design office on the exact software cabinet shops across Canada and the US run on.",
+  heroPoints: [
+    "Shop floor -> Design office",
+    "No license or computer required",
+    "Live expert, not pre-recorded videos",
+    "Schedule set around your work hours",
+  ],
+  enrollNow: "Enroll Now",
+  seeHowItWorks: "See How It Works",
+  moveKicker: "The move you're making",
+  moveTitle: "Shop floor -> Design office. Same industry. Bigger role.",
+  moveBody:
+    "You already know cabinets from the inside: how they are built, how they fit, what works on the floor. That knowledge does not go away. You take it with you into the design role, and it makes you better at it than someone who has never built a thing.",
+  whereYouAreTitle: "Where you are",
+  whereYouAreLabel: "Shop floor",
+  whereYouAre: [
+    "Assembling, installing, operating machines",
+    "Building what someone else designed",
+    "Expertise in how cabinets actually work",
+  ],
+  whereYouGoTitle: "Where you're going",
+  whereYouGoLabel: "Design office",
+  whereYouGo: [
+    "Designing jobs and running Cabinet Vision",
+    "Creating the files the shop builds from",
+    "Higher-paying role in the same industry",
+  ],
+  spineTitle: "Shop floor -> Design office",
+  spineText: "Same industry. Same skills you already have. One software standing in between.",
+  barrierKicker: "No barrier to entry",
+  barrierTitle: "No Cabinet Vision license. No special computer. Nothing to buy.",
+  barrierBody:
+    "Cabinet Vision licenses cost thousands of dollars. That is exactly why most shop-floor workers never get the chance to learn it on their own. We remove that barrier completely.",
+  withoutTitle: "Without this training",
+  withoutBody:
+    "To train on Cabinet Vision alone, you would need to buy an expensive individual license and a computer powerful enough to run it. Most people cannot. So the gap stays.",
+  withTitle: "With this training",
+  withBody:
+    "You get connected directly to a powerful computer with Cabinet Vision already set up and running. The software access is included. No purchase, no installation, no setup on your end. Just open and start training.",
+  deliveryKicker: "How training is delivered",
+  deliveryTitle: "A real expert. Live. Not a video.",
+  deliveryBody:
+    "You are not buying access to a video library you watch alone and hope something sticks. You train directly with an instructor who works in this industry: in real time, on real jobs, with real feedback.",
+  otherTrainingTitle: "Other training",
+  otherTraining: [
+    "Pre-recorded videos you watch at your own pace",
+    "No one to answer your questions as they come up",
+    "Generic exercises that do not reflect real shop work",
+    "You figure out what to do with what you learned",
+  ],
+  cvsolucionTrainingTitle: "CVsolucion training",
+  cvsolucionTraining: [
+    "Live sessions with an instructor and real-time guidance",
+    "Questions answered in the moment, not later",
+    "Real cabinet jobs, built the way shops expect",
+    "You leave with files and skills you can use immediately",
+  ],
+  scheduleKicker: "Flexible scheduling",
+  scheduleTitle: "Your schedule. Your availability. We work around you.",
+  scheduleBody:
+    "You have a job. You have shifts. Your training schedule is set directly with you based on when you are actually available, not when it is convenient for us.",
+  scheduleCards: [
+    [
+      "We set the timing together",
+      "Before training starts, we coordinate directly with you to find sessions that work with your work schedule: mornings, evenings, weekends. You decide.",
+    ],
+    [
+      "Any time zone",
+      "Whether you are in British Columbia, Ontario, Quebec, or anywhere in the US, training is scheduled in your local time with no confusion.",
+    ],
+    [
+      "No rush, no pressure",
+      "Training is paced to your availability. If you can only do a few hours a week, we build around that. The goal is for you to actually learn.",
+    ],
+  ] satisfies TextPair[],
+  learnKicker: "What you'll learn",
+  learnTitle: "From your first job setup to a file the shop trusts.",
+  learnBody:
+    "No generic software demos. Every module is built around what shops actually expect from someone running Cabinet Vision.",
+  modules: [
+    [
+      "Foundation: Getting started in Cabinet Vision",
+      [
+        "Job, room, and cabinet setup from scratch",
+        "Clean modeling habits used in real shops",
+        "Reading and building a job the way shops expect",
       ],
-      pathTitle: "The learning path",
-      pathIntro: "The complete route is split into clear levels so a student can start at the right point and keep progressing.",
-      includesTitle: "Included in the career path",
-      includes: [
-        "Needs review before the first session",
-        "Live remote training on practical Cabinet Vision cases",
-        "Assignments and final project for each level",
-        "Workflow recommendations for your shop or career goal",
-        "Follow-up support after payment confirmation",
+    ],
+    [
+      "Production: From design to shop-ready files",
+      [
+        "Basic reports, cut lists, and labels",
+        "How your design connects to CNC and production",
+        "The habits that earn a designer the shop's trust",
       ],
-      pricingTitle: "Enroll and pay",
-      pricingIntro: "Choose the full career path or one level. Prices appear after login because payment is tied to the customer account.",
-      recommended: "Recommended for career growth",
-      select: "Select",
-      selected: "Selected",
-      loginToSeePrice: "Sign in to see price",
-      signIn: "Sign in and continue",
-      subtotal: "Subtotal",
-      cardFee: "Card payment fee",
-      total: "Total due now",
-      payTitle: "Training payment",
-      paySubtitle: "Confirm your selected training program and pay securely.",
-      secure: "Secure payment by Stripe",
-      cardNumber: "Card number",
-      expiry: "Expiry",
-      cvc: "CVC",
-      missingCustomer: "Your login session is required before payment.",
-      missingCard: "Enter all card fields to enable payment.",
-      ready: "Payment is ready.",
-      payNow: "Pay and enroll",
-      processing: "Confirming payment...",
-      preparing: "Preparing secure payment...",
-      unavailable: "Payment is not available right now.",
-      success: "Training payment confirmed. We will contact you with the next steps.",
-      contactTitle: "Need help choosing the right start?",
-      contactText: "Send us your current Cabinet Vision level and your target job or production role.",
-      contactButton: "Ask on WhatsApp",
+    ],
+    [
+      "Practice: Building real confidence",
+      [
+        "Work on real jobs, not generic exercises",
+        "Direct, live feedback from your instructor",
+        "Leave with a job file you can show",
+      ],
+    ],
+  ] satisfies ModuleItem[],
+  audienceKicker: "Is this for you?",
+  audienceTitle: "Built for people already in the shop.",
+  audienceBody:
+    "This training is for anyone already working in cabinet, millwork, or furniture manufacturing who wants to move toward design and higher-paying roles in the same industry they already know.",
+  audience: ["Installers and assemblers", "Machine operators", "CNC technicians", "Anyone ready to design"],
+  notNeedTitle: "What you do not need",
+  notNeedBody: "A design degree. Years of CAD experience. Your own Cabinet Vision license. None of it.",
+  needTitle: "What you do need",
+  needBody:
+    "You already understand cabinets from working in a shop. That is the hard part. The software is what we teach you.",
+  packagesKicker: "Training packages",
+  packagesTitle: "Choose your training package.",
+  packagesIntro: "Live instructor. Real software access. Schedule set around your availability.",
+  recommended: "Recommended",
+  select: "Select",
+  selected: "Selected",
+  loginToSeePrice: "Sign in to see price",
+  signIn: "Sign in and continue",
+  subtotal: "Subtotal",
+  cardFee: "Card payment fee",
+  total: "Total due now",
+  payTitle: "Training payment",
+  paySubtitle: "Confirm your selected training package and pay securely.",
+  secure: "Secure payment by Stripe",
+  cardNumber: "Card number",
+  expiry: "Expiry",
+  cvc: "CVC",
+  missingCustomer: "Your login session is required before payment.",
+  missingCard: "Enter all card fields to enable payment.",
+  ready: "Payment is ready.",
+  payNow: "Pay and enroll",
+  processing: "Confirming payment...",
+  preparing: "Preparing secure payment...",
+  unavailable: "Payment is not available right now.",
+  success: "Training payment confirmed. We will contact you with the next steps.",
+  faqKicker: "Questions",
+  faqTitle: "Common questions",
+  faq: [
+    {
+      question: "Do I need to already own Cabinet Vision?",
+      answer: "No. You get direct access to the software during training. No license purchase required.",
     },
-    fr: {
-      seoTitle: "Formation carriere Cabinet Vision | CVsolucion",
-      seoDescription:
-        "Un parcours Cabinet Vision axe carriere avec formation en direct, workflows production, integration CNC et paiement securise.",
-      eyebrow: "Formation carriere Cabinet Vision",
-      h1: "Construisez les competences Cabinet Vision recherchees en atelier.",
-      intro:
-        "Un parcours pratique pour designers, programmeurs, operateurs CNC et equipes production qui veulent travailler plus vite, corriger les erreurs et sortir des fichiers propres.",
-      primaryCta: "Choisir un programme",
-      secondaryCta: "Demander avant inscription",
-      proof: ["Formation en direct", "Workflows Cabinet Vision reels", "Paiement securise Stripe"],
-      outcomesTitle: "Objectif de cette page",
-      outcomesIntro:
-        "Cette page est concue pour les publicites: elle explique le resultat et amene le visiteur vers l'inscription securisee.",
-      outcomes: [
-        ["Confiance design", "Configurer les pieces, placer les cabinets, controler la presentation et eviter les erreurs de base."],
-        ["Controle bibliotheque", "Comprendre catalogues, assemblies, hardware, bidding, rapports et standards reutilisables."],
-        ["Pret pour production", "Passer du design a S2M, CNC, nesting, etiquettes et fichiers propres pour l'atelier."],
-        ["Valeur carriere", "Construire un projet final qui prouve le niveau, pas seulement la presence."],
-      ],
-      pathTitle: "Le parcours",
-      pathIntro: "Le parcours complet est divise par niveaux pour commencer au bon endroit et progresser clairement.",
-      includesTitle: "Inclus dans le parcours carriere",
-      includes: [
-        "Evaluation des besoins avant la premiere session",
-        "Formation en direct sur des cas Cabinet Vision pratiques",
-        "Exercices et projet final pour chaque niveau",
-        "Recommandations workflow selon votre atelier ou objectif",
-        "Suivi apres confirmation du paiement",
-      ],
-      pricingTitle: "Inscription et paiement",
-      pricingIntro: "Choisissez le parcours complet ou un niveau. Les prix apparaissent apres connexion car le paiement est lie au compte client.",
-      recommended: "Recommande pour la carriere",
-      select: "Choisir",
-      selected: "Selectionne",
-      loginToSeePrice: "Connectez-vous pour voir le prix",
-      signIn: "Se connecter et continuer",
-      subtotal: "Sous-total",
-      cardFee: "Frais carte",
-      total: "Total maintenant",
-      payTitle: "Paiement formation",
-      paySubtitle: "Confirmez le programme choisi et payez en securite.",
-      secure: "Paiement securise par Stripe",
-      cardNumber: "Numero de carte",
-      expiry: "Expiration",
-      cvc: "CVC",
-      missingCustomer: "Votre session de connexion est requise avant le paiement.",
-      missingCard: "Entrez tous les champs carte pour activer le paiement.",
-      ready: "Le paiement est pret.",
-      payNow: "Payer et inscrire",
-      processing: "Confirmation du paiement...",
-      preparing: "Preparation du paiement securise...",
-      unavailable: "Le paiement n'est pas disponible actuellement.",
-      success: "Paiement formation confirme. Nous vous contacterons pour les prochaines etapes.",
-      contactTitle: "Besoin d'aide pour choisir le depart?",
-      contactText: "Envoyez votre niveau Cabinet Vision actuel et votre objectif de poste ou production.",
-      contactButton: "Demander sur WhatsApp",
+    {
+      question: "I'm not a designer. Can I really learn this?",
+      answer:
+        "Yes. Most students start with zero design software experience but already understand cabinets from working in a shop. That industry knowledge is the hard part. The software is what we teach.",
     },
-    ar: {
-      seoTitle: "تكوين مهني في Cabinet Vision | CVsolucion",
-      seoDescription:
-        "مسار تكوين مهني في Cabinet Vision مع تدريب مباشر عن بعد، سير عمل الإنتاج، ربط CNC، ودفع آمن داخل الموقع.",
-      eyebrow: "تكوين مهني في Cabinet Vision",
-      h1: "ابن المهارات التي تحتاجها المصانع فعليا في Cabinet Vision.",
-      intro:
-        "مسار عملي للمصممين، المبرمجين، مشغلي CNC، وفرق الإنتاج الذين يحتاجون إلى العمل بسرعة أكبر، إصلاح الأخطاء، وإخراج ملفات إنتاج نظيفة.",
-      primaryCta: "اختر البرنامج",
-      secondaryCta: "اسأل قبل التسجيل",
-      proof: ["تكوين مباشر عن بعد", "سير عمل حقيقي في Cabinet Vision", "دفع آمن عبر Stripe"],
-      outcomesTitle: "هدف هذه الصفحة",
-      outcomesIntro:
-        "هذه الصفحة مخصصة لزوار الإعلانات: تشرح النتيجة بوضوح وتقود الزائر مباشرة إلى التسجيل والدفع.",
-      outcomes: [
-        ["ثقة في التصميم", "إعداد الغرف، وضع الخزائن، التحكم في العرض، وتجنب أخطاء الإنتاج الأساسية."],
-        ["تحكم في المكتبة", "فهم الكتالوجات، assemblies، hardware، التسعير، التقارير، والمعايير القابلة لإعادة الاستعمال."],
-        ["جاهزية للإنتاج", "الانتقال من التصميم إلى S2M، CNC، nesting، الملصقات، وملفات جاهزة للورشة."],
-        ["قيمة مهنية", "بناء مشروع نهائي يثبت مستوى المهارة وليس فقط حضور الدروس."],
-      ],
-      pathTitle: "مسار التعلم",
-      pathIntro: "المسار الكامل مقسم إلى مستويات واضحة حتى يبدأ المتعلم من النقطة الصحيحة ويتقدم بدون ارتباك.",
-      includesTitle: "ماذا يشمل المسار المهني",
-      includes: [
-        "مراجعة الاحتياج قبل أول حصة",
-        "تكوين مباشر على حالات عملية في Cabinet Vision",
-        "تمارين ومشروع نهائي لكل مستوى",
-        "توصيات سير العمل حسب هدفك أو مصنعك",
-        "متابعة بعد تأكيد الدفع",
-      ],
-      pricingTitle: "التسجيل والدفع",
-      pricingIntro: "اختر المسار الكامل أو مستوى واحدا. الأسعار تظهر بعد تسجيل الدخول لأن الدفع مرتبط بحساب العميل.",
-      recommended: "الأفضل للنمو المهني",
-      select: "اختيار",
-      selected: "مختار",
-      loginToSeePrice: "سجل الدخول لرؤية السعر",
-      signIn: "تسجيل الدخول والمتابعة",
-      subtotal: "المجموع الفرعي",
-      cardFee: "رسوم الدفع بالبطاقة",
-      total: "المبلغ الآن",
-      payTitle: "دفع التكوين",
-      paySubtitle: "أكد البرنامج المختار وادفع بأمان.",
-      secure: "دفع آمن عبر Stripe",
-      cardNumber: "رقم البطاقة",
-      expiry: "تاريخ الانتهاء",
-      cvc: "CVC",
-      missingCustomer: "يجب تسجيل الدخول قبل الدفع.",
-      missingCard: "أدخل كل خانات البطاقة لتفعيل الدفع.",
-      ready: "الدفع جاهز.",
-      payNow: "ادفع وسجل",
-      processing: "جاري تأكيد الدفع...",
-      preparing: "جاري تجهيز الدفع الآمن...",
-      unavailable: "الدفع غير متاح حاليا.",
-      success: "تم تأكيد دفع التكوين. سنتواصل معك بخصوص الخطوات التالية.",
-      contactTitle: "تحتاج مساعدة لاختيار نقطة البداية؟",
-      contactText: "أرسل لنا مستواك الحالي في Cabinet Vision والوظيفة أو دور الإنتاج الذي تستهدفه.",
-      contactButton: "اسأل عبر WhatsApp",
+    {
+      question: "Is this training remote?",
+      answer: "Yes. Sessions are delivered remotely with direct software access and live guidance.",
     },
-  }[locale];
-}
+    {
+      question: "What if my work schedule changes or I can't make a session?",
+      answer:
+        "Scheduling is set directly with you before training starts, based on your availability. If something changes, we coordinate together to find a solution.",
+    },
+    {
+      question: "Is this a recorded course, or do I train with a real person?",
+      answer:
+        "You train live with a real instructor, never a pre-recorded video course. You also get connected to a dedicated computer with Cabinet Vision already running.",
+    },
+    {
+      question: "Will this actually help me get a better position?",
+      answer:
+        "Cabinet Vision is the standard design software in cabinet and millwork shops across Canada and the US. Knowing it is typically what separates production roles from design roles.",
+    },
+  ] satisfies FaqItem[],
+  finalTitle: "Same shop. Different role.",
+  finalBody: "You already belong in this industry. This is how you move up in it.",
+  teamTraining: "Looking to train your whole team instead?",
+  teamTrainingLink: "See team Cabinet Vision training",
+  contactText: "Hello CVsolucion, I want to ask about Cabinet Vision career training before enrolling.",
+};
 
 function localPath(locale: PageLocale, path: string) {
   if (locale === "fr") return path === "/" ? "/fr" : `/fr${path}`;
@@ -385,17 +303,17 @@ function normalizeLocale(locale: string): PageLocale {
   return locale === "fr" || locale === "ar" ? locale : "en";
 }
 
-function programFromRecord(program: PublicTrainingProgram, locale: PageLocale): ProgramView {
-  const fallback = fallbackPrograms[program.key]?.[locale] || fallbackPrograms[program.key]?.en;
+function programFromRecord(program: PublicTrainingProgram): ProgramView {
+  const fallback = fallbackPrograms[program.key];
   if (fallback) {
     return { ...fallback, id: program.key || program.id, featured: program.featured || fallback.featured };
   }
 
-  const translation = program.translations[locale]?.title ? program.translations[locale] : program.translations.en;
+  const translation = program.translations.en;
   return {
     id: program.key || program.id,
     badge: translation.badge || program.key || "Training",
-    title: translation.title || program.key || "Training program",
+    title: translation.title || program.key || "Training package",
     hours: translation.hours || "",
     duration: translation.duration || "",
     project: translation.project || "",
@@ -407,7 +325,6 @@ export default function TrainingCareer() {
   const { locale } = useI18n();
   const { user, loading: authLoading } = useAuth();
   const pageLocale = normalizeLocale(locale);
-  const copy = useMemo(() => getCopy(pageLocale), [pageLocale]);
   const [programRecords, setProgramRecords] = useState<PublicTrainingProgram[] | null>(null);
   const [selectedProgramId, setSelectedProgramId] = useState<TrainingPriceKey>("bundle");
   const [pricing, setPricing] = useState<TrainingPricingResponse | null>(null);
@@ -417,7 +334,7 @@ export default function TrainingCareer() {
 
   const programs = useMemo(() => {
     if (programRecords === null) {
-      return ["bundle", "level1", "level2", "level3", "level4"].map((key) => fallbackPrograms[key][pageLocale]);
+      return ["bundle", "level1", "level2", "level3", "level4"].map((key) => fallbackPrograms[key]);
     }
 
     return [...programRecords]
@@ -425,8 +342,8 @@ export default function TrainingCareer() {
         if (a.featured !== b.featured) return a.featured ? -1 : 1;
         return a.order - b.order;
       })
-      .map((program) => programFromRecord(program, pageLocale));
-  }, [pageLocale, programRecords]);
+      .map(programFromRecord);
+  }, [programRecords]);
 
   const selectedProgram = programs.find((program) => program.id === selectedProgramId) || programs[0] || null;
   const currency = pricing?.currency || "usd";
@@ -436,6 +353,7 @@ export default function TrainingCareer() {
   const selectedPriceLabel = selectedPrice ? moneyLabel(selectedPrice, pageLocale, currency) : copy.loginToSeePrice;
   const selectedTotalLabel = selectedTotal ? moneyLabel(selectedTotal, pageLocale, currency) : copy.loginToSeePrice;
   const loginHref = `${localPath(pageLocale, "/login")}?next=${encodeURIComponent(localPath(pageLocale, "/training/career"))}`;
+  const teamTrainingHref = localPath(pageLocale, "/training");
   const whatsappHref = buildWhatsAppLink("+1 438 807 8747", copy.contactText);
   const paymentReady = Boolean(selectedProgram?.id && user && pricing?.enabled && pricing.publishableKey && selectedPrice > 0);
 
@@ -526,7 +444,7 @@ export default function TrainingCareer() {
         courseWorkload: program.hours,
       })),
     }),
-    [copy, programs],
+    [programs],
   );
 
   return (
@@ -535,58 +453,41 @@ export default function TrainingCareer() {
       <Header />
       <main className="pb-20 pt-28">
         <section className="container">
-          <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+          <div className="grid gap-8 lg:grid-cols-[1.04fr_0.96fr] lg:items-center">
             <div className="py-8">
               <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/75 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-primary">
                 <BriefcaseBusiness className="h-4 w-4" />
-                {copy.eyebrow}
+                Cabinet Vision career training
               </div>
-              <h1 className="mt-7 max-w-4xl text-4xl font-black text-slate-950 sm:text-6xl">
-                {copy.h1}
+              <h1 className="mt-7 max-w-4xl text-5xl font-black leading-[0.95] text-slate-950 sm:text-7xl">
+                <span className="block">{copy.heroHeadlineTop}</span>
+                <span className="block text-primary">{copy.heroHeadlineBottom}</span>
               </h1>
-              <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-700">{copy.intro}</p>
+              <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-700">{copy.heroSubheading}</p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button asChild className="rounded-full bg-primary px-6 text-white hover:bg-primary/90">
                   <a href="#career-payment">
                     <CreditCard className="mr-2 h-5 w-5" />
-                    {copy.primaryCta}
+                    {copy.enrollNow}
                   </a>
                 </Button>
                 <Button asChild variant="outline" className="rounded-full bg-white/80 px-6">
-                  <a href={whatsappHref} target="_blank" rel="noopener noreferrer">
-                    <MessageCircle className="mr-2 h-5 w-5" />
-                    {copy.secondaryCta}
+                  <a href="#how-it-works">
+                    <PlayCircle className="mr-2 h-5 w-5" />
+                    {copy.seeHowItWorks}
                   </a>
                 </Button>
-              </div>
-              <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                {copy.proof.map((item) => (
-                  <div key={item} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/78 px-4 py-3 text-sm font-semibold text-slate-700">
-                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                    <span>{item}</span>
-                  </div>
-                ))}
               </div>
             </div>
 
             <GlassCard className="card-static rounded-[32px] p-6 sm:p-8">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white">
-                  <Target className="h-6 w-6" />
-                </div>
-                <div>
-                  <div className="text-sm font-bold uppercase tracking-[0.16em] text-primary">{copy.outcomesTitle}</div>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">{copy.outcomesIntro}</p>
-                </div>
-              </div>
-              <div className="mt-6 space-y-4">
-                {copy.outcomes.map(([title, body]) => (
-                  <div key={title} className="rounded-2xl border border-slate-200 bg-white/78 p-4">
-                    <div className="flex items-center gap-2 text-base font-black text-slate-950">
-                      <CheckCircle2 className="h-5 w-5 text-primary" />
-                      {title}
+              <div className="grid gap-4">
+                {copy.heroPoints.map((item, index) => (
+                  <div key={item} className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white/80 p-4">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-black text-white">
+                      {index + 1}
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
+                    <div className="text-base font-black text-slate-900">{item}</div>
                   </div>
                 ))}
               </div>
@@ -594,65 +495,184 @@ export default function TrainingCareer() {
           </div>
         </section>
 
-        <section className="container mt-16">
-          <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-primary">
-                <GraduationCap className="h-4 w-4" />
-                {copy.pathTitle}
-              </div>
-              <h2 className="mt-5 text-3xl font-black text-slate-950 sm:text-5xl">{copy.pathTitle}</h2>
-              <p className="mt-4 text-base leading-8 text-slate-600">{copy.pathIntro}</p>
+        <section id="how-it-works" className="container mt-16 scroll-mt-28">
+          <div className="max-w-3xl">
+            <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.moveKicker}</div>
+            <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.moveTitle}</h2>
+            <p className="mt-4 text-base leading-8 text-slate-600">{copy.moveBody}</p>
+          </div>
+          <div className="mt-8 grid gap-5 lg:grid-cols-[1fr_auto_1fr] lg:items-stretch">
+            <GlassCard className="card-static rounded-[28px] p-7">
+              <Wrench className="h-8 w-8 text-primary" />
+              <div className="mt-5 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{copy.whereYouAreLabel}</div>
+              <h3 className="mt-2 text-2xl font-black text-slate-950">{copy.whereYouAreTitle}</h3>
+              <ul className="mt-5 space-y-3">
+                {copy.whereYouAre.map((item) => (
+                  <li key={item} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </GlassCard>
+            <div className="hidden items-center justify-center px-3 lg:flex">
+              <ArrowRight className="h-9 w-9 text-primary" />
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              {programs.map((program, index) => (
-                <GlassCard key={program.id} className={`card-static rounded-[28px] p-6 ${program.featured ? "md:col-span-2 border-primary/35" : ""}`}>
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <div className="text-xs font-bold uppercase tracking-[0.18em] text-primary">{program.badge}</div>
-                      <h3 className="mt-2 text-2xl font-black text-slate-950">{program.title}</h3>
-                    </div>
-                    <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-black text-slate-700">{String(index + 1).padStart(2, "0")}</div>
-                  </div>
-                  <p className="mt-4 text-sm leading-7 text-slate-600">{program.project}</p>
-                  <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold text-slate-700">
-                    {[program.hours, program.duration].filter(Boolean).map((item) => (
-                      <span key={item} className="rounded-full bg-white/80 px-3 py-1 shadow-sm">{item}</span>
-                    ))}
-                    {program.featured ? <span className="rounded-full bg-primary px-3 py-1 text-white">{copy.recommended}</span> : null}
-                  </div>
-                </GlassCard>
-              ))}
+            <GlassCard className="card-static rounded-[28px] border-primary/30 p-7">
+              <MonitorUp className="h-8 w-8 text-primary" />
+              <div className="mt-5 text-xs font-bold uppercase tracking-[0.2em] text-primary">{copy.whereYouGoLabel}</div>
+              <h3 className="mt-2 text-2xl font-black text-slate-950">{copy.whereYouGoTitle}</h3>
+              <ul className="mt-5 space-y-3">
+                {copy.whereYouGo.map((item) => (
+                  <li key={item} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </GlassCard>
+          </div>
+        </section>
+
+        <section className="container mt-16">
+          <div className="rounded-[28px] bg-primary px-6 py-8 text-center text-white shadow-xl sm:px-10">
+            <h2 className="text-3xl font-black">{copy.spineTitle}</h2>
+            <p className="mx-auto mt-3 max-w-3xl text-base leading-7 text-white/85">{copy.spineText}</p>
+          </div>
+        </section>
+
+        <section className="container mt-16">
+          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.barrierKicker}</div>
+              <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.barrierTitle}</h2>
+              <p className="mt-4 text-base leading-8 text-slate-600">{copy.barrierBody}</p>
+            </div>
+            <div className="grid gap-5 md:grid-cols-2">
+              <GlassCard className="card-static rounded-[28px] p-7">
+                <Lock className="h-8 w-8 text-slate-500" />
+                <h3 className="mt-5 text-2xl font-black text-slate-950">{copy.withoutTitle}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-600">{copy.withoutBody}</p>
+              </GlassCard>
+              <GlassCard className="card-static rounded-[28px] border-primary/30 p-7">
+                <Laptop className="h-8 w-8 text-primary" />
+                <h3 className="mt-5 text-2xl font-black text-slate-950">{copy.withTitle}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-600">{copy.withBody}</p>
+              </GlassCard>
             </div>
           </div>
         </section>
 
         <section className="container mt-16">
-          <GlassCard className="card-static rounded-[32px] p-7 sm:p-9">
-            <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
-              <div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500 text-white">
-                  <BadgeCheck className="h-6 w-6" />
-                </div>
-                <h2 className="mt-5 text-3xl font-black text-slate-950">{copy.includesTitle}</h2>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {copy.includes.map((item) => (
-                  <div key={item} className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white/78 p-4 text-sm font-semibold leading-6 text-slate-700">
+          <div className="max-w-3xl">
+            <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.deliveryKicker}</div>
+            <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.deliveryTitle}</h2>
+            <p className="mt-4 text-base leading-8 text-slate-600">{copy.deliveryBody}</p>
+          </div>
+          <div className="mt-8 grid gap-5 lg:grid-cols-2">
+            <GlassCard className="card-static rounded-[28px] p-7">
+              <h3 className="text-2xl font-black text-slate-950">{copy.otherTrainingTitle}</h3>
+              <ul className="mt-5 space-y-3">
+                {copy.otherTraining.map((item) => (
+                  <li key={item} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
+                    <span className="mt-1 h-4 w-4 shrink-0 rounded-full bg-rose-100 text-center text-[10px] font-black leading-4 text-rose-700">x</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </GlassCard>
+            <GlassCard className="card-static rounded-[28px] border-emerald-300/60 p-7">
+              <h3 className="text-2xl font-black text-slate-950">{copy.cvsolucionTrainingTitle}</h3>
+              <ul className="mt-5 space-y-3">
+                {copy.cvsolucionTraining.map((item) => (
+                  <li key={item} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-                    <span>{item}</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </GlassCard>
+          </div>
+        </section>
+
+        <section className="container mt-16">
+          <div className="max-w-3xl">
+            <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.scheduleKicker}</div>
+            <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.scheduleTitle}</h2>
+            <p className="mt-4 text-base leading-8 text-slate-600">{copy.scheduleBody}</p>
+          </div>
+          <div className="mt-8 grid gap-5 md:grid-cols-3">
+            {copy.scheduleCards.map(([title, body]) => (
+              <GlassCard key={title} className="card-static rounded-[28px] p-7">
+                <CalendarDays className="h-8 w-8 text-primary" />
+                <h3 className="mt-5 text-xl font-black text-slate-950">{title}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-600">{body}</p>
+              </GlassCard>
+            ))}
+          </div>
+        </section>
+
+        <section className="container mt-16">
+          <div className="max-w-3xl">
+            <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.learnKicker}</div>
+            <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.learnTitle}</h2>
+            <p className="mt-4 text-base leading-8 text-slate-600">{copy.learnBody}</p>
+          </div>
+          <div className="mt-8 grid gap-5 lg:grid-cols-3">
+            {copy.modules.map(([title, items], index) => (
+              <GlassCard key={title} className="card-static rounded-[28px] p-7">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-black text-white">
+                  {index + 1}
+                </div>
+                <h3 className="mt-5 text-xl font-black text-slate-950">{title}</h3>
+                <ul className="mt-5 space-y-3">
+                  {items.map((item) => (
+                    <li key={item} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
+                      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </GlassCard>
+            ))}
+          </div>
+        </section>
+
+        <section className="container mt-16">
+          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.audienceKicker}</div>
+              <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.audienceTitle}</h2>
+              <p className="mt-4 text-base leading-8 text-slate-600">{copy.audienceBody}</p>
+            </div>
+            <div className="grid gap-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {copy.audience.map((item) => (
+                  <div key={item} className="rounded-2xl border border-slate-200 bg-white/78 p-4 text-sm font-black text-slate-800">
+                    {item}
                   </div>
                 ))}
               </div>
+              <div className="grid gap-5 md:grid-cols-2">
+                <GlassCard className="card-static rounded-[28px] p-7">
+                  <h3 className="text-xl font-black text-slate-950">{copy.notNeedTitle}</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">{copy.notNeedBody}</p>
+                </GlassCard>
+                <GlassCard className="card-static rounded-[28px] border-primary/30 p-7">
+                  <h3 className="text-xl font-black text-slate-950">{copy.needTitle}</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">{copy.needBody}</p>
+                </GlassCard>
+              </div>
             </div>
-          </GlassCard>
+          </div>
         </section>
 
         <section id="career-payment" className="container mt-16 scroll-mt-28">
           <div className="grid gap-8 xl:grid-cols-[1fr_430px]">
             <div>
-              <h2 className="text-3xl font-black text-slate-950 sm:text-5xl">{copy.pricingTitle}</h2>
-              <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">{copy.pricingIntro}</p>
+              <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.packagesKicker}</div>
+              <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.packagesTitle}</h2>
+              <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">{copy.packagesIntro}</p>
               <div className="mt-8 grid gap-4 md:grid-cols-2">
                 {programs.map((program) => {
                   const active = selectedProgram?.id === program.id;
@@ -676,6 +696,7 @@ export default function TrainingCareer() {
                           {!user ? <Lock className="ml-auto mt-2 h-4 w-4 text-slate-400" /> : null}
                         </div>
                       </div>
+                      <p className="mt-4 text-sm leading-6 text-slate-600">{program.project}</p>
                       <div className={`mt-5 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold ${active ? "bg-primary text-white" : "bg-slate-100 text-slate-700"}`}>
                         {active ? copy.selected : copy.select}
                         <ArrowRight className="h-4 w-4" />
@@ -761,19 +782,44 @@ export default function TrainingCareer() {
         </section>
 
         <section className="container mt-16">
-          <GlassCard className="card-static rounded-[32px] p-8 sm:p-10">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="text-3xl font-black text-slate-950">{copy.contactTitle}</h2>
-                <p className="mt-3 max-w-2xl text-base leading-8 text-slate-600">{copy.contactText}</p>
-              </div>
-              <Button asChild className="rounded-full bg-green-500 px-6 text-white hover:bg-green-600">
+          <div className="max-w-3xl">
+            <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.faqKicker}</div>
+            <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.faqTitle}</h2>
+          </div>
+          <div className="mt-8 grid gap-5 lg:grid-cols-2">
+            {copy.faq.map((item) => (
+              <GlassCard key={item.question} className="card-static rounded-[28px] p-7">
+                <h3 className="text-lg font-black text-slate-950">{item.question}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-600">{item.answer}</p>
+              </GlassCard>
+            ))}
+          </div>
+        </section>
+
+        <section className="container mt-16">
+          <GlassCard className="card-static rounded-[32px] p-8 text-center sm:p-10">
+            <h2 className="text-4xl font-black text-slate-950">{copy.finalTitle}</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-base leading-8 text-slate-600">{copy.finalBody}</p>
+            <div className="mt-7 flex flex-wrap justify-center gap-3">
+              <Button asChild className="rounded-full bg-primary px-6 text-white hover:bg-primary/90">
+                <a href="#career-payment">
+                  <CreditCard className="mr-2 h-5 w-5" />
+                  {copy.enrollNow}
+                </a>
+              </Button>
+              <Button asChild variant="outline" className="rounded-full bg-white/80 px-6">
                 <a href={whatsappHref} target="_blank" rel="noopener noreferrer">
                   <MessageCircle className="mr-2 h-5 w-5" />
-                  {copy.contactButton}
+                  Ask a question
                 </a>
               </Button>
             </div>
+            <p className="mt-7 text-sm font-semibold text-slate-600">
+              {copy.teamTraining}{" "}
+              <a className="text-primary underline-offset-4 hover:underline" href={teamTrainingHref}>
+                {copy.teamTrainingLink}
+              </a>
+            </p>
           </GlassCard>
         </section>
       </main>
