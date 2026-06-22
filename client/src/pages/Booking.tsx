@@ -409,10 +409,7 @@ export default function Booking() {
       <main className="pt-32 pb-20">
         <section className="container">
           <div className="mx-auto max-w-4xl text-center">
-            <span className="glass-chip inline-flex rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
-              Quebec Schedule
-            </span>
-            <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">{copy.title}</h1>
+            <h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">{copy.title}</h1>
             <p className="mt-5 text-lg leading-8 text-slate-600">{copy.subtitle}</p>
           </div>
 
