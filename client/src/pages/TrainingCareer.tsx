@@ -100,6 +100,13 @@ const fallbackPrograms: Record<TrainingPriceKey, ProgramView> = {
   },
 };
 
+const pageSectionClass = "mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-10 xl:px-12";
+
+const careerImages = {
+  shopFloor: "/images/training-career-shop-floor.jpg",
+  designOffice: "/images/training-career-design-office.jpg",
+};
+
 const copy = {
   seoTitle: "From Shop Floor to Design Office | Cabinet Vision Career Training | CVsolucion",
   seoDescription:
@@ -452,7 +459,7 @@ export default function TrainingCareer() {
       <Seo title={copy.seoTitle} description={copy.seoDescription} type="website" structuredData={structuredData} />
       <Header />
       <main className="pb-20 pt-28">
-        <section className="container">
+        <section className={pageSectionClass}>
           <div className="grid gap-8 lg:grid-cols-[1.04fr_0.96fr] lg:items-center">
             <div className="py-8">
               <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/75 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-primary">
@@ -480,22 +487,58 @@ export default function TrainingCareer() {
               </div>
             </div>
 
-            <GlassCard className="card-static rounded-[32px] p-6 sm:p-8">
+            <GlassCard className="card-static overflow-hidden rounded-[32px] p-4 sm:p-5">
               <div className="grid gap-4">
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+                  <figure className="overflow-hidden rounded-[24px] border border-white/70 bg-white shadow-sm">
+                    <img
+                      src={careerImages.shopFloor}
+                      alt="Cabinet shop worker assembling cabinets on the shop floor"
+                      className="h-56 w-full object-cover sm:h-72 lg:h-64"
+                      loading="eager"
+                      decoding="async"
+                    />
+                    <figcaption className="px-4 py-3 text-sm font-black text-slate-900">
+                      <span className="mr-2 rounded-full bg-slate-100 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-slate-500">Before</span>
+                      Shop floor
+                    </figcaption>
+                  </figure>
+                  <div className="flex justify-center">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-white shadow-lg">
+                      <ArrowRight className="h-5 w-5 rotate-90 sm:rotate-0" />
+                    </div>
+                  </div>
+                  <figure className="overflow-hidden rounded-[24px] border border-primary/25 bg-white shadow-sm">
+                    <img
+                      src={careerImages.designOffice}
+                      alt="Cabinet Vision designer working at a computer in the design office"
+                      className="h-56 w-full object-cover sm:h-72 lg:h-64"
+                      loading="eager"
+                      decoding="async"
+                    />
+                    <figcaption className="px-4 py-3 text-sm font-black text-slate-900">
+                      <span className="mr-2 rounded-full bg-primary/10 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-primary">After</span>
+                      Design office
+                    </figcaption>
+                  </figure>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
                 {copy.heroPoints.map((item, index) => (
-                  <div key={item} className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white/80 p-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-black text-white">
+                  <div key={item} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 p-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-black text-white">
                       {index + 1}
                     </div>
-                    <div className="text-base font-black text-slate-900">{item}</div>
+                    <div className="text-sm font-black text-slate-900">{item}</div>
                   </div>
                 ))}
+                </div>
               </div>
             </GlassCard>
           </div>
         </section>
 
-        <section id="how-it-works" className="container mt-16 scroll-mt-28">
+        <section id="how-it-works" className={`${pageSectionClass} mt-16 scroll-mt-28`}>
           <div className="max-w-3xl">
             <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.moveKicker}</div>
             <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.moveTitle}</h2>
@@ -534,14 +577,14 @@ export default function TrainingCareer() {
           </div>
         </section>
 
-        <section className="container mt-16">
+        <section className={`${pageSectionClass} mt-16`}>
           <div className="rounded-[28px] bg-primary px-6 py-8 text-center text-white shadow-xl sm:px-10">
             <h2 className="text-3xl font-black">{copy.spineTitle}</h2>
             <p className="mx-auto mt-3 max-w-3xl text-base leading-7 text-white/85">{copy.spineText}</p>
           </div>
         </section>
 
-        <section className="container mt-16">
+        <section className={`${pageSectionClass} mt-16`}>
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.barrierKicker}</div>
@@ -563,7 +606,7 @@ export default function TrainingCareer() {
           </div>
         </section>
 
-        <section className="container mt-16">
+        <section className={`${pageSectionClass} mt-16`}>
           <div className="max-w-3xl">
             <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.deliveryKicker}</div>
             <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.deliveryTitle}</h2>
@@ -595,7 +638,7 @@ export default function TrainingCareer() {
           </div>
         </section>
 
-        <section className="container mt-16">
+        <section className={`${pageSectionClass} mt-16`}>
           <div className="max-w-3xl">
             <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.scheduleKicker}</div>
             <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.scheduleTitle}</h2>
@@ -612,7 +655,7 @@ export default function TrainingCareer() {
           </div>
         </section>
 
-        <section className="container mt-16">
+        <section className={`${pageSectionClass} mt-16`}>
           <div className="max-w-3xl">
             <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.learnKicker}</div>
             <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.learnTitle}</h2>
@@ -638,7 +681,7 @@ export default function TrainingCareer() {
           </div>
         </section>
 
-        <section className="container mt-16">
+        <section className={`${pageSectionClass} mt-16`}>
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.audienceKicker}</div>
@@ -667,7 +710,7 @@ export default function TrainingCareer() {
           </div>
         </section>
 
-        <section id="career-payment" className="container mt-16 scroll-mt-28">
+        <section id="career-payment" className={`${pageSectionClass} mt-16 scroll-mt-28`}>
           <div className="grid gap-8 xl:grid-cols-[1fr_430px]">
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.packagesKicker}</div>
@@ -781,7 +824,7 @@ export default function TrainingCareer() {
           </div>
         </section>
 
-        <section className="container mt-16">
+        <section className={`${pageSectionClass} mt-16`}>
           <div className="max-w-3xl">
             <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{copy.faqKicker}</div>
             <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">{copy.faqTitle}</h2>
@@ -796,7 +839,7 @@ export default function TrainingCareer() {
           </div>
         </section>
 
-        <section className="container mt-16">
+        <section className={`${pageSectionClass} mt-16`}>
           <GlassCard className="card-static rounded-[32px] p-8 text-center sm:p-10">
             <h2 className="text-4xl font-black text-slate-950">{copy.finalTitle}</h2>
             <p className="mx-auto mt-3 max-w-2xl text-base leading-8 text-slate-600">{copy.finalBody}</p>
