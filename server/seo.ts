@@ -48,31 +48,31 @@ const TRAINING_CAREER_COPY = {
     ],
   },
   fr: {
-    seoTitle: "From Shop Floor to Design Office | Cabinet Vision Career Training | CVsolucion",
+    seoTitle: "De l'atelier au bureau de design | Formation carriere Cabinet Vision | CVsolucion",
     metaDescription:
-      "Already working in a cabinet shop? Learn Cabinet Vision and move from production to design. Live training with a real instructor, full software access, schedule set around your availability.",
-    h1: "Same shop floor. Different paycheck.",
+      "Vous travaillez deja dans un atelier de cabinets? Apprenez Cabinet Vision et passez de la production au design. Formation en direct, acces logiciel inclus, horaire selon vos disponibilites.",
+    h1: "Meme atelier. Meilleur role.",
     intro:
-      "You already work in the industry. This training takes you from the shop floor to the design office on the exact software cabinet shops across Canada and the US run on.",
+      "Vous travaillez deja dans l'industrie. Cette formation vous aide a passer de l'atelier au bureau de design avec le logiciel utilise par les ateliers de cabinets au Canada et aux Etats-Unis.",
     points: [
-      "Shop floor to design office.",
-      "No license or computer required.",
-      "Live expert, not pre-recorded videos.",
-      "Schedule set around your work hours.",
+      "De l'atelier au bureau de design.",
+      "Aucune licence ni ordinateur requis.",
+      "Expert en direct, pas des videos preenregistrees.",
+      "Horaire adapte a vos heures de travail.",
     ],
   },
   ar: {
-    seoTitle: "From Shop Floor to Design Office | Cabinet Vision Career Training | CVsolucion",
+    seoTitle: "من الورشة إلى مكتب التصميم | تدريب مهني Cabinet Vision | CVsolucion",
     metaDescription:
-      "Already working in a cabinet shop? Learn Cabinet Vision and move from production to design. Live training with a real instructor, full software access, schedule set around your availability.",
-    h1: "Same shop floor. Different paycheck.",
+      "هل تعمل بالفعل في ورشة خزائن أو مطابخ؟ تعلم Cabinet Vision وانتقل من الإنتاج إلى التصميم. تدريب مباشر مع مدرب حقيقي، وصول كامل للبرنامج، وجدولة حسب وقتك.",
+    h1: "نفس الورشة. دور أفضل.",
     intro:
-      "You already work in the industry. This training takes you from the shop floor to the design office on the exact software cabinet shops across Canada and the US run on.",
+      "أنت تعمل بالفعل في المجال. هذا التدريب يساعدك على الانتقال من أرضية الورشة إلى مكتب التصميم باستعمال نفس البرنامج الذي تعتمد عليه ورش الخزائن والمطابخ في كندا والولايات المتحدة.",
     points: [
-      "Shop floor to design office.",
-      "No license or computer required.",
-      "Live expert, not pre-recorded videos.",
-      "Schedule set around your work hours.",
+      "من الورشة إلى مكتب التصميم.",
+      "لا تحتاج رخصة أو كمبيوتر خاص.",
+      "مدرب مباشر وليس فيديوهات مسجلة.",
+      "جدولة حسب ساعات عملك.",
     ],
   },
 } as const;
