@@ -123,6 +123,7 @@ const copy = {
   ],
   enrollNow: "Enroll Now",
   seeHowItWorks: "See How It Works",
+  helpCta: "هل تحتاج المساعدة؟ تواصل معنا",
   moveKicker: "The move you're making",
   moveTitle: "Shop floor -> Design office. Same industry. Bigger role.",
   moveBody:
@@ -482,6 +483,12 @@ export default function TrainingCareer() {
                   <a href="#how-it-works">
                     <PlayCircle className="mr-2 h-5 w-5" />
                     {copy.seeHowItWorks}
+                  </a>
+                </Button>
+                <Button asChild variant="outline" className="rounded-full bg-white/80 px-6">
+                  <a href={whatsappHref} target="_blank" rel="noopener noreferrer" dir="rtl">
+                    <MessageCircle className="ml-2 h-5 w-5" />
+                    {copy.helpCta}
                   </a>
                 </Button>
               </div>
