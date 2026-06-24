@@ -84,32 +84,6 @@ function DeferredChatWidget() {
   );
 }
 
-function DeferredAnalytics() {
-  const [enabled, setEnabled] = useState(false);
-
-  useEffect(() => {
-    const events: Array<keyof WindowEventMap> = ["click", "keydown"];
-    const handler = () => {
-      setEnabled(true);
-      events.forEach((eventName) => window.removeEventListener(eventName, handler));
-    };
-
-    events.forEach((eventName) => window.addEventListener(eventName, handler, { passive: true, once: true }));
-
-    return () => {
-      events.forEach((eventName) => window.removeEventListener(eventName, handler));
-    };
-  }, []);
-
-  if (!enabled) return null;
-
-  return (
-    <Suspense fallback={null}>
-      <Analytics />
-    </Suspense>
-  );
-}
-
 function Router() {
   const designerWorkspace = isDesignerWorkspaceHost();
   const homeComponent = designerWorkspace ? DesignerDashboard : Home;
@@ -198,7 +172,9 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <DotWaveBackground />
-            <DeferredAnalytics />
+            <Suspense fallback={null}>
+              <Analytics />
+            </Suspense>
             <DeferredChatWidget />
             <Suspense fallback={<RouteFallback />}>
               <Router />

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useI18n } from "@/i18n/i18n";
 import { useAuth } from "@/contexts/AuthContext";
@@ -94,6 +94,23 @@ function getAnalyticsWindow() {
   return window as AnalyticsWindow;
 }
 
+function isDoNotTrackEnabled() {
+  return (
+    typeof navigator !== "undefined" &&
+    (navigator.doNotTrack === "1" || (window as any).doNotTrack === "1")
+  );
+}
+
+function getGtmId() {
+  const enabled =
+    (
+      (import.meta.env.VITE_ENABLE_GTM as string | undefined)?.trim() || ""
+    ).toLowerCase() === "true";
+  return enabled
+    ? (import.meta.env.VITE_GTM_ID as string | undefined)?.trim() || ""
+    : "";
+}
+
 function ensureGtag(ga4Id: string) {
   const analyticsWindow = getAnalyticsWindow();
   if (!analyticsWindow) return null;
@@ -117,7 +134,21 @@ function ensureGtag(ga4Id: string) {
   return analyticsWindow.gtag;
 }
 
-function trackGa4Event(name: string, params: Record<string, unknown> = {}) {
+function trackExternalEvent(
+  name: string,
+  params: Record<string, unknown> = {},
+) {
+  if (isDoNotTrackEnabled()) return;
+
+  const gtmId = getGtmId();
+  if (gtmId) {
+    const analyticsWindow = getAnalyticsWindow();
+    if (!analyticsWindow) return;
+    analyticsWindow.dataLayer = analyticsWindow.dataLayer || [];
+    analyticsWindow.dataLayer.push({ event: name, ...params });
+    return;
+  }
+
   const ga4Id = (import.meta.env.VITE_GA4_ID as string | undefined)?.trim();
   if (!ga4Id) return;
   const gtag = ensureGtag(ga4Id);
@@ -139,21 +170,18 @@ function trackGa4Event(name: string, params: Record<string, unknown> = {}) {
 export default function Analytics() {
   const [location] = useLocation();
   const { locale } = useI18n();
-  const { user } = useAuth();
+  const { user, isAdmin, loading } = useAuth();
+  const lastExternalPageKey = useRef<string | null>(null);
+  const excludedFromTracking =
+    loading ||
+    isAdmin ||
+    user?.role === "admin" ||
+    window.location.pathname.startsWith("/admin");
 
   useEffect(() => {
-    const dnt =
-      typeof navigator !== "undefined" &&
-      (navigator.doNotTrack === "1" || (window as any).doNotTrack === "1");
-    if (dnt) return;
+    if (excludedFromTracking || isDoNotTrackEnabled()) return;
 
-    const gtmEnabled =
-      (
-        (import.meta.env.VITE_ENABLE_GTM as string | undefined)?.trim() || ""
-      ).toLowerCase() === "true";
-    const gtmId = gtmEnabled
-      ? (import.meta.env.VITE_GTM_ID as string | undefined)?.trim()
-      : "";
+    const gtmId = getGtmId();
     const ga4Id = (import.meta.env.VITE_GA4_ID as string | undefined)?.trim();
     const umamiUrl = (
       (import.meta.env.VITE_UMAMI_URL as string | undefined) ||
@@ -164,40 +192,17 @@ export default function Analytics() {
       (import.meta.env.VITE_ANALYTICS_WEBSITE_ID as string | undefined)
     )?.trim();
 
-    let loaded = false;
-    const events: Array<keyof WindowEventMap> = ["click", "keydown"];
-    const markLoaded = () => {
-      if (loaded) return false;
-      loaded = true;
-      events.forEach((eventName) =>
-        window.removeEventListener(eventName, loadExternalAnalytics),
-      );
-      return true;
-    };
-
     const loadExternalAnalytics = () => {
-      if (!markLoaded()) return;
-
-      if (ga4Id) {
-        // Delay third-party analytics execution until the user interacts.
-        window.setTimeout(() => {
-          const directGtag = ensureGtag(ga4Id);
-          if (!directGtag) return;
+      if (ga4Id && !gtmId) {
+        const directGtag = ensureGtag(ga4Id);
+        if (directGtag) {
           directGtag("js", new Date());
           directGtag("config", ga4Id, {
             allow_google_signals: false,
             allow_ad_personalization_signals: false,
             send_page_view: false,
           });
-          directGtag("event", "page_view", {
-            page_title: document.title,
-            page_path: window.location.pathname,
-            page_location: window.location.href,
-            page_search: window.location.search || "",
-            locale,
-            user_status: user ? "registered" : "anonymous",
-          });
-        }, 900);
+        }
       }
 
       const gtmAlreadyLoaded =
@@ -236,24 +241,14 @@ export default function Analytics() {
       }
     };
 
-    events.forEach((eventName) =>
-      window.addEventListener(eventName, loadExternalAnalytics, {
-        passive: true,
-        once: true,
-      }),
-    );
-
-    return () => {
-      events.forEach((eventName) =>
-        window.removeEventListener(eventName, loadExternalAnalytics),
-      );
-    };
-  }, []);
+    loadExternalAnalytics();
+  }, [excludedFromTracking]);
 
   useEffect(() => {
-    const dnt =
-      typeof navigator !== "undefined" &&
-      (navigator.doNotTrack === "1" || (window as any).doNotTrack === "1");
+    if (excludedFromTracking) return;
+
+    const dnt = isDoNotTrackEnabled();
+    const gtmId = getGtmId();
     const ga4Id = (import.meta.env.VITE_GA4_ID as string | undefined)?.trim();
 
     const search = window.location.search || "";
@@ -274,7 +269,27 @@ export default function Analytics() {
     };
 
     if (!dnt) {
-      if (ga4Id) {
+      const pageKey =
+        window.location.pathname +
+        window.location.search +
+        window.location.hash;
+      const isInitialPage = lastExternalPageKey.current === null;
+      const isNewPage = lastExternalPageKey.current !== pageKey;
+      lastExternalPageKey.current = pageKey;
+
+      if (isNewPage && gtmId && !isInitialPage) {
+        (window as any).dataLayer = (window as any).dataLayer || [];
+        (window as any).dataLayer.push({
+          event: "virtual_pageview",
+          page_title: document.title,
+          page_path: window.location.pathname,
+          page_location: window.location.href,
+          page_search: search,
+          locale,
+          user_status: user ? "registered" : "anonymous",
+          ...campaign,
+        });
+      } else if (isNewPage && ga4Id && !gtmId) {
         const analyticsWindow = getAnalyticsWindow();
         analyticsWindow?.gtag?.("event", "page_view", {
           page_title: document.title,
@@ -286,18 +301,6 @@ export default function Analytics() {
           ...campaign,
         });
       }
-
-      (window as any).dataLayer = (window as any).dataLayer || [];
-      (window as any).dataLayer.push({
-        event: "virtual_pageview",
-        page_title: document.title,
-        page_path: window.location.pathname,
-        page_location: window.location.href,
-        page_search: search,
-        locale,
-        user_status: user ? "registered" : "anonymous",
-        ...campaign,
-      });
     }
 
     const controller = new AbortController();
@@ -352,7 +355,7 @@ export default function Analytics() {
       const label = (link.textContent || "").trim().slice(0, 140) || null;
 
       if (/wa\.me|whatsapp/i.test(href)) {
-        trackGa4Event("whatsapp_click", {
+        trackExternalEvent("whatsapp_click", {
           link_url: href,
           link_text: label,
           page_path: window.location.pathname,
@@ -369,7 +372,7 @@ export default function Analytics() {
           true,
         );
       } else if (href.startsWith("mailto:")) {
-        trackGa4Event("email_click", {
+        trackExternalEvent("email_click", {
           link_url: href,
           link_text: label,
           page_path: window.location.pathname,
@@ -389,7 +392,7 @@ export default function Analytics() {
         link.dataset.cta === "true" ||
         link.getAttribute("data-track") === "cta"
       ) {
-        trackGa4Event("cta_click", {
+        trackExternalEvent("cta_click", {
           link_url: href,
           link_text: label,
           page_path: window.location.pathname,
@@ -431,7 +434,7 @@ export default function Analytics() {
       document.removeEventListener("click", clickHandler, true);
       window.removeEventListener("pagehide", pageHideHandler);
     };
-  }, [location, locale, user?.id]);
+  }, [location, locale, user?.id, excludedFromTracking]);
 
   return null;
 }
