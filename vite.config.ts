@@ -1,13 +1,69 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+
+function deferPublicStylesheet(): Plugin {
+  return {
+    name: "defer-public-stylesheet",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler(html, context) {
+        if (path.basename(context.filename) !== "index.html") return html;
+
+        let deferred = false;
+        const transformed = html.replace(
+          /<link rel="stylesheet"[^>]*>/g,
+          (stylesheet) => {
+            deferred = true;
+            const preload = stylesheet.replace(
+              'rel="stylesheet"',
+              'rel="preload" as="style" data-app-stylesheet',
+            );
+            return `${preload}<noscript>${stylesheet}</noscript>`;
+          },
+        );
+
+        if (!deferred) return html;
+
+        const loader = `<script>
+    (() => {
+      document.documentElement.classList.add("css-deferred");
+      const stylesheets = Array.from(document.querySelectorAll("link[data-app-stylesheet]"));
+      let remaining = stylesheets.length;
+      const markReady = () => {
+        remaining -= 1;
+        if (remaining > 0) return;
+        document.documentElement.classList.add("styles-ready");
+        window.dispatchEvent(new Event("cvsolucion:styles-ready"));
+      };
+      if (!remaining) {
+        document.documentElement.classList.add("styles-ready");
+        return;
+      }
+      stylesheets.forEach((stylesheet) => {
+        const activate = () => {
+          stylesheet.rel = "stylesheet";
+          markReady();
+        };
+        stylesheet.addEventListener("load", activate, { once: true });
+        stylesheet.addEventListener("error", activate, { once: true });
+      });
+    })();
+  </script>`;
+
+        return transformed.replace("</head>", `${loader}\n</head>`);
+      },
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
   const isProduction = mode === "production";
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), deferPublicStylesheet()],
     resolve: {
       alias: {
         "@": path.resolve(import.meta.dirname, "client", "src"),
@@ -30,13 +86,6 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             "react-vendor": ["react", "react-dom"],
-            "radix-ui": [
-              "@radix-ui/react-accordion",
-              "@radix-ui/react-dialog",
-              "@radix-ui/react-dropdown-menu",
-              "@radix-ui/react-tabs",
-              "@radix-ui/react-tooltip",
-            ],
             icons: ["lucide-react"],
             motion: ["framer-motion"],
             forms: ["react-hook-form", "zod", "@hookform/resolvers"],

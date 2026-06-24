@@ -4,6 +4,8 @@ import { useI18n } from "@/i18n/i18n";
 import { useAuth } from "@/contexts/AuthContext";
 
 const SESSION_STORAGE_KEY = "cvs_visitor_session";
+const LOAD_EXTERNAL_ANALYTICS_EVENT =
+  "cvsolucion:load-external-analytics";
 
 type AnalyticsWindow = Window & {
   dataLayer?: unknown[];
@@ -140,6 +142,8 @@ function trackExternalEvent(
 ) {
   if (isDoNotTrackEnabled()) return;
 
+  window.dispatchEvent(new Event(LOAD_EXTERNAL_ANALYTICS_EVENT));
+
   const gtmId = getGtmId();
   if (gtmId) {
     const analyticsWindow = getAnalyticsWindow();
@@ -239,9 +243,46 @@ export default function Analytics() {
         s.setAttribute("data-website-id", umamiWebsiteId);
         document.head.appendChild(s);
       }
+
+      if (!document.querySelector("script[data-ahrefs-analytics]")) {
+        const ahrefs = document.createElement("script");
+        ahrefs.async = true;
+        ahrefs.src = "https://analytics.ahrefs.com/analytics.js";
+        ahrefs.setAttribute("data-key", "iABZcinu8y6HV7To3tLfIA");
+        ahrefs.setAttribute("data-ahrefs-analytics", "true");
+        document.head.appendChild(ahrefs);
+      }
     };
 
-    loadExternalAnalytics();
+    let loaded = false;
+    let timer = 0;
+    const triggerLoad = () => {
+      if (loaded) return;
+      loaded = true;
+      window.clearTimeout(timer);
+      window.removeEventListener(LOAD_EXTERNAL_ANALYTICS_EVENT, triggerLoad);
+      loadExternalAnalytics();
+    };
+    const scheduleLoad = () => {
+      const mobile = window.matchMedia("(max-width: 767px)").matches;
+      timer = window.setTimeout(triggerLoad, mobile ? 7000 : 2500);
+    };
+
+    window.addEventListener(LOAD_EXTERNAL_ANALYTICS_EVENT, triggerLoad, {
+      once: true,
+    });
+
+    if (document.readyState === "complete") {
+      scheduleLoad();
+    } else {
+      window.addEventListener("load", scheduleLoad, { once: true });
+    }
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("load", scheduleLoad);
+      window.removeEventListener(LOAD_EXTERNAL_ANALYTICS_EVENT, triggerLoad);
+    };
   }, [excludedFromTracking]);
 
   useEffect(() => {

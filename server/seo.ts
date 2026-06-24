@@ -82,8 +82,8 @@ const HOME_COPY = {
     title: "Cabinet Vision Consulting, Training & Support | CVsolucion",
     description:
       "Cabinet Vision consulting, training, support, and optimization for cabinet shops: fix errors, speed up workflows, standardize libraries, and stabilize CNC output.",
-    h1: "Cabinet Vision Consulting, Support, Training, and Booking",
-    p1: "CVsolucion helps cabinet shops fix Cabinet Vision errors, improve performance, standardize libraries, stabilize CNC output, and train designers, engineers, and production teams. The goal is not generic software support. It is reliable implementation that works inside real cabinet manufacturing workflows.",
+    h1: "Cabinet Vision\nSetup, Support & Training",
+    p1: "Expert Cabinet Vision consulting, training, and support to fix errors, optimize performance, and standardize libraries and CNC output.",
     p2: "Shops contact us when Cabinet Vision becomes slow, unstable, inconsistent, or difficult to scale. We work on troubleshooting, library setup, pricing logic, report alignment, UCS automation, CNC troubleshooting, and operator-ready output. This gives teams cleaner data, fewer production surprises, and faster day-to-day execution.",
     h2a: "Core services",
     p3: "Our public service pages cover remote support, training, design and pricing setup, workflow audits, and structured booking for consulting or urgent intervention. Articles and case studies are also published to help teams understand what causes failures and how to avoid them.",
@@ -95,8 +95,8 @@ const HOME_COPY = {
     title: "Consulting, formation et support Cabinet Vision | CVsolucion",
     description:
       "Consulting, formation, support et optimisation Cabinet Vision pour ateliers d'ebnisterie : corriger les erreurs, accelerer les flux, standardiser les bibliotheques et stabiliser la sortie CNC.",
-    h1: "Consulting, support, formation et reservation Cabinet Vision",
-    p1: "CVsolucion aide les ateliers d'ebnisterie a corriger les erreurs Cabinet Vision, ameliorer les performances, standardiser les bibliotheques, stabiliser la sortie CNC et former les designers, ingenieurs et equipes de production. L'objectif n'est pas un support logiciel generique, mais une implementation fiable dans un vrai contexte usine.",
+    h1: "Cabinet Vision\nConfiguration, support et formation",
+    p1: "Conseil, formation et support Cabinet Vision pour corriger les erreurs, optimiser les performances et standardiser les sorties CNC.",
     p2: "Les ateliers nous contactent lorsque Cabinet Vision devient lent, instable, incoherent ou difficile a faire evoluer. Nous intervenons sur le troubleshooting, les bibliotheques, la logique de pricing, les rapports, l'automatisation UCS, la sortie CNC et la validation operateur. Le resultat: moins d'erreurs, des donnees plus propres et une execution plus rapide.",
     h2a: "Services principaux",
     p3: "Nos pages publiques couvrent le support a distance, la formation, la mise en place design & pricing, les audits de workflow et le booking structure pour les consultations ou urgences. Des articles et etudes de cas sont egalement publies pour montrer pourquoi certaines mises en place echouent et comment les corriger.",
@@ -108,8 +108,8 @@ const HOME_COPY = {
     title: "استشارات وتدريب ودعم Cabinet Vision | CVsolucion",
     description:
       "استشارات وتدريب ودعم وتحسين Cabinet Vision لمصانع المطابخ والخزائن: إصلاح الأخطاء، تسريع العمل، توحيد المكتبات، وتثبيت مخرجات CNC.",
-    h1: "استشارات ودعم وتدريب وحجز Cabinet Vision",
-    p1: "تساعد CVsolucion مصانع الخزائن والمطابخ على إصلاح مشاكل Cabinet Vision، تحسين الأداء، توحيد المكتبات، تثبيت مخرجات CNC، وتدريب المصممين والمهندسين وفرق الإنتاج. الهدف ليس دعماً عاماً للبرنامج، بل تنفيذاً عملياً مستقراً داخل بيئة تصنيع حقيقية.",
+    h1: "Cabinet Vision\nإعداد، دعم وتدريب",
+    p1: "استشارات وتدريب ودعم Cabinet Vision لإصلاح الأخطاء وتحسين الأداء وتوحيد مخرجات CNC.",
     p2: "تتواصل معنا الورشات عندما يصبح Cabinet Vision بطيئاً أو غير مستقر أو صعب التوسع. نعمل على التشخيص، المكتبات، منطق التسعير، التقارير، أتمتة UCS، إخراج CNC، وتجهيز المخرجات للمشغلين. النتيجة هي بيانات أنظف وأخطاء أقل وسير عمل أسرع.",
     h2a: "الخدمات الأساسية",
     p3: "تشمل الصفحات العامة لدينا الدعم عن بعد، التدريب، إعداد التصميم والتسعير، تدقيق سير العمل، ونظام حجز منظم للاستشارات أو الحالات المستعجلة. كما ننشر مقالات ودراسات حالة تساعد الفرق على فهم أسباب التعثر وكيفية تجنبها.",

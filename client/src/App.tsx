@@ -1,6 +1,4 @@
 import { Suspense, lazy, useEffect, useState } from "react";
-import { Toaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -32,6 +30,11 @@ const SeoKnowledgeLanding = lazy(() => import("./pages/SeoKnowledgeLanding"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Analytics = lazy(() => import("./components/Analytics"));
 const ChatWidget = lazy(() => import("./components/ChatWidget"));
+const Toaster = lazy(() =>
+  import("@/components/ui/sonner").then((module) => ({
+    default: module.Toaster,
+  })),
+);
 
 const serviceRoutes = SEO_SERVICE_CANONICAL_PATHS.flatMap((path) => {
   return [path, `/fr${path}`, `/ar${path}`];
@@ -49,14 +52,11 @@ function DeferredChatWidget() {
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
-    let idleHandle = 0;
-    const fallbackTimer = window.setTimeout(() => setEnabled(true), 7000);
-    const requestIdle = window.requestIdleCallback?.bind(window);
-    const cancelIdle = window.cancelIdleCallback?.bind(window);
-
-    if (requestIdle) {
-      idleHandle = requestIdle(() => setEnabled(true), { timeout: 7000 });
-    }
+    const mobile = window.matchMedia("(max-width: 767px)").matches;
+    const fallbackTimer = window.setTimeout(
+      () => setEnabled(true),
+      mobile ? 12000 : 7000,
+    );
 
     const events: Array<keyof WindowEventMap> = ["click", "keydown"];
     const handler = () => {
@@ -68,9 +68,6 @@ function DeferredChatWidget() {
 
     return () => {
       window.clearTimeout(fallbackTimer);
-      if (idleHandle && cancelIdle) {
-        cancelIdle(idleHandle);
-      }
       events.forEach((eventName) => window.removeEventListener(eventName, handler));
     };
   }, []);
@@ -80,6 +77,32 @@ function DeferredChatWidget() {
   return (
     <Suspense fallback={null}>
       <ChatWidget />
+    </Suspense>
+  );
+}
+
+function DeferredToaster() {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    const enable = () => setEnabled(true);
+    const timer = window.setTimeout(enable, 4000);
+    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown"];
+    events.forEach((eventName) =>
+      window.addEventListener(eventName, enable, { passive: true, once: true }),
+    );
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((eventName) =>
+        window.removeEventListener(eventName, enable),
+      );
+    };
+  }, []);
+
+  if (!enabled) return null;
+  return (
+    <Suspense fallback={null}>
+      <Toaster />
     </Suspense>
   );
 }
@@ -169,8 +192,8 @@ function App() {
         defaultTheme="light"
       >
         <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
+          <>
+            <DeferredToaster />
             <DotWaveBackground />
             <Suspense fallback={null}>
               <Analytics />
@@ -179,7 +202,7 @@ function App() {
             <Suspense fallback={<RouteFallback />}>
               <Router />
             </Suspense>
-          </TooltipProvider>
+          </>
         </AuthProvider>
       </ThemeProvider>
       </I18nProvider>

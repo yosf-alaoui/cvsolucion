@@ -1,18 +1,47 @@
+import { useEffect, useState } from "react";
 import siteBackground from "@/assets/site-background.webp";
 
 export default function DotWaveBackground() {
+  const [showImage, setShowImage] = useState(() => {
+    const path = window.location.pathname.replace(/\/+$/, "") || "/";
+    return path !== "/" && path !== "/fr" && path !== "/ar";
+  });
+
+  useEffect(() => {
+    if (showImage) return;
+    const reveal = () => setShowImage(true);
+    const events: Array<keyof WindowEventMap> = [
+      "scroll",
+      "pointerdown",
+      "keydown",
+      "touchstart",
+    ];
+    const timer = window.setTimeout(reveal, 12000);
+    events.forEach((eventName) =>
+      window.addEventListener(eventName, reveal, { passive: true, once: true }),
+    );
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((eventName) =>
+        window.removeEventListener(eventName, reveal),
+      );
+    };
+  }, [showImage]);
+
   return (
     <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden bg-[#f8fbff]" aria-hidden="true">
-      <img
-        src={siteBackground}
-        alt=""
-        decoding="async"
-        draggable={false}
-        className="absolute inset-0 h-full w-full object-cover opacity-75"
-        style={{
-          objectPosition: "58% center",
-        }}
-      />
+      {showImage ? (
+        <img
+          src={siteBackground}
+          alt=""
+          decoding="async"
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-cover opacity-75"
+          style={{
+            objectPosition: "58% center",
+          }}
+        />
+      ) : null}
 
       <div
         className="absolute inset-0"

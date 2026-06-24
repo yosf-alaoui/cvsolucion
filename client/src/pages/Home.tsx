@@ -46,7 +46,6 @@ export default function Home() {
   }, [showSections]);
 
   useEffect(() => {
-    let idleHandle = 0;
     let fallbackTimer = 0;
 
     const show = () => setShowSections(true);
@@ -56,14 +55,8 @@ export default function Home() {
       events.forEach((eventName) => window.removeEventListener(eventName, onInteraction));
     };
 
-    const requestIdle = window.requestIdleCallback?.bind(window);
-    const cancelIdle = window.cancelIdleCallback?.bind(window);
-
-    if (requestIdle) {
-      idleHandle = requestIdle(() => setShowSections(true), { timeout: 2500 });
-    } else {
-      fallbackTimer = window.setTimeout(show, 2500);
-    }
+    const mobile = window.matchMedia("(max-width: 767px)").matches;
+    fallbackTimer = window.setTimeout(show, mobile ? 12000 : 6000);
 
     events.forEach((eventName) =>
       window.addEventListener(eventName, onInteraction, { passive: true, once: true }),
@@ -72,9 +65,6 @@ export default function Home() {
     return () => {
       if (fallbackTimer) {
         window.clearTimeout(fallbackTimer);
-      }
-      if (idleHandle && cancelIdle) {
-        cancelIdle(idleHandle);
       }
       events.forEach((eventName) => window.removeEventListener(eventName, onInteraction));
     };

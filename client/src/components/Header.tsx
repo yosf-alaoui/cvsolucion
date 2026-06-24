@@ -398,12 +398,18 @@ export default function Header() {
           <div className="flex items-center justify-between gap-3 px-3 py-3 sm:px-4">
             <a href={homeHref} className="flex items-center transition-opacity hover:opacity-90">
               <picture>
-                <source srcSet="/logo.webp" type="image/webp" />
+                <source
+                  srcSet="/logo-256.webp 256w, /logo-480.webp 480w"
+                  sizes="(max-width: 639px) 108px, 192px"
+                  type="image/webp"
+                />
                 <img
-                  src="/logo.png"
+                  src="/logo-256.webp"
                   alt="CV Solucion Logo"
-                  width={1600}
-                  height={533}
+                  width={256}
+                  height={86}
+                  fetchPriority="high"
+                  loading="eager"
                   decoding="async"
                   className="h-9 w-auto drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)] sm:h-11 md:h-12"
                 />

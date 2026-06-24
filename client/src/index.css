@@ -163,6 +163,16 @@
     animation: fade-in 0.8s ease-out;
   }
 
+  .hero-content-enter {
+    animation: fade-in 0.55s ease-out;
+  }
+
+  @media (max-width: 639px), (prefers-reduced-motion: reduce) {
+    .hero-content-enter {
+      animation: none;
+    }
+  }
+
   @keyframes card-screen-escape {
     0% {
       transform: perspective(1600px) translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) scale(1);

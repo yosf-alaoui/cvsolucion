@@ -77,7 +77,7 @@ export default function HeroSection() {
       ) : null}
 
       <div className="container relative z-10 mx-auto px-4 py-16 text-center sm:py-20">
-        <div className="relative mx-auto max-w-4xl animate-fade-in px-0 py-4 sm:px-6 sm:py-8">
+        <div className="hero-content-enter relative mx-auto max-w-4xl px-0 py-4 sm:px-6 sm:py-8">
           <div className="absolute inset-0 rounded-[30px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),rgba(255,255,255,0)_46%)] blur-md sm:rounded-[40px] sm:blur-2xl" />
           <div className="relative mx-auto max-w-3xl overflow-hidden rounded-[30px] border border-white/20 bg-[linear-gradient(180deg,rgba(11,18,35,0.66)_0%,rgba(15,23,42,0.54)_48%,rgba(15,23,42,0.42)_100%)] px-5 py-7 shadow-[0_18px_42px_rgba(0,0,0,0.28)] ring-1 ring-white/12 sm:rounded-[38px] sm:bg-[linear-gradient(180deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0.1)_45%,rgba(255,255,255,0.06)_100%)] sm:px-10 sm:py-10 sm:shadow-[0_26px_70px_rgba(0,0,0,0.24)] sm:ring-white/16 sm:backdrop-blur-[18px] sm:backdrop-saturate-140">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(10,22,48,0.26),rgba(10,22,48,0)_62%)] sm:bg-[radial-gradient(circle_at_50%_30%,rgba(10,22,48,0.18),rgba(10,22,48,0)_62%)]" />

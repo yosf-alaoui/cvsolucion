@@ -7,11 +7,88 @@
   <meta name="theme-color" content="#f8fafc" />
 
   <script>
-    document.documentElement.classList.add("js");
+    (() => {
+      const path = window.location.pathname.replace(/\/+$/, "") || "/";
+      const isHome = path === "/" || path === "/fr" || path === "/ar";
+      document.documentElement.classList.add(isHome ? "home-shell" : "js");
+    })();
   </script>
 
   <style>
+    html.css-deferred:not(.styles-ready) #root {
+      visibility: hidden;
+    }
+
     html.js #seo-fallback {
+      display: none;
+    }
+
+    html.home-shell,
+    html.home-shell body {
+      min-height: 100%;
+      background: #081525;
+    }
+
+    html.home-shell #seo-fallback {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: flex;
+      min-height: 100svh;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 104px 20px 36px;
+      background:
+        linear-gradient(rgba(77, 134, 170, 0.12) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(77, 134, 170, 0.12) 1px, transparent 1px),
+        #081525;
+      background-size: 48px 48px, 48px 48px, auto;
+      color: #ffffff;
+      text-align: center;
+    }
+
+    html.home-shell.app-ready #seo-fallback {
+      z-index: -1;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    html.home-shell #seo-fallback > section {
+      width: min(100%, 760px);
+      padding: 28px 22px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 28px;
+      background: rgba(10, 20, 39, 0.7);
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.3);
+    }
+
+    html.home-shell #seo-fallback h1 {
+      margin: 0;
+      color: #ffffff;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(2.3rem, 10vw, 4.2rem);
+      line-height: 1.08;
+      white-space: pre-line;
+      text-wrap: balance;
+    }
+
+    html.home-shell #seo-fallback p:first-of-type {
+      display: block;
+      max-width: 680px;
+      margin: 20px auto 0;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: clamp(1rem, 3.8vw, 1.2rem);
+      line-height: 1.65;
+    }
+
+    html.home-shell #seo-fallback p:not(:first-of-type),
+    html.home-shell #seo-fallback h2,
+    html.home-shell #seo-fallback h3,
+    html.home-shell #seo-fallback ul,
+    html.home-shell #seo-fallback ol,
+    html.home-shell #seo-fallback nav,
+    html.home-shell #seo-fallback figure {
       display: none;
     }
 
@@ -108,7 +185,6 @@
   <!-- SEO_ALTERNATES -->
   <!-- SEO_STRUCTURED_DATA -->
 
-  <script src="https://analytics.ahrefs.com/analytics.js" data-key="iABZcinu8y6HV7To3tLfIA" async></script>
   <link rel="icon" type="image/x-icon" href="/favicon.ico?v=brand-20260529" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=brand-20260529" />
 </head>
