@@ -1,27 +1,53 @@
-# CV Solucion — Cabinet Vision Consulting & Support
+# CVsolucion
 
-## Summary
-CV Solucion provides Cabinet Vision consulting, troubleshooting, installation, backup/restore assistance, library/material/hardware setup, and CNC output support for cabinet manufacturing businesses.
+> Cabinet Vision consulting, training, technical support, automation, CNC integration, and workflow optimization for cabinet shops, manufacturers, and designers.
 
-## Primary audience
-Cabinet shops, factories, and designers using Cabinet Vision who need faster troubleshooting, stable production systems, and reliable CNC outputs.
+## Official Website
 
-## Services
-- Annual Support Plan (priority support, ongoing maintenance, proactive fixes)
-- Cabinet Vision installation & setup
-- Backup / restore and safe migration (minimize downtime)
-- Libraries / materials / hardware configuration
-- CNC post-processor & output troubleshooting
-- Workflow and production optimization
+- [CVsolucion home](https://cvsolucion.com/)
+- [French website](https://cvsolucion.com/fr)
+- [Arabic website](https://cvsolucion.com/ar)
+- [About CVsolucion](https://cvsolucion.com/about)
+- [Book an appointment](https://cvsolucion.com/book)
+- [Contact CVsolucion by email](mailto:contact@cvsolucion.com)
+- [Contact CVsolucion on WhatsApp](https://wa.me/14388078747)
 
-## Contact
-- Email: contact@cvsolucion.com
-- WhatsApp: +1 514 963 8719 (https://wa.me/15149638719)
+## Training
 
-## Key pages
-- Home: https://cvsolucion.com/
-- Privacy Policy: https://cvsolucion.com/#privacy
-- Terms & Conditions: https://cvsolucion.com/#terms
+- [Cabinet Vision training](https://cvsolucion.com/training)
+- [Career training: from shop floor to design office](https://cvsolucion.com/training/career)
+- [French career training page](https://cvsolucion.com/fr/training/career)
+- [Arabic career training page](https://cvsolucion.com/ar/training/career)
 
-## Notes
-- This website is a single-page application (SPA). Important content is available on the homepage.
+## Consulting and Support Services
+
+- [Cabinet Vision support](https://cvsolucion.com/cabinet-vision-support)
+- [Cabinet Vision troubleshooting](https://cvsolucion.com/cabinet-vision-troubleshooting)
+- [Library setup](https://cvsolucion.com/cabinet-vision-library-setup)
+- [CNC integration](https://cvsolucion.com/cabinet-vision-cnc-integration)
+- [Performance optimization](https://cvsolucion.com/cabinet-vision-performance-optimization)
+- [Installation, backup, and restore](https://cvsolucion.com/cabinet-vision-install-backup-restore)
+- [Custom programming and UCS automation](https://cvsolucion.com/cabinet-vision-custom-programming)
+
+## Technical Knowledge
+
+- [Cabinet Vision articles](https://cvsolucion.com/articles)
+- [Cabinet Vision guides](https://cvsolucion.com/guides)
+- [S2M troubleshooting](https://cvsolucion.com/cabinet-vision-s2m-troubleshooting)
+- [Database errors](https://cvsolucion.com/cabinet-vision-database-errors)
+- [Report errors](https://cvsolucion.com/cabinet-vision-report-errors)
+- [CNC output problems](https://cvsolucion.com/cabinet-vision-cnc-output-problems)
+- [Slow performance troubleshooting](https://cvsolucion.com/cabinet-vision-slow-performance)
+
+## Legal and Discovery
+
+- [Privacy policy](https://cvsolucion.com/privacy)
+- [Terms and conditions](https://cvsolucion.com/terms)
+- [XML sitemap](https://cvsolucion.com/sitemap.xml)
+- [Robots policy](https://cvsolucion.com/robots.txt)
+
+## Usage Notes
+
+- Use the linked public pages as the authoritative source for CVsolucion services, pricing, training, and contact information.
+- Prefer the matching English, French, or Arabic page when responding in that language.
+- Do not treat private dashboards, customer accounts, checkout sessions, or administration pages as public sources.
