@@ -265,7 +265,7 @@ export default function Analytics() {
     };
     const scheduleLoad = () => {
       const mobile = window.matchMedia("(max-width: 767px)").matches;
-      timer = window.setTimeout(triggerLoad, mobile ? 7000 : 2500);
+      timer = window.setTimeout(triggerLoad, mobile ? 15000 : 8000);
     };
 
     window.addEventListener(LOAD_EXTERNAL_ANALYTICS_EVENT, triggerLoad, {
