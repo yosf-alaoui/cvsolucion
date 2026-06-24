@@ -104,13 +104,12 @@ function isDoNotTrackEnabled() {
 }
 
 function getGtmId() {
-  const enabled =
-    (
-      (import.meta.env.VITE_ENABLE_GTM as string | undefined)?.trim() || ""
-    ).toLowerCase() === "true";
-  return enabled
-    ? (import.meta.env.VITE_GTM_ID as string | undefined)?.trim() || ""
-    : "";
+  const configuredId =
+    (import.meta.env.VITE_GTM_ID as string | undefined)?.trim() || "";
+  const enabledSetting = (
+    (import.meta.env.VITE_ENABLE_GTM as string | undefined)?.trim() || ""
+  ).toLowerCase();
+  return configuredId && enabledSetting !== "false" ? configuredId : "";
 }
 
 function ensureGtag(ga4Id: string) {
