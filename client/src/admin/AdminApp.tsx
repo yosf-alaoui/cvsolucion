@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Route, Switch } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -63,6 +63,10 @@ function AdminRouter() {
 }
 
 export default function AdminApp() {
+  useEffect(() => {
+    document.title = "Admin Console | CVsolucion";
+  }, []);
+
   return (
     <ErrorBoundary>
       <I18nProvider>
