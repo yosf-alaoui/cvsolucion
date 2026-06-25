@@ -8,6 +8,19 @@ type ContactPayload = {
   interest?: string;
   message: string;
   locale?: string;
+  source?: "career_evaluation";
+  tracking?: Partial<
+    Record<
+      | "utm_source"
+      | "utm_medium"
+      | "utm_campaign"
+      | "utm_content"
+      | "utm_term"
+      | "fbclid"
+      | "landing_page",
+      string
+    >
+  >;
 };
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {

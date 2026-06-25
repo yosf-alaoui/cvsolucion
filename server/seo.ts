@@ -36,7 +36,7 @@ const TRAINING_CAREER_COPY = {
   en: {
     seoTitle: "From Shop Floor to Design Office | Cabinet Vision Career Training | CVsolucion",
     metaDescription:
-      "Already working in a cabinet shop? Learn Cabinet Vision and move from production to design. Live training with a real instructor, full software access, schedule set around your availability.",
+      "Request a free Cabinet Vision career evaluation for cabinet shop workers, CNC operators, assemblers, installers, and woodworkers moving toward design.",
     h1: "Same shop floor. Different paycheck.",
     intro:
       "You already work in the industry. This training takes you from the shop floor to the design office on the exact software cabinet shops across Canada and the US run on.",
@@ -50,7 +50,7 @@ const TRAINING_CAREER_COPY = {
   fr: {
     seoTitle: "De l'atelier au bureau de design | Formation carriere Cabinet Vision | CVsolucion",
     metaDescription:
-      "Vous travaillez deja dans un atelier de cabinets? Apprenez Cabinet Vision et passez de la production au design. Formation en direct, acces logiciel inclus, horaire selon vos disponibilites.",
+      "Demandez une evaluation de carriere Cabinet Vision gratuite pour passer de l'atelier, du CNC ou de l'installation vers le bureau de design.",
     h1: "Meme atelier. Meilleur role.",
     intro:
       "Vous travaillez deja dans l'industrie. Cette formation vous aide a passer de l'atelier au bureau de design avec le logiciel utilise par les ateliers de cabinets au Canada et aux Etats-Unis.",
@@ -64,7 +64,7 @@ const TRAINING_CAREER_COPY = {
   ar: {
     seoTitle: "من الورشة إلى مكتب التصميم | تدريب مهني Cabinet Vision | CVsolucion",
     metaDescription:
-      "هل تعمل بالفعل في ورشة خزائن أو مطابخ؟ تعلم Cabinet Vision وانتقل من الإنتاج إلى التصميم. تدريب مباشر مع مدرب حقيقي، وصول كامل للبرنامج، وجدولة حسب وقتك.",
+      "اطلب تقييما مهنيا مجانيا لتعرف هل تدريب Cabinet Vision مناسب لانتقالك من الورشة أو CNC أو التركيب إلى التصميم.",
     h1: "نفس الورشة. دور أفضل.",
     intro:
       "أنت تعمل بالفعل في المجال. هذا التدريب يساعدك على الانتقال من أرضية الورشة إلى مكتب التصميم باستعمال نفس البرنامج الذي تعتمد عليه ورش الخزائن والمطابخ في كندا والولايات المتحدة.",
@@ -648,6 +648,11 @@ function trainingStructuredData(locale: ArticleLocale, origin: string) {
 function trainingCareerFallback(locale: ArticleLocale) {
   const copy = TRAINING_CAREER_COPY[locale];
   const points = copy.points.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  const evaluationLabel = {
+    en: "Request a Free Career Evaluation",
+    fr: "Demander une evaluation de carriere gratuite",
+    ar: "اطلب تقييما مهنيا مجانيا",
+  }[locale];
 
   return `
     <main id="seo-fallback">
@@ -657,7 +662,7 @@ function trainingCareerFallback(locale: ArticleLocale) {
           <p>${escapeHtml(copy.intro)}</p>
           <ul>${points}</ul>
           <nav class="seo-links">
-            <a href="${escapeHtml(localizePath("/training", locale))}">${escapeHtml(routeLabelForLocale(locale, "/training"))}</a>
+            <a href="${escapeHtml(`${localizePath("/training/career", locale)}#career-evaluation`)}">${escapeHtml(evaluationLabel)}</a>
             <a href="${escapeHtml(localizePath("/book", locale))}">${escapeHtml(linkLabel(locale, "/book") || "Book")}</a>
             <a href="${escapeHtml(localizePath("/cabinet-vision-cnc-integration", locale))}">${escapeHtml(routeLabelForLocale(locale, "/cabinet-vision-cnc-integration"))}</a>
           </nav>
@@ -988,6 +993,7 @@ function isKnownCleanPath(cleanPath: string) {
     "/",
     "/training",
     "/training/career",
+    "/training/career/thank-you",
     "/design-pricing",
     "/articles",
     "/guides",
@@ -1093,6 +1099,42 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
       image: DEFAULT_IMAGE,
       fallbackHtml: trainingCareerFallback(locale),
       structuredData: trainingCareerStructuredData(locale, origin),
+    };
+  }
+
+  if (cleanPath === "/training/career/thank-you") {
+    const copy = TRAINING_CAREER_COPY[locale];
+    const title =
+      locale === "ar"
+        ? "تم استلام طلب التقييم | CVsolucion"
+        : locale === "fr"
+          ? "Demande d'evaluation recue | CVsolucion"
+          : "Career evaluation request received | CVsolucion";
+    const description =
+      locale === "ar"
+        ? "تم استلام طلب التقييم المهني لتدريب Cabinet Vision."
+        : locale === "fr"
+          ? "Votre demande d'evaluation de carriere Cabinet Vision a bien ete recue."
+          : "Your Cabinet Vision career evaluation request has been received.";
+    return {
+      lang,
+      dir,
+      title,
+      description,
+      canonicalPath: cleanPath,
+      ogType: "website",
+      robots: "noindex, nofollow",
+      image: DEFAULT_IMAGE,
+      fallbackHtml: `
+        <main id="seo-fallback">
+          <section>
+            <h1>${escapeHtml(title)}</h1>
+            <p>${escapeHtml(description)}</p>
+            <a href="${escapeHtml(localizePath("/training/career", locale))}">${escapeHtml(copy.h1)}</a>
+          </section>
+        </main>
+      `,
+      structuredData: null,
     };
   }
 

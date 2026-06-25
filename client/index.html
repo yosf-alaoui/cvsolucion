@@ -10,7 +10,13 @@
     (() => {
       const path = window.location.pathname.replace(/\/+$/, "") || "/";
       const isHome = path === "/" || path === "/fr" || path === "/ar";
-      document.documentElement.classList.add(isHome ? "home-shell" : "js");
+      const isCareer =
+        path === "/training/career" ||
+        path === "/fr/training/career" ||
+        path === "/ar/training/career";
+      document.documentElement.classList.add(
+        isHome ? "home-shell" : isCareer ? "career-shell" : "js",
+      );
     })();
   </script>
 
@@ -54,6 +60,121 @@
       pointer-events: none;
     }
 
+    html.career-shell,
+    html.career-shell body {
+      min-height: 100%;
+      background: #f8fafc;
+    }
+
+    html.career-shell #seo-fallback {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: flex;
+      min-height: 100svh;
+      align-items: center;
+      overflow: auto;
+      max-width: none;
+      padding: 48px 20px;
+      background:
+        linear-gradient(135deg, rgba(29, 63, 145, 0.07), transparent 52%),
+        #f8fafc;
+      color: #0f172a;
+    }
+
+    html.career-shell.app-ready #seo-fallback {
+      z-index: -1;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    html.career-shell #seo-fallback > article {
+      width: min(100%, 1180px);
+      margin: 0 auto;
+    }
+
+    html.career-shell #seo-fallback section {
+      max-width: 760px;
+    }
+
+    html.career-shell #seo-fallback h1 {
+      margin: 0;
+      max-width: 720px;
+      color: #0f172a;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: clamp(2.45rem, 8vw, 5.4rem);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: 0;
+      text-wrap: balance;
+    }
+
+    html.career-shell #seo-fallback p {
+      max-width: 740px;
+      margin: 24px 0 0;
+      color: #334155;
+      font-size: clamp(1.375rem, 4vw, 1.55rem);
+      font-weight: 700;
+      line-height: 1.55;
+    }
+
+    html.career-shell #seo-fallback ul {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 24px;
+      margin: 26px 0 0;
+      padding: 0;
+      list-style: none;
+      color: #334155;
+    }
+
+    html.career-shell #seo-fallback li {
+      position: relative;
+      margin: 0;
+      padding-left: 22px;
+      font-size: 1rem;
+      line-height: 1.5;
+    }
+
+    html[dir="rtl"].career-shell #seo-fallback li {
+      padding-right: 22px;
+      padding-left: 0;
+    }
+
+    html.career-shell #seo-fallback li::before {
+      position: absolute;
+      top: 0;
+      left: 0;
+      color: #16a34a;
+      content: "✓";
+      font-weight: 800;
+    }
+
+    html[dir="rtl"].career-shell #seo-fallback li::before {
+      right: 0;
+      left: auto;
+    }
+
+    html.career-shell #seo-fallback nav {
+      margin-top: 30px;
+    }
+
+    html.career-shell #seo-fallback nav a {
+      display: none;
+    }
+
+    html.career-shell #seo-fallback nav a:first-child {
+      display: inline-flex;
+      min-height: 48px;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 20px;
+      border-radius: 8px;
+      background: #1d3f91;
+      color: #ffffff;
+      text-decoration: none;
+    }
+
     html.home-shell #seo-fallback > section {
       width: min(100%, 760px);
       padding: 28px 22px;
@@ -90,6 +211,17 @@
     html.home-shell #seo-fallback nav,
     html.home-shell #seo-fallback figure {
       display: none;
+    }
+
+    @media (max-width: 640px) {
+      html.career-shell #seo-fallback {
+        align-items: flex-start;
+        padding-top: 72px;
+      }
+
+      html.career-shell #seo-fallback ul {
+        grid-template-columns: 1fr;
+      }
     }
 
     #seo-fallback {

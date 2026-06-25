@@ -11,6 +11,9 @@ import { isDesignerWorkspaceHost } from "@/lib/site";
 
 const Training = lazy(() => import("./pages/Training"));
 const TrainingCareer = lazy(() => import("./pages/TrainingCareer"));
+const TrainingCareerThankYou = lazy(
+  () => import("./pages/TrainingCareerThankYou"),
+);
 const Login = lazy(() => import("./pages/Login"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
@@ -117,6 +120,18 @@ function Router() {
       <Route path={"/fr"} component={homeComponent} />
       <Route path={"/ar"} component={homeComponent} />
       {/* Training */}
+      <Route
+        path={"/training/career/thank-you"}
+        component={TrainingCareerThankYou}
+      />
+      <Route
+        path={"/fr/training/career/thank-you"}
+        component={TrainingCareerThankYou}
+      />
+      <Route
+        path={"/ar/training/career/thank-you"}
+        component={TrainingCareerThankYou}
+      />
       <Route path={"/training/career"} component={TrainingCareer} />
       <Route path={"/fr/training/career"} component={TrainingCareer} />
       <Route path={"/ar/training/career"} component={TrainingCareer} />

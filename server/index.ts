@@ -2121,6 +2121,31 @@ async function startServer() {
         const interest = String(req.body?.interest || "").trim();
         const message = String(req.body?.message || "").trim();
         const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
+        const sourceType =
+          String(req.body?.source || "").trim() === "career_evaluation"
+            ? "career_evaluation"
+            : "contact";
+        const rawTracking =
+          req.body?.tracking && typeof req.body.tracking === "object"
+            ? req.body.tracking
+            : {};
+        const trackingKeys = [
+          "utm_source",
+          "utm_medium",
+          "utm_campaign",
+          "utm_content",
+          "utm_term",
+          "fbclid",
+          "landing_page",
+        ] as const;
+        const tracking = trackingKeys.reduce<Record<string, string>>(
+          (result, key) => {
+            const value = String(rawTracking[key] || "").trim().slice(0, 1000);
+            if (value) result[key] = value;
+            return result;
+          },
+          {},
+        );
 
         if (name.length < 2) {
           return res.status(400).json({ error: "Name is required." });
@@ -2146,6 +2171,9 @@ async function startServer() {
           process.env.CONTACT_EMAIL || "contact@cvsolucion.com"
         ).trim();
         const source = req.get("referer") || appOrigin(req);
+        const trackingLines = Object.entries(tracking).map(
+          ([key, value]) => `${key}: ${value}`,
+        );
 
         const lines = [
           `Lead ID: ${lead.id}`,
@@ -2156,17 +2184,25 @@ async function startServer() {
           lead.interest ? `Interest: ${lead.interest}` : null,
           `Locale: ${locale}`,
           `Source: ${source}`,
+          ...(trackingLines.length ? ["", "Tracking:", ...trackingLines] : []),
           "",
           lead.message,
         ].filter(Boolean);
 
         await sendAuthEmail({
           to: destination,
-          subject: `New CVsolucion contact request - ${lead.name}`,
+          subject:
+            sourceType === "career_evaluation"
+              ? `New Career Evaluation Request - ${lead.name}`
+              : `New CVsolucion contact request - ${lead.name}`,
           text: lines.join("\n"),
           html: `
           <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
-            <h2 style="margin:0 0 16px">New CVsolucion contact request</h2>
+            <h2 style="margin:0 0 16px">${
+              sourceType === "career_evaluation"
+                ? "New Free Career Evaluation Request"
+                : "New CVsolucion contact request"
+            }</h2>
             <p><strong>Lead ID:</strong> ${escapeHtml(lead.id)}</p>
             <p><strong>Name:</strong> ${escapeHtml(lead.name)}</p>
             <p><strong>Email:</strong> ${escapeHtml(lead.email)}</p>
@@ -2175,6 +2211,18 @@ async function startServer() {
             ${lead.interest ? `<p><strong>Interest:</strong> ${escapeHtml(lead.interest)}</p>` : ""}
             <p><strong>Locale:</strong> ${escapeHtml(locale)}</p>
             <p><strong>Source:</strong> ${escapeHtml(source)}</p>
+            ${
+              trackingLines.length
+                ? `<h3 style="margin:24px 0 8px">Tracking</h3>${Object.entries(
+                    tracking,
+                  )
+                    .map(
+                      ([key, value]) =>
+                        `<p><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</p>`,
+                    )
+                    .join("")}`
+                : ""
+            }
             <hr style="margin:24px 0;border:none;border-top:1px solid #cbd5e1" />
             <p style="white-space:pre-wrap">${escapeHtml(lead.message)}</p>
           </div>
