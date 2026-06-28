@@ -5,6 +5,7 @@ import {
   isSqliteStorageEnabled,
   withDocumentDatabase,
 } from "./documentDatabase";
+import { isAutomatedUserAgent } from "./botGuard";
 import { ensureJsonFile, readJsonFile, writeJsonFileAtomic } from "./jsonFile";
 
 export type VisitorPageView = {
@@ -378,7 +379,7 @@ function inferDeviceType(
 ): VisitorRecord["deviceType"] {
   const ua = (userAgent || "").toLowerCase();
   if (!ua) return "unknown";
-  if (/bot|crawl|spider|slurp|facebookexternalhit/.test(ua)) return "bot";
+  if (isAutomatedUserAgent(ua)) return "bot";
   if (/ipad|tablet/.test(ua)) return "tablet";
   if (/mobile|android|iphone/.test(ua)) return "mobile";
   return "desktop";
@@ -484,7 +485,7 @@ function inferTrafficSource(input: {
   const navigationType = input.navigationType || null;
   const secFetchSite = input.secFetchSite || null;
 
-  if (/bot|crawl|spider|slurp|facebookexternalhit|preview/.test(userAgent)) {
+  if (isAutomatedUserAgent(userAgent)) {
     return {
       category: "Bot / crawler",
       source: referrerHost || "Bot",
@@ -942,6 +943,11 @@ export function getVisitorsSnapshot() {
   const db = loadDb();
   return db.visitors
     .slice()
+    .filter(
+      (visitor) =>
+        visitor.deviceType !== "bot" &&
+        !isAutomatedUserAgent(visitor.userAgent),
+    )
     .sort(
       (a, b) =>
         new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime(),

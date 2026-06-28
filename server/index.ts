@@ -46,6 +46,11 @@ import {
   trackVisitor,
   trackVisitorInteraction,
 } from "./visitorStore";
+import {
+  getBotDecision,
+  shouldBlockBotRequest,
+  shouldIgnoreVisitorTracking,
+} from "./botGuard";
 import { getGa4DashboardSnapshot } from "./ga4Reporting";
 import { generateAssistantReply, isChatEnabled } from "./chatAssistant";
 import {
@@ -897,6 +902,14 @@ function isAdminShellRequest(pathname: string) {
   return pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
+function isBotGuardBypassPath(pathname: string) {
+  return (
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname === "/sitemap-index.xml"
+  );
+}
+
 async function sendLinkEmail(args: {
   email: string;
   locale?: string;
@@ -1298,6 +1311,16 @@ async function startServer() {
       return res.status(404).send("Not Found");
     }
     return next();
+  });
+
+  app.use((req, res, next) => {
+    if (isBotGuardBypassPath(req.path)) return next();
+    if (!shouldBlockBotRequest(req.get("user-agent") || null)) return next();
+
+    const decision = getBotDecision(req.get("user-agent") || null);
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(403).send(`Forbidden: ${decision.label}`);
   });
 
   app.use((req, res, next) => {
@@ -1807,6 +1830,10 @@ async function startServer() {
     "/api/visitor/track",
     rateLimit({ key: "visitor-track", windowMs: 1000 * 60, limit: 240 }),
     (req, res) => {
+      if (shouldIgnoreVisitorTracking(req.get("user-agent") || null)) {
+        return res.json({ ok: true, ignored: true, reason: "bot" });
+      }
+
       const cookies = parseCookies(req.headers.cookie);
       const existingVisitorId = cookies[VISITOR_COOKIE_NAME];
       const visitorId = existingVisitorId || createVisitorId();
@@ -1865,6 +1892,10 @@ async function startServer() {
     "/api/visitor/event",
     rateLimit({ key: "visitor-event", windowMs: 1000 * 60, limit: 300 }),
     (req, res) => {
+      if (shouldIgnoreVisitorTracking(req.get("user-agent") || null)) {
+        return res.json({ ok: true, ignored: true, reason: "bot" });
+      }
+
       const cookies = parseCookies(req.headers.cookie);
       const visitorId = cookies[VISITOR_COOKIE_NAME];
       if (!visitorId) {
@@ -1904,6 +1935,13 @@ async function startServer() {
       return res.json({ ok: true, tracked: Boolean(visitor) });
     },
   );
+
+  app.use("/api/chat", (req, res, next) => {
+    if (!shouldIgnoreVisitorTracking(req.get("user-agent") || null)) {
+      return next();
+    }
+    return res.status(403).json({ error: "Automated clients cannot use chat." });
+  });
 
   app.post(
     "/api/chat/session",
