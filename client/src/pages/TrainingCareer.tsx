@@ -70,6 +70,10 @@ type CareerCopy = {
   submitting: string;
   formPrivacy: string;
   formError: string;
+  verificationTitle: string;
+  verificationBody: string;
+  verificationHint: string;
+  confirmationExpired: string;
   roleOptions: SelectOption[];
   shopOptions: SelectOption[];
   experienceOptions: SelectOption[];
@@ -199,6 +203,13 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     formPrivacy:
       "Your details are used only to review this request and contact you about the evaluation.",
     formError: "We could not send the request. Please try again.",
+    verificationTitle: "Confirm your email to complete the request",
+    verificationBody:
+      "We sent a confirmation link to your email. Open it to finish the request. Our team will only receive the evaluation request after the email is confirmed.",
+    verificationHint:
+      "If you do not see it, check spam or promotions and make sure the email address is correct.",
+    confirmationExpired:
+      "The confirmation link is invalid or expired. Please submit the form again.",
     roleOptions: options(enOptions.roles),
     shopOptions: options(enOptions.shop),
     experienceOptions: options(enOptions.experience),
@@ -373,6 +384,13 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     formPrivacy:
       "Vos informations servent uniquement a examiner la demande et a vous contacter.",
     formError: "La demande n'a pas pu etre envoyee. Veuillez reessayer.",
+    verificationTitle: "Confirmez votre email pour finaliser la demande",
+    verificationBody:
+      "Nous avons envoye un lien de confirmation a votre adresse email. Ouvrez-le pour terminer la demande. Notre equipe recevra la demande uniquement apres confirmation.",
+    verificationHint:
+      "Si vous ne le voyez pas, verifiez les spams ou promotions et assurez-vous que l'adresse email est correcte.",
+    confirmationExpired:
+      "Le lien de confirmation est invalide ou expire. Veuillez renvoyer le formulaire.",
     roleOptions: options([
       "Travailleur d'atelier",
       "Operateur CNC",
@@ -533,6 +551,13 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     submitting: "جار إرسال طلبك...",
     formPrivacy: "نستعمل معلوماتك فقط لمراجعة الطلب والتواصل معك حول التقييم.",
     formError: "تعذر إرسال الطلب. حاول مرة أخرى.",
+    verificationTitle: "أكد بريدك الإلكتروني لإكمال الطلب",
+    verificationBody:
+      "أرسلنا رابط تأكيد إلى بريدك الإلكتروني. افتحه لإكمال الطلب. لن يصل طلب التقييم إلى فريقنا إلا بعد تأكيد البريد.",
+    verificationHint:
+      "إذا لم تجد الرسالة، تحقق من البريد غير المرغوب فيه وتأكد من أن عنوان البريد صحيح.",
+    confirmationExpired:
+      "رابط التأكيد غير صالح أو انتهت مدته. يرجى إرسال الفورم من جديد.",
     roleOptions: options([
       "عامل في ورشة خزائن",
       "مشغل CNC",
@@ -696,6 +721,9 @@ export default function TrainingCareer() {
   const scrollEvents = useRef({ fifty: false, ninety: false });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(
+    null,
+  );
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -725,6 +753,13 @@ export default function TrainingCareer() {
     "+1 438 807 8747",
     copy.whatsappMessage,
   );
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("confirmation") === "expired") {
+      setError(copy.confirmationExpired);
+    }
+  }, [copy.confirmationExpired]);
 
   useEffect(() => {
     trackCampaignEvent("ViewContent", {
@@ -792,6 +827,7 @@ export default function TrainingCareer() {
 
   const updateForm = (field: keyof typeof form, value: string) => {
     startForm();
+    setVerificationEmail(null);
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -827,6 +863,14 @@ export default function TrainingCareer() {
         source: "career_evaluation",
         tracking,
       });
+      if (response.pendingEmailVerification) {
+        setVerificationEmail(response.email || form.email);
+        setBusy(false);
+        return;
+      }
+      if (!response.leadId) {
+        throw new Error(copy.formError);
+      }
       markCareerLeadForThankYou(response.leadId);
       window.location.assign(
         localPath(pageLocale, "/training/career/thank-you"),
@@ -1106,6 +1150,28 @@ export default function TrainingCareer() {
                     }
                   />
                 </div>
+
+                {verificationEmail ? (
+                  <div className="border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm leading-7 text-emerald-900">
+                    <div className="flex items-start gap-3">
+                      <Mail className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
+                      <div>
+                        <div className="font-black">
+                          {copy.verificationTitle}
+                        </div>
+                        <p className="mt-1">
+                          {copy.verificationBody}{" "}
+                          <span className="font-bold">
+                            {verificationEmail}
+                          </span>
+                        </p>
+                        <p className="mt-1 text-emerald-800">
+                          {copy.verificationHint}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 <Button
                   type="submit"

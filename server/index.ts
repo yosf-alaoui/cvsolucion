@@ -96,7 +96,17 @@ import {
   isBookingScheduleOpen,
   updateBookingScheduleSettings,
 } from "./bookingSettingsStore";
-import { listContactLeads, storeContactLead } from "./contactStore";
+import {
+  listContactLeads,
+  storeContactLead,
+  type ContactLead,
+} from "./contactStore";
+import {
+  createPendingContactLead,
+  getPendingContactLeadByToken,
+  markPendingContactLeadConfirmed,
+  type PendingContactLead,
+} from "./contactVerificationStore";
 import {
   buildRobotsTxt,
   buildSitemapXml,
@@ -184,6 +194,7 @@ const __dirname = path.dirname(__filename);
 
 const MAGIC_LINK_MS = 1000 * 60 * 20;
 const VERIFY_LINK_MS = 1000 * 60 * 60 * 24;
+const CONTACT_CONFIRM_LINK_MS = 1000 * 60 * 60 * 24 * 3;
 const RESET_LINK_MS = 1000 * 60 * 30;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
@@ -926,6 +937,165 @@ function authEmailDeliveryMessage(
   return kind === "recipient_rejected"
     ? "This email address cannot receive messages. Check the spelling or use a different inbox."
     : "We couldn't send the email right now. Please try again in a moment.";
+}
+
+type ContactSourceType = "contact" | "career_evaluation";
+
+function renderContactConfirmationEmail(args: {
+  name: string;
+  locale: "en" | "fr" | "ar";
+  url: string;
+  sourceType: ContactSourceType;
+}) {
+  const copy = {
+    en: {
+      subject:
+        args.sourceType === "career_evaluation"
+          ? "Confirm your free career evaluation request"
+          : "Confirm your CVsolucion contact request",
+      title: "Confirm your email to complete your request",
+      body:
+        "We received your request. Please confirm your email address so our team can review it and contact you.",
+      cta: "Confirm my email",
+      fallback: "If the button does not work, open this link:",
+      expiry: "This confirmation link expires in 3 days.",
+    },
+    fr: {
+      subject:
+        args.sourceType === "career_evaluation"
+          ? "Confirmez votre demande d'evaluation gratuite"
+          : "Confirmez votre demande CVsolucion",
+      title: "Confirmez votre email pour finaliser la demande",
+      body:
+        "Nous avons recu votre demande. Confirmez votre adresse email pour que notre equipe puisse l'examiner et vous contacter.",
+      cta: "Confirmer mon email",
+      fallback: "Si le bouton ne fonctionne pas, ouvrez ce lien :",
+      expiry: "Ce lien de confirmation expire dans 3 jours.",
+    },
+    ar: {
+      subject: "تأكيد بريدك لإكمال الطلب",
+      title: "أكد بريدك الإلكتروني لإكمال الطلب",
+      body:
+        "توصلنا بطلبك. يرجى تأكيد البريد الإلكتروني حتى يتمكن فريقنا من مراجعته والتواصل معك.",
+      cta: "تأكيد البريد الإلكتروني",
+      fallback: "إذا لم يعمل الزر، افتح هذا الرابط:",
+      expiry: "رابط التأكيد صالح لمدة 3 أيام.",
+    },
+  }[args.locale];
+
+  const dir = args.locale === "ar" ? "rtl" : "ltr";
+  const align = args.locale === "ar" ? "right" : "left";
+  const greeting =
+    args.locale === "fr"
+      ? `Bonjour ${args.name},`
+      : args.locale === "ar"
+        ? `مرحبا ${args.name}،`
+        : `Hello ${args.name},`;
+  const text = [
+    greeting,
+    "",
+    copy.body,
+    "",
+    args.url,
+    "",
+    copy.expiry,
+  ].join("\n");
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.7;color:#0f172a;direction:${dir};text-align:${align}">
+      <h2 style="margin:0 0 16px">${escapeHtml(copy.title)}</h2>
+      <p>${escapeHtml(greeting)}</p>
+      <p>${escapeHtml(copy.body)}</p>
+      <p>
+        <a href="${escapeHtml(args.url)}" style="display:inline-block;padding:12px 18px;background:#1e3a8a;color:#ffffff;text-decoration:none;border-radius:10px">
+          ${escapeHtml(copy.cta)}
+        </a>
+      </p>
+      <p style="margin:18px 0 6px;color:#475569">${escapeHtml(copy.fallback)}</p>
+      <p style="word-break:break-all;color:#475569">${escapeHtml(args.url)}</p>
+      <p style="color:#64748b">${escapeHtml(copy.expiry)}</p>
+    </div>
+  `;
+
+  return { subject: copy.subject, text, html };
+}
+
+async function sendContactLeadNotification(args: {
+  lead: ContactLead;
+  sourceType: ContactSourceType;
+  locale: "en" | "fr" | "ar";
+  source: string;
+  tracking: Record<string, string>;
+}) {
+  const destination = (process.env.CONTACT_EMAIL || "contact@cvsolucion.com")
+    .trim();
+  const trackingLines = Object.entries(args.tracking).map(
+    ([key, value]) => `${key}: ${value}`,
+  );
+
+  const lines = [
+    `Lead ID: ${args.lead.id}`,
+    `Name: ${args.lead.name}`,
+    `Email: ${args.lead.email}`,
+    args.lead.company ? `Company: ${args.lead.company}` : null,
+    args.lead.phone ? `Phone: ${args.lead.phone}` : null,
+    args.lead.interest ? `Interest: ${args.lead.interest}` : null,
+    `Locale: ${args.locale}`,
+    `Source: ${args.source}`,
+    ...(trackingLines.length ? ["", "Tracking:", ...trackingLines] : []),
+    "",
+    args.lead.message,
+  ].filter(Boolean);
+
+  await sendAuthEmail({
+    to: destination,
+    subject:
+      args.sourceType === "career_evaluation"
+        ? `New Career Evaluation Request - ${args.lead.name}`
+        : `New CVsolucion contact request - ${args.lead.name}`,
+    text: lines.join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+        <h2 style="margin:0 0 16px">${
+          args.sourceType === "career_evaluation"
+            ? "New Free Career Evaluation Request"
+            : "New CVsolucion contact request"
+        }</h2>
+        <p><strong>Lead ID:</strong> ${escapeHtml(args.lead.id)}</p>
+        <p><strong>Name:</strong> ${escapeHtml(args.lead.name)}</p>
+        <p><strong>Email:</strong> ${escapeHtml(args.lead.email)}</p>
+        ${args.lead.company ? `<p><strong>Company:</strong> ${escapeHtml(args.lead.company)}</p>` : ""}
+        ${args.lead.phone ? `<p><strong>Phone:</strong> ${escapeHtml(args.lead.phone)}</p>` : ""}
+        ${args.lead.interest ? `<p><strong>Interest:</strong> ${escapeHtml(args.lead.interest)}</p>` : ""}
+        <p><strong>Locale:</strong> ${escapeHtml(args.locale)}</p>
+        <p><strong>Source:</strong> ${escapeHtml(args.source)}</p>
+        ${
+          trackingLines.length
+            ? `<h3 style="margin:24px 0 8px">Tracking</h3>${Object.entries(
+                args.tracking,
+              )
+                .map(
+                  ([key, value]) =>
+                    `<p><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</p>`,
+                )
+                .join("")}`
+            : ""
+        }
+        <hr style="margin:24px 0;border:none;border-top:1px solid #cbd5e1" />
+        <p style="white-space:pre-wrap">${escapeHtml(args.lead.message)}</p>
+      </div>
+    `,
+  });
+}
+
+function storeConfirmedContactLead(pendingLead: PendingContactLead) {
+  return storeContactLead({
+    name: pendingLead.name,
+    email: pendingLead.email,
+    company: pendingLead.company,
+    phone: pendingLead.phone,
+    interest: pendingLead.interest,
+    message: pendingLead.message,
+  });
 }
 
 async function startServer() {
@@ -2121,7 +2291,7 @@ async function startServer() {
         const interest = String(req.body?.interest || "").trim();
         const message = String(req.body?.message || "").trim();
         const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
-        const sourceType =
+        const sourceType: ContactSourceType =
           String(req.body?.source || "").trim() === "career_evaluation"
             ? "career_evaluation"
             : "contact";
@@ -2159,6 +2329,58 @@ async function startServer() {
           });
         }
 
+        const source = req.get("referer") || appOrigin(req);
+        const auth = getCurrentUser(req);
+
+        if (sourceType === "career_evaluation" && !auth) {
+          const { rawToken } = createPendingContactLead(
+            {
+              name,
+              email,
+              company,
+              phone,
+              interest,
+              message,
+              locale,
+              sourceType,
+              source,
+              tracking,
+            },
+            CONTACT_CONFIRM_LINK_MS,
+          );
+          const confirmUrl = `${appOrigin(req)}/api/contact/confirm?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}`;
+          const confirmationEmail = renderContactConfirmationEmail({
+            name,
+            locale,
+            url: confirmUrl,
+            sourceType,
+          });
+
+          try {
+            await sendAuthEmail({
+              to: email,
+              subject: confirmationEmail.subject,
+              text: confirmationEmail.text,
+              html: confirmationEmail.html,
+            });
+          } catch (error) {
+            if (error instanceof RecipientEmailRejectedError) {
+              return res.status(400).json({
+                error: authEmailDeliveryMessage(locale, "recipient_rejected"),
+              });
+            }
+            return res.status(502).json({
+              error: authEmailDeliveryMessage(locale, "delivery_failed"),
+            });
+          }
+
+          return res.status(202).json({
+            ok: true,
+            pendingEmailVerification: true,
+            email: email.toLowerCase(),
+          });
+        }
+
         const lead = storeContactLead({
           name,
           email,
@@ -2167,69 +2389,54 @@ async function startServer() {
           interest,
           message,
         });
-        const destination = (
-          process.env.CONTACT_EMAIL || "contact@cvsolucion.com"
-        ).trim();
-        const source = req.get("referer") || appOrigin(req);
-        const trackingLines = Object.entries(tracking).map(
-          ([key, value]) => `${key}: ${value}`,
-        );
-
-        const lines = [
-          `Lead ID: ${lead.id}`,
-          `Name: ${lead.name}`,
-          `Email: ${lead.email}`,
-          lead.company ? `Company: ${lead.company}` : null,
-          lead.phone ? `Phone: ${lead.phone}` : null,
-          lead.interest ? `Interest: ${lead.interest}` : null,
-          `Locale: ${locale}`,
-          `Source: ${source}`,
-          ...(trackingLines.length ? ["", "Tracking:", ...trackingLines] : []),
-          "",
-          lead.message,
-        ].filter(Boolean);
-
-        await sendAuthEmail({
-          to: destination,
-          subject:
-            sourceType === "career_evaluation"
-              ? `New Career Evaluation Request - ${lead.name}`
-              : `New CVsolucion contact request - ${lead.name}`,
-          text: lines.join("\n"),
-          html: `
-          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
-            <h2 style="margin:0 0 16px">${
-              sourceType === "career_evaluation"
-                ? "New Free Career Evaluation Request"
-                : "New CVsolucion contact request"
-            }</h2>
-            <p><strong>Lead ID:</strong> ${escapeHtml(lead.id)}</p>
-            <p><strong>Name:</strong> ${escapeHtml(lead.name)}</p>
-            <p><strong>Email:</strong> ${escapeHtml(lead.email)}</p>
-            ${lead.company ? `<p><strong>Company:</strong> ${escapeHtml(lead.company)}</p>` : ""}
-            ${lead.phone ? `<p><strong>Phone:</strong> ${escapeHtml(lead.phone)}</p>` : ""}
-            ${lead.interest ? `<p><strong>Interest:</strong> ${escapeHtml(lead.interest)}</p>` : ""}
-            <p><strong>Locale:</strong> ${escapeHtml(locale)}</p>
-            <p><strong>Source:</strong> ${escapeHtml(source)}</p>
-            ${
-              trackingLines.length
-                ? `<h3 style="margin:24px 0 8px">Tracking</h3>${Object.entries(
-                    tracking,
-                  )
-                    .map(
-                      ([key, value]) =>
-                        `<p><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</p>`,
-                    )
-                    .join("")}`
-                : ""
-            }
-            <hr style="margin:24px 0;border:none;border-top:1px solid #cbd5e1" />
-            <p style="white-space:pre-wrap">${escapeHtml(lead.message)}</p>
-          </div>
-        `,
+        await sendContactLeadNotification({
+          lead,
+          sourceType,
+          locale,
+          source,
+          tracking,
         });
 
         return res.status(201).json({ ok: true, leadId: lead.id });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.get(
+    "/api/contact/confirm",
+    rateLimit({ key: "contact-confirm", windowMs: 1000 * 60 * 10, limit: 30 }),
+    async (req, res, next) => {
+      try {
+        const token = String(req.query.token || "");
+        const locale = normalizeAuthLocale(String(req.query.locale || "en"));
+        const pendingLead = getPendingContactLeadByToken(token);
+        const fallbackUrl = `${appOrigin(req)}${localePrefix(locale)}/training/career?confirmation=expired`;
+
+        if (!pendingLead) {
+          return res.redirect(302, fallbackUrl);
+        }
+
+        const lead = storeConfirmedContactLead(pendingLead);
+        markPendingContactLeadConfirmed(pendingLead.id);
+        void sendContactLeadNotification({
+          lead,
+          sourceType: pendingLead.sourceType,
+          locale: pendingLead.locale,
+          source: pendingLead.source,
+          tracking: pendingLead.tracking,
+        }).catch((error) => {
+          console.error("[contact-confirm:admin-email-error]", {
+            leadId: lead.id,
+            error: error instanceof Error ? error.stack || error.message : String(error),
+          });
+        });
+
+        return res.redirect(
+          302,
+          `${appOrigin(req)}${localePrefix(pendingLead.locale)}/training/career/thank-you?confirmed=1&lead=${encodeURIComponent(lead.id)}`,
+        );
       } catch (error) {
         return next(error);
       }

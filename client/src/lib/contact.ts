@@ -41,7 +41,12 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
 }
 
 export function submitContactLead(payload: ContactPayload) {
-  return request<{ ok: true; leadId: string }>("/api/contact", {
+  return request<{
+    ok: true;
+    leadId?: string;
+    pendingEmailVerification?: boolean;
+    email?: string;
+  }>("/api/contact", {
     method: "POST",
     body: JSON.stringify(payload),
   });

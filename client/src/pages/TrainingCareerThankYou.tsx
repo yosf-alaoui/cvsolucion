@@ -51,7 +51,10 @@ export default function TrainingCareerThankYou() {
   const whatsappHref = buildWhatsAppLink("+1 438 807 8747", text.message);
 
   useEffect(() => {
-    const leadId = consumeCareerLeadForThankYou();
+    const params = new URLSearchParams(window.location.search);
+    const confirmedLeadId =
+      params.get("confirmed") === "1" ? params.get("lead") || "confirmed" : null;
+    const leadId = consumeCareerLeadForThankYou() || confirmedLeadId;
     if (!leadId) return;
     trackCampaignEvent("Lead", {
       lead_id: leadId,
