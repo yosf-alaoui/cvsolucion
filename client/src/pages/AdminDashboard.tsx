@@ -120,6 +120,23 @@ function localeBadge(locale: string | null) {
   return "EN";
 }
 
+type VisitorGroup = "all" | "new" | "returning";
+
+function isReturningVisitor(visitor: AdminDashboardVisitor) {
+  if (visitor.totalSessions > 1) return true;
+  return visitor.totalSessions === 0 && visitor.visitCount > 1;
+}
+
+function getVisitorLabel(visitor: AdminDashboardVisitor) {
+  return visitor.email || visitor.ip || visitor.id.slice(0, 12);
+}
+
+function getVisitorGroupLabel(group: VisitorGroup, copy: Record<string, string>) {
+  if (group === "new") return copy.newVisitors;
+  if (group === "returning") return copy.returningVisitors;
+  return copy.allVisitors;
+}
+
 function MetricCard({
   title,
   value,
@@ -204,6 +221,7 @@ export default function AdminDashboard() {
   const [selectedVisitorId, setSelectedVisitorId] = useState<string | null>(
     null,
   );
+  const [visitorGroup, setVisitorGroup] = useState<VisitorGroup>("all");
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null
   >(null);
@@ -228,6 +246,12 @@ export default function AdminDashboard() {
         sessions: "Sessions",
         events: "Activite",
         search: "Rechercher par email",
+        allVisitors: "Tous les visiteurs",
+        newVisitors: "Nouveaux visiteurs",
+        returningVisitors: "Visiteurs de retour",
+        visitorCohort: "Segment",
+        visitorListHint:
+          "Vue separee pour distinguer les premiers contacts des visiteurs deja revenus.",
         email: "Email",
         created: "Creation",
         updated: "Mise a jour",
@@ -333,6 +357,12 @@ export default function AdminDashboard() {
         sessions: "الجلسات",
         events: "النشاط",
         search: "ابحث بالبريد الإلكتروني",
+        allVisitors: "كل الزوار",
+        newVisitors: "زوار جدد",
+        returningVisitors: "زوار عائدون",
+        visitorCohort: "الشريحة",
+        visitorListHint:
+          "تم فصل الزوار الجدد عن العائدين حتى يسهل متابعة جودة الزيارات.",
         email: "البريد",
         created: "تاريخ الإنشاء",
         updated: "آخر تحديث",
@@ -436,6 +466,12 @@ export default function AdminDashboard() {
       sessions: "Sessions",
       events: "Activity",
       search: "Search by email",
+      allVisitors: "All visitors",
+      newVisitors: "New visitors",
+      returningVisitors: "Returning visitors",
+      visitorCohort: "Segment",
+      visitorListHint:
+        "Visitors are separated by first-time and returning behavior so the list stays easier to scan.",
       email: "Email",
       created: "Created",
       updated: "Updated",
@@ -819,6 +855,27 @@ export default function AdminDashboard() {
     });
   }, [data?.visitors, query]);
 
+  const visitorGroups = useMemo(() => {
+    const returningVisitors: AdminDashboardVisitor[] = [];
+    const newVisitors: AdminDashboardVisitor[] = [];
+
+    filteredVisitors.forEach((visitor) => {
+      if (isReturningVisitor(visitor)) {
+        returningVisitors.push(visitor);
+      } else {
+        newVisitors.push(visitor);
+      }
+    });
+
+    return {
+      all: filteredVisitors,
+      new: newVisitors,
+      returning: returningVisitors,
+    } satisfies Record<VisitorGroup, AdminDashboardVisitor[]>;
+  }, [filteredVisitors]);
+
+  const visibleVisitors = visitorGroups[visitorGroup];
+
   const filteredBookings = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return [...(data?.bookings ?? [])]
@@ -903,10 +960,24 @@ export default function AdminDashboard() {
         .slice(0, 20),
     [filteredEvents, selectedUserId],
   );
+  useEffect(() => {
+    if (!visibleVisitors.length) {
+      setSelectedVisitorId(null);
+      return;
+    }
+
+    if (
+      !selectedVisitorId ||
+      !visibleVisitors.some((item) => item.id === selectedVisitorId)
+    ) {
+      setSelectedVisitorId(visibleVisitors[0].id);
+    }
+  }, [selectedVisitorId, visibleVisitors]);
+
   const selectedVisitor = useMemo(
     () =>
-      filteredVisitors.find((item) => item.id === selectedVisitorId) ?? null,
-    [filteredVisitors, selectedVisitorId],
+      visibleVisitors.find((item) => item.id === selectedVisitorId) ?? null,
+    [visibleVisitors, selectedVisitorId],
   );
   const eventTypes = useMemo(
     () => Array.from(new Set((data?.events ?? []).map((item) => item.type))),
@@ -1783,7 +1854,10 @@ export default function AdminDashboard() {
                           <VisitorsTable
                             copy={copy}
                             locale={locale}
-                            visitors={filteredVisitors}
+                            visitors={visibleVisitors}
+                            visitorGroups={visitorGroups}
+                            activeGroup={visitorGroup}
+                            onGroupChange={setVisitorGroup}
                             selectedVisitorId={selectedVisitorId}
                             onSelect={setSelectedVisitorId}
                           />
@@ -2068,7 +2142,7 @@ function UsersTable({
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500">
+                  <TableCell colSpan={6} className="text-center text-slate-500">
                     {copy.noResults}
                   </TableCell>
                 </TableRow>
@@ -2291,28 +2365,88 @@ function VisitorsTable({
   copy,
   locale,
   visitors,
+  visitorGroups,
+  activeGroup,
+  onGroupChange,
   selectedVisitorId,
   onSelect,
 }: {
   copy: Record<string, string>;
   locale: string;
   visitors: AdminDashboardVisitor[];
+  visitorGroups: Record<VisitorGroup, AdminDashboardVisitor[]>;
+  activeGroup: VisitorGroup;
+  onGroupChange: (group: VisitorGroup) => void;
   selectedVisitorId: string | null;
   onSelect: (visitorId: string) => void;
 }) {
+  const visitorGroupOptions: VisitorGroup[] = ["all", "new", "returning"];
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{copy.visitors}</CardTitle>
+      <CardHeader className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>{copy.visitors}</CardTitle>
+            <p className="mt-2 max-w-2xl text-sm text-slate-500">
+              {copy.visitorListHint}
+            </p>
+          </div>
+          <Badge variant="outline" className="w-fit">
+            {visitors.length} / {visitorGroups.all.length}
+          </Badge>
+        </div>
+        <Tabs
+          value={activeGroup}
+          onValueChange={(value) => onGroupChange(value as VisitorGroup)}
+        >
+          <TabsList className="grid h-auto w-full grid-cols-3 bg-slate-100 p-1">
+            {visitorGroupOptions.map((group) => (
+              <TabsTrigger
+                key={group}
+                value={group}
+                className="min-h-16 flex-col items-start gap-1 px-3 py-2 text-left"
+              >
+                <span className="text-sm font-semibold">
+                  {getVisitorGroupLabel(group, copy)}
+                </span>
+                <span className="text-xs text-slate-500">
+                  {visitorGroups[group].length}
+                </span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </CardHeader>
-      <CardContent>
-        <ScrollArea className="w-full">
-          <Table>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <StatPill
+            label={copy.visitorCohort}
+            value={getVisitorGroupLabel(activeGroup, copy)}
+          />
+          <StatPill
+            label={copy.totalSessions}
+            value={visitors.reduce(
+              (total, visitor) => total + visitor.totalSessions,
+              0,
+            )}
+          />
+          <StatPill
+            label={copy.totalPageViews}
+            value={visitors.reduce(
+              (total, visitor) => total + visitor.totalPageViews,
+              0,
+            )}
+          />
+        </div>
+        <ScrollArea className="h-[min(68vh,680px)] w-full rounded-xl border border-slate-200">
+          <Table className="min-w-[920px]">
             <TableHeader>
               <TableRow>
                 <TableHead>{copy.email}</TableHead>
-                <TableHead>{copy.registeredState}</TableHead>
-                <TableHead>{copy.deviceType}</TableHead>
+                <TableHead>{copy.visitorCohort}</TableHead>
+                <TableHead>{copy.trafficSource}</TableHead>
+                <TableHead>{copy.engagement}</TableHead>
                 <TableHead>{copy.lastSeen}</TableHead>
                 <TableHead>{copy.actions}</TableHead>
               </TableRow>
@@ -2321,43 +2455,65 @@ function VisitorsTable({
               {visitors.length ? (
                 visitors.map((visitor) => {
                   const isSelected = selectedVisitorId === visitor.id;
+                  const returning = isReturningVisitor(visitor);
+                  const interactionCount =
+                    visitor.whatsappClicks +
+                    visitor.emailClicks +
+                    visitor.ctaClicks +
+                    visitor.chatOpens +
+                    visitor.chatMessages;
                   return (
                     <TableRow
                       key={visitor.id}
                       className={`cursor-pointer transition-colors ${isSelected ? "bg-primary/5" : "hover:bg-slate-50"}`}
                       onClick={() => onSelect(visitor.id)}
                     >
-                      <TableCell className="font-medium">
-                        <div>
-                          {visitor.email ||
-                            visitor.ip ||
-                            visitor.id.slice(0, 12)}
+                      <TableCell className="max-w-[340px] whitespace-normal">
+                        <div className="font-medium text-slate-900">
+                          {getVisitorLabel(visitor)}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
-                          <span>
-                            {copy.lastPage}: {visitor.lastPath}
-                          </span>
                           <span>
                             {copy.locale}: {localeBadge(visitor.locale)}
                           </span>
                           <span>
-                            {copy.trafficSource}:{" "}
-                            {visitor.trafficSource?.source || "-"}
+                            {copy.deviceType}: {visitor.deviceType}
+                          </span>
+                          <span className="break-all">
+                            {copy.lastPage}: {visitor.lastPath}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
-                            visitor.isRegistered ? "default" : "secondary"
-                          }
-                        >
+                        <Badge variant={returning ? "default" : "secondary"}>
+                          {returning
+                            ? copy.returningVisitors
+                            : copy.newVisitors}
+                        </Badge>
+                        <div className="mt-2 text-xs text-slate-500">
                           {visitor.isRegistered
                             ? copy.registeredYes
                             : copy.registeredNo}
-                        </Badge>
+                        </div>
                       </TableCell>
-                      <TableCell>{visitor.deviceType}</TableCell>
+                      <TableCell className="max-w-[220px] whitespace-normal">
+                        <div className="font-medium text-slate-800">
+                          {visitor.trafficSource?.source || "-"}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {visitor.trafficSource?.medium || "-"} /{" "}
+                          {visitor.trafficSource?.category || "-"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm font-medium text-slate-900">
+                          {visitor.totalSessions} {copy.sessions}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {visitor.totalPageViews} {copy.totalPageViews} /{" "}
+                          {interactionCount} {copy.events}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         {formatDate(visitor.lastSeenAt, locale)}
                       </TableCell>
@@ -2379,7 +2535,7 @@ function VisitorsTable({
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500">
+                  <TableCell colSpan={6} className="text-center text-slate-500">
                     {copy.noResults}
                   </TableCell>
                 </TableRow>
