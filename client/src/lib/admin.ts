@@ -219,6 +219,63 @@ export type AdminContactLead = {
   createdAt: string;
 };
 
+export type AdminDashboardInvoiceLineItem = {
+  id: string;
+  description: string;
+  quantity: number;
+  unitAmount: number;
+  amount: number;
+};
+
+export type AdminDashboardInvoice = {
+  id: string;
+  invoiceNumber: string | null;
+  bookingId: string | null;
+  userId: string;
+  status: "requested" | "issued";
+  requestedAt: string;
+  issuedAt: string | null;
+  updatedAt: string;
+  currency: string;
+  subtotalAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  taxLabel: string | null;
+  taxRate: number | null;
+  customerType: "individual" | "company";
+  customerName: string;
+  email: string;
+  phone: string | null;
+  country: string;
+  countryCode: string | null;
+  company: string | null;
+  billingAddress: string;
+  city: string | null;
+  region: string | null;
+  postalCode: string | null;
+  taxId: string | null;
+  serviceDescription: string;
+  notes: string | null;
+  adminNotes: string | null;
+  sellerName: string;
+  sellerEmail: string | null;
+  sellerPhone: string | null;
+  sellerAddress: string | null;
+  sellerTaxId: string | null;
+  sellerWebsite: string | null;
+  paymentTerms: string | null;
+  dueDate: string | null;
+  paymentReference: string | null;
+  paymentProvider: BookingRecord["paymentProvider"] | null;
+  serviceType: BookingRecord["serviceType"] | null;
+  priority: BookingRecord["priority"] | null;
+  date: string | null;
+  hour: number | null;
+  locale: BookingRecord["locale"] | "en";
+  lineItems: AdminDashboardInvoiceLineItem[];
+  downloadUrl: string | null;
+};
+
 export type AdminDashboardGa4 = {
   enabled: boolean;
   propertyId: string | null;
@@ -248,6 +305,7 @@ export type AdminDashboardResponse = {
   stats: AdminDashboardStats;
   users: AdminDashboardUser[];
   bookings: BookingRecord[];
+  invoices: AdminDashboardInvoice[];
   bookingSchedule: {
     standardOpen: boolean;
     expressOpen: boolean;
@@ -669,6 +727,61 @@ export function unblockAdminBookingSlot(payload: {
 }) {
   return adminRequest<AdminBookingSlotsResponse & { slot: { id: string } }>(
     "/api/admin/bookings/slots/unblock",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export type AdminInvoicePayload = Partial<
+  Pick<
+    AdminDashboardInvoice,
+    | "customerType"
+    | "customerName"
+    | "email"
+    | "phone"
+    | "country"
+    | "countryCode"
+    | "company"
+    | "billingAddress"
+    | "city"
+    | "region"
+    | "postalCode"
+    | "taxId"
+    | "serviceDescription"
+    | "notes"
+    | "adminNotes"
+    | "sellerName"
+    | "sellerEmail"
+    | "sellerPhone"
+    | "sellerAddress"
+    | "sellerTaxId"
+    | "sellerWebsite"
+    | "paymentTerms"
+    | "dueDate"
+    | "currency"
+    | "subtotalAmount"
+    | "taxAmount"
+    | "taxLabel"
+    | "taxRate"
+    | "lineItems"
+  >
+>;
+
+export function updateAdminInvoice(invoiceId: string, payload: AdminInvoicePayload) {
+  return adminRequest<{ ok: true; invoice: AdminDashboardInvoice }>(
+    `/api/admin/invoices/${encodeURIComponent(invoiceId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function issueAdminInvoice(invoiceId: string, payload: AdminInvoicePayload) {
+  return adminRequest<{ ok: true; invoice: AdminDashboardInvoice }>(
+    `/api/admin/invoices/${encodeURIComponent(invoiceId)}/issue`,
     {
       method: "POST",
       body: JSON.stringify(payload),

@@ -7,13 +7,21 @@ import GlassCard from "@/components/GlassCard";
 import TrainingProgressPanel from "@/components/customer/TrainingProgressPanel";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/i18n/i18n";
-import { getCustomerDashboard, updateCustomerProfile, type CustomerDashboardResponse, type CustomerInvoice } from "@/lib/customer";
+import {
+  getCustomerDashboard,
+  requestCustomerInvoice,
+  updateCustomerProfile,
+  type CustomerDashboardResponse,
+  type CustomerInvoice,
+} from "@/lib/customer";
 import { getBookingAvailability, rescheduleBooking, type BookingAvailabilitySlot, type BookingRecord } from "@/lib/bookings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { getBookingCountryLabel, getBookingCountryOptions } from "@/lib/bookingTime";
 import { buildInternationalPhone, getDefaultPhoneCountryCode, getPhoneCountryOptions, splitInternationalPhone } from "@/lib/phone";
 import { toast } from "sonner";
@@ -26,7 +34,8 @@ function formatDateTime(date: string, hour: number, locale: string) {
   }).format(dt);
 }
 
-function formatDate(value: string, locale: string) {
+function formatDate(value: string | null, locale: string) {
+  if (!value) return "-";
   return new Intl.DateTimeFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -54,6 +63,8 @@ export default function CustomerDashboard() {
   const [availabilitySlots, setAvailabilitySlots] = useState<BookingAvailabilitySlot[]>([]);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+  const [requestingInvoice, setRequestingInvoice] = useState(false);
   const [profileForm, setProfileForm] = useState({
     name: "",
     country: "",
@@ -61,6 +72,22 @@ export default function CustomerDashboard() {
     phone: "",
     phoneCountryCode: "CA",
     company: "",
+  });
+  const [invoiceForm, setInvoiceForm] = useState({
+    bookingId: "none",
+    customerType: "individual" as "individual" | "company",
+    customerName: "",
+    company: "",
+    phone: "",
+    country: "",
+    countryCode: "CA",
+    billingAddress: "",
+    city: "",
+    region: "",
+    postalCode: "",
+    taxId: "",
+    serviceDescription: "",
+    notes: "",
   });
 
   const copy = useMemo(() => {
@@ -187,21 +214,37 @@ export default function CustomerDashboard() {
     if (locale === "fr") {
       return {
         title: "Factures",
-        subtitle: "La facture sera generee et exportee apres le rendez-vous.",
-        pending: "Facture non active pour le moment",
-        action: "Disponible apres le rendez-vous",
+        subtitle: "Demandez une facture, suivez son statut, puis telechargez le PDF apres emission.",
+        pending: "Demande en attente",
+        action: "Demande en attente",
         download: "Telecharger la facture",
         issued: "Emise le",
+        requested: "Demandee",
+        pendingReview: "En revue admin",
+        requestInvoice: "Demander une facture",
+        requestTitle: "Demander une facture",
+        requestDescription: "Ajoutez les details de facturation a afficher sur la facture.",
+        submitRequest: "Envoyer la demande",
+        requestSuccess: "Demande de facture envoyee. Vous serez notifie quand le PDF sera pret.",
+        requiredMessage: "Nom, pays et adresse de facturation sont obligatoires.",
         empty: "Aucune facture pour le moment.",
       };
     }
     return {
       title: "Invoices",
-      subtitle: "The invoice will be generated and exported after the appointment has passed.",
-      pending: "Invoice not active yet",
-      action: "Available after the appointment",
+      subtitle: "Request an invoice, track its review status, and download the PDF after it is issued.",
+      pending: "Invoice request pending",
+      action: "Request pending",
       download: "Download invoice",
       issued: "Issued",
+      requested: "Requested",
+      pendingReview: "Waiting for admin review",
+      requestInvoice: "Request invoice",
+      requestTitle: "Request an invoice",
+      requestDescription: "Add the billing details that should appear on the invoice.",
+      submitRequest: "Submit request",
+      requestSuccess: "Invoice request sent. We will notify you when the PDF is ready.",
+      requiredMessage: "Name, country, and billing address are required.",
       empty: "No invoices yet.",
     };
   }, [locale]);
@@ -223,6 +266,14 @@ export default function CustomerDashboard() {
       phoneCountryCode: resolvedPhone.phoneCountryCode,
       company: response.profile.company || "",
     });
+    setInvoiceForm((current) => ({
+      ...current,
+      customerName: current.customerName || response.profile.name || response.user.email.split("@")[0],
+      company: current.company || response.profile.company || "",
+      phone: current.phone || response.profile.phone || "",
+      country: current.country || response.profile.country || getBookingCountryLabel(resolvedCountryCode, locale),
+      countryCode: current.countryCode || resolvedCountryCode,
+    }));
   }
 
   useEffect(() => {
@@ -255,16 +306,48 @@ export default function CustomerDashboard() {
       ),
     [data?.bookings, now]
   );
+  const sortedInvoices = useMemo(
+    () =>
+      [...(data?.invoices || [])].sort((a, b) =>
+        (b.issuedAt || b.requestedAt).localeCompare(a.issuedAt || a.requestedAt),
+      ),
+    [data?.invoices],
+  );
   const invoicesByBookingId = useMemo(() => {
     const map = new Map<string, CustomerInvoice>();
     for (const invoice of data?.invoices || []) {
-      map.set(invoice.bookingId, invoice);
+      if (invoice.bookingId) {
+        map.set(invoice.bookingId, invoice);
+      }
     }
     return map;
   }, [data?.invoices]);
+  const invoiceBookingOptions = useMemo(
+    () =>
+      [...(data?.bookings || [])].sort((a, b) =>
+        `${b.date}-${String(b.hour).padStart(2, "0")}`.localeCompare(
+          `${a.date}-${String(a.hour).padStart(2, "0")}`,
+        ),
+      ),
+    [data?.bookings],
+  );
   const invoiceDownloadLabel = invoiceCopy.download || invoiceCopy.action;
   const invoiceIssuedLabel = invoiceCopy.issued || copy.created;
   const invoiceEmptyLabel = invoiceCopy.empty || copy.noBookings;
+  const invoiceRequestedLabel = invoiceCopy.requested || "Requested";
+  const invoicePendingLabel = invoiceCopy.pendingReview || "Waiting for admin review";
+  const invoiceRequestLabel = invoiceCopy.requestInvoice || "Request invoice";
+  const invoiceRequestTitle = invoiceCopy.requestTitle || "Request an invoice";
+  const invoiceSubtitle =
+    locale === "ar"
+      ? "Request an invoice, track its review status, and download the PDF after it is issued."
+      : invoiceCopy.subtitle;
+  const invoiceRequestDescription =
+    invoiceCopy.requestDescription || "Add the billing details that should appear on the invoice.";
+  const invoiceSubmitLabel = invoiceCopy.submitRequest || "Submit request";
+  const invoiceRequestSuccess = invoiceCopy.requestSuccess || "Invoice request sent. We will notify you when the PDF is ready.";
+  const invoiceRequiredMessage = invoiceCopy.requiredMessage || "Name, country, and billing address are required.";
+  const invoiceStatusLabel = invoiceCopy.status || copy.status;
 
   async function handleProfileSave(event: React.FormEvent) {
     event.preventDefault();
@@ -283,6 +366,66 @@ export default function CustomerDashboard() {
       toast.error(error?.message || "Profile update failed.");
     } finally {
       setSavingProfile(false);
+    }
+  }
+
+  async function handleInvoiceRequest(event: React.FormEvent) {
+    event.preventDefault();
+    const selectedBooking =
+      invoiceForm.bookingId === "none"
+        ? null
+        : data?.bookings.find((booking) => booking.id === invoiceForm.bookingId) || null;
+    const country =
+      invoiceForm.country ||
+      getBookingCountryLabel(invoiceForm.countryCode, locale);
+
+    if (!invoiceForm.customerName.trim() || !country.trim() || !invoiceForm.billingAddress.trim()) {
+      toast.error(invoiceRequiredMessage);
+      return;
+    }
+
+    try {
+      setRequestingInvoice(true);
+      const response = await requestCustomerInvoice({
+        bookingId: selectedBooking?.id || null,
+        customerType: invoiceForm.customerType,
+        customerName: invoiceForm.customerName,
+        phone: invoiceForm.phone || null,
+        country,
+        countryCode: invoiceForm.countryCode,
+        company: invoiceForm.customerType === "company" ? invoiceForm.company || null : null,
+        billingAddress: invoiceForm.billingAddress,
+        city: invoiceForm.city || null,
+        region: invoiceForm.region || null,
+        postalCode: invoiceForm.postalCode || null,
+        taxId: invoiceForm.taxId || null,
+        serviceDescription:
+          invoiceForm.serviceDescription ||
+          (selectedBooking
+            ? `${selectedBooking.serviceType === "support" ? copy.support : copy.consultation} - ${
+                selectedBooking.priority === "express" ? copy.express : copy.standard
+              }`
+            : null),
+        notes: invoiceForm.notes || null,
+      });
+
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              invoices: [
+                response.invoice,
+                ...current.invoices.filter((invoice) => invoice.id !== response.invoice.id),
+              ],
+            }
+          : current,
+      );
+      setInvoiceDialogOpen(false);
+      toast.success(invoiceRequestSuccess);
+    } catch (error: any) {
+      toast.error(error?.message || "Invoice request failed.");
+    } finally {
+      setRequestingInvoice(false);
     }
   }
 
@@ -395,6 +538,9 @@ export default function CustomerDashboard() {
                 </TabsTrigger>
                 <TabsTrigger value="training" className="rounded-full px-5 py-2">
                   {trainingTabLabel}
+                </TabsTrigger>
+                <TabsTrigger value="invoices" className="rounded-full px-5 py-2">
+                  {invoiceCopy.title}
                 </TabsTrigger>
                 <TabsTrigger value="profile" className="rounded-full px-5 py-2">
                   {copy.profile}
@@ -516,8 +662,261 @@ export default function CustomerDashboard() {
                 <TrainingProgressPanel locale={locale as "en" | "fr" | "ar"} />
               </TabsContent>
 
+              <TabsContent value="invoices" className="mt-6">
+                <GlassCard className="card-static rounded-[32px] p-7">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="flex items-start gap-3">
+                      <ReceiptText className="mt-1 h-6 w-6 text-primary" />
+                      <div>
+                        <h2 className="text-2xl font-bold text-slate-950">{invoiceCopy.title}</h2>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{invoiceSubtitle}</p>
+                      </div>
+                    </div>
+                    <Button type="button" className="rounded-full" onClick={() => setInvoiceDialogOpen(true)}>
+                      <ReceiptText className="h-4 w-4" />
+                      {invoiceRequestLabel}
+                    </Button>
+                  </div>
+
+                  <div className="mt-6 space-y-4">
+                    {sortedInvoices.length ? (
+                      sortedInvoices.map((invoice) => (
+                        <div key={invoice.id} className="rounded-[24px] border border-slate-200 bg-white/75 p-5">
+                          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="font-semibold text-slate-950">
+                                  {invoice.invoiceNumber || invoiceRequestTitle}
+                                </div>
+                                <span
+                                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                    invoice.status === "issued"
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : "bg-amber-50 text-amber-700"
+                                  }`}
+                                >
+                                  {invoice.status === "issued" ? invoiceIssuedLabel : invoiceRequestedLabel}
+                                </span>
+                              </div>
+                              <div className="mt-2 text-sm text-slate-600">{invoice.serviceDescription}</div>
+                              <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
+                                <div>
+                                  <span className="text-slate-400">{invoiceStatusLabel}: </span>
+                                  {invoice.status === "issued" ? invoiceIssuedLabel : invoicePendingLabel}
+                                </div>
+                                <div>
+                                  <span className="text-slate-400">{copy.created}: </span>
+                                  {formatDate(invoice.requestedAt, locale)}
+                                </div>
+                                {invoice.issuedAt ? (
+                                  <div>
+                                    <span className="text-slate-400">{invoiceIssuedLabel}: </span>
+                                    {formatDate(invoice.issuedAt, locale)}
+                                  </div>
+                                ) : null}
+                                <div className="font-semibold text-slate-900">
+                                  {formatInvoiceAmount(invoice.totalAmount, invoice.currency, locale)}
+                                </div>
+                              </div>
+                            </div>
+                            {invoice.status === "issued" && invoice.downloadUrl ? (
+                              <Button type="button" variant="outline" className="rounded-full" asChild>
+                                <a href={invoice.downloadUrl} target="_blank" rel="noreferrer">
+                                  {invoiceDownloadLabel}
+                                </a>
+                              </Button>
+                            ) : (
+                              <Button type="button" variant="outline" className="rounded-full" disabled>
+                                {invoicePendingLabel}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-[24px] border border-dashed border-slate-300 bg-white/65 p-8 text-center">
+                        <div className="font-semibold text-slate-900">{invoiceEmptyLabel}</div>
+                        <p className="mt-2 text-sm text-slate-600">{invoiceRequestDescription}</p>
+                        <Button type="button" className="mt-5 rounded-full" onClick={() => setInvoiceDialogOpen(true)}>
+                          {invoiceRequestLabel}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </GlassCard>
+
+                <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
+                  <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+                    <DialogHeader>
+                      <DialogTitle>{invoiceRequestTitle}</DialogTitle>
+                      <DialogDescription>{invoiceRequestDescription}</DialogDescription>
+                    </DialogHeader>
+                    <form className="grid gap-5" onSubmit={handleInvoiceRequest}>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="invoice-booking">{copy.bookings}</Label>
+                          <Select
+                            value={invoiceForm.bookingId}
+                            onValueChange={(bookingId) => setInvoiceForm((current) => ({ ...current, bookingId }))}
+                          >
+                            <SelectTrigger id="invoice-booking" className="bg-white">
+                              <SelectValue placeholder={copy.bookings} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">General service invoice</SelectItem>
+                              {invoiceBookingOptions.map((booking) => (
+                                <SelectItem key={booking.id} value={booking.id}>
+                                  {formatDateTime(booking.date, booking.hour, locale)} -{" "}
+                                  {booking.serviceType === "support" ? copy.support : copy.consultation}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="invoice-type">Customer type</Label>
+                          <Select
+                            value={invoiceForm.customerType}
+                            onValueChange={(customerType) =>
+                              setInvoiceForm((current) => ({
+                                ...current,
+                                customerType: customerType as "individual" | "company",
+                              }))
+                            }
+                          >
+                            <SelectTrigger id="invoice-type" className="bg-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="individual">Individual</SelectItem>
+                              <SelectItem value="company">Company</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="invoice-name">{copy.name}</Label>
+                          <Input
+                            id="invoice-name"
+                            value={invoiceForm.customerName}
+                            onChange={(event) => setInvoiceForm((current) => ({ ...current, customerName: event.target.value }))}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="invoice-company">{copy.company}</Label>
+                          <Input
+                            id="invoice-company"
+                            value={invoiceForm.company}
+                            onChange={(event) => setInvoiceForm((current) => ({ ...current, company: event.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="invoice-phone">{copy.phone}</Label>
+                          <Input
+                            id="invoice-phone"
+                            value={invoiceForm.phone}
+                            onChange={(event) => setInvoiceForm((current) => ({ ...current, phone: event.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="invoice-country">{copy.country}</Label>
+                          <Select
+                            value={invoiceForm.countryCode}
+                            onValueChange={(countryCode) =>
+                              setInvoiceForm((current) => ({
+                                ...current,
+                                countryCode,
+                                country: getBookingCountryLabel(countryCode, locale),
+                              }))
+                            }
+                          >
+                            <SelectTrigger id="invoice-country" className="bg-white">
+                              <SelectValue placeholder={copy.country} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {countryOptions.map((option) => (
+                                <SelectItem key={option.code} value={option.code}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="invoice-address">Billing address</Label>
+                          <Input
+                            id="invoice-address"
+                            value={invoiceForm.billingAddress}
+                            onChange={(event) => setInvoiceForm((current) => ({ ...current, billingAddress: event.target.value }))}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="invoice-city">City</Label>
+                          <Input
+                            id="invoice-city"
+                            value={invoiceForm.city}
+                            onChange={(event) => setInvoiceForm((current) => ({ ...current, city: event.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="invoice-region">State / Province</Label>
+                          <Input
+                            id="invoice-region"
+                            value={invoiceForm.region}
+                            onChange={(event) => setInvoiceForm((current) => ({ ...current, region: event.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="invoice-postal">Postal code</Label>
+                          <Input
+                            id="invoice-postal"
+                            value={invoiceForm.postalCode}
+                            onChange={(event) => setInvoiceForm((current) => ({ ...current, postalCode: event.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="invoice-tax">Tax / VAT ID</Label>
+                          <Input
+                            id="invoice-tax"
+                            value={invoiceForm.taxId}
+                            onChange={(event) => setInvoiceForm((current) => ({ ...current, taxId: event.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="invoice-service">{copy.service}</Label>
+                          <Input
+                            id="invoice-service"
+                            value={invoiceForm.serviceDescription}
+                            onChange={(event) => setInvoiceForm((current) => ({ ...current, serviceDescription: event.target.value }))}
+                            placeholder="Cabinet Vision consulting, training, or support"
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="invoice-notes">Notes</Label>
+                          <Textarea
+                            id="invoice-notes"
+                            value={invoiceForm.notes}
+                            onChange={(event) => setInvoiceForm((current) => ({ ...current, notes: event.target.value }))}
+                            placeholder="Purchase order, company instructions, or accounting notes"
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setInvoiceDialogOpen(false)}>
+                          {copy.cancel}
+                        </Button>
+                        <Button type="submit" disabled={requestingInvoice}>
+                          {invoiceSubmitLabel}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </TabsContent>
+
               <TabsContent value="profile" className="mt-6">
-                <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+                <div className="max-w-4xl">
                   <GlassCard className="card-static rounded-[32px] p-7">
                     <form className="grid gap-5 md:grid-cols-2" onSubmit={handleProfileSave}>
                       <div className="space-y-2">
@@ -613,7 +1012,7 @@ export default function CustomerDashboard() {
                       <ReceiptText className="h-6 w-6 text-primary" />
                       <div>
                         <h2 className="text-2xl font-bold text-slate-950">{invoiceCopy.title}</h2>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">{invoiceCopy.subtitle}</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{invoiceSubtitle}</p>
                       </div>
                     </div>
 
@@ -632,7 +1031,7 @@ export default function CustomerDashboard() {
                                     ? `${booking.serviceType === "support" ? copy.support : copy.consultation} • ${
                                         booking.priority === "express" ? copy.express : copy.standard
                                       }`
-                                    : invoiceCopy.subtitle}
+                    : invoiceSubtitle}
                                 </div>
                                 {invoice ? (
                                   <div className="mt-4 space-y-1 text-sm text-slate-600">
@@ -646,7 +1045,7 @@ export default function CustomerDashboard() {
                                   <div className="mt-4 text-sm text-slate-500">{invoiceCopy.pending}</div>
                                 ) : null}
                               </div>
-                              {invoice ? (
+                              {invoice?.downloadUrl ? (
                                 <Button type="button" variant="outline" className="rounded-full" asChild>
                                   <a href={invoice.downloadUrl} target="_blank" rel="noreferrer">
                                     {invoiceDownloadLabel}

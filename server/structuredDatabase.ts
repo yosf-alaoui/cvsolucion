@@ -851,10 +851,11 @@ function replaceInvoices(db: SqliteDatabase, data: JsonObject) {
       `INSERT INTO invoices VALUES (@id, @sequence, @bookingId, @userId, @email, @status, @currency, @subtotalAmount, @taxAmount, @totalAmount, @issuedAt, @createdAt, @updatedAt)`,
     );
     for (const invoice of invoices) {
+      const createdAt = text(invoice.createdAt) || text(invoice.requestedAt) || text(invoice.issuedAt) || new Date(0).toISOString();
       insert.run({
         id: requiredText(invoice.id),
         sequence: integerValue(invoice.sequence),
-        bookingId: requiredText(invoice.bookingId),
+        bookingId: text(invoice.bookingId) || "",
         userId: text(invoice.userId),
         email: text(invoice.email),
         status: text(invoice.status),
@@ -863,9 +864,9 @@ function replaceInvoices(db: SqliteDatabase, data: JsonObject) {
         taxAmount: integerValue(invoice.taxAmount),
         totalAmount: integerValue(invoice.totalAmount),
         issuedAt: text(invoice.issuedAt),
-        createdAt: requiredText(invoice.createdAt || invoice.issuedAt),
+        createdAt,
         updatedAt: requiredText(
-          invoice.updatedAt || invoice.createdAt || invoice.issuedAt,
+          invoice.updatedAt || invoice.createdAt || invoice.requestedAt || invoice.issuedAt || createdAt,
         ),
       });
     }

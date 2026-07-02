@@ -125,10 +125,14 @@ import {
 } from "./customerProfileStore";
 import { buildInvoiceFilename, renderInvoicePdf } from "./invoicePdf";
 import {
+  createInvoiceRequest,
   getInvoiceById,
-  issueInvoicesForBookings,
+  issueInvoiceByAdmin,
   listInvoicesForUser,
+  listInvoicesForAdmin,
+  updateInvoiceByAdmin,
   type InvoiceRecord,
+  type InvoiceCustomerType,
 } from "./invoiceStore";
 import {
   constructStripeEvent,
@@ -408,6 +412,7 @@ function serializeCustomerInvoice(invoice: InvoiceRecord) {
     bookingId: invoice.bookingId,
     invoiceNumber: invoice.invoiceNumber,
     status: invoice.status,
+    requestedAt: invoice.requestedAt,
     issuedAt: invoice.issuedAt,
     currency: invoice.currency,
     subtotalAmount: invoice.subtotalAmount,
@@ -417,8 +422,39 @@ function serializeCustomerInvoice(invoice: InvoiceRecord) {
     priority: invoice.priority,
     date: invoice.date,
     hour: invoice.hour,
-    downloadUrl: `/api/customer/invoices/${encodeURIComponent(invoice.id)}/download`,
+    customerName: invoice.customerName,
+    company: invoice.company,
+    serviceDescription: invoice.serviceDescription,
+    downloadUrl:
+      invoice.status === "issued"
+        ? `/api/customer/invoices/${encodeURIComponent(invoice.id)}/download`
+        : null,
   };
+}
+
+function serializeAdminInvoice(invoice: InvoiceRecord) {
+  return {
+    ...invoice,
+    downloadUrl:
+      invoice.status === "issued"
+        ? `/api/admin/invoices/${encodeURIComponent(invoice.id)}/download`
+        : null,
+  };
+}
+
+function getAdminNotificationEmail() {
+  const firstAdmin = (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)[0];
+  return firstAdmin || (process.env.CONTACT_EMAIL || "contact@cvsolucion.com").trim();
+}
+
+function formatInvoiceAmount(amount: number, currency: string) {
+  return new Intl.NumberFormat("en-CA", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amount / 100);
 }
 
 function fallbackDisplayNameFromEmail(email: string) {
@@ -1100,6 +1136,64 @@ async function sendContactLeadNotification(args: {
   });
 }
 
+async function sendInvoiceRequestNotification(invoice: InvoiceRecord, dashboardUrl: string) {
+  const destination = getAdminNotificationEmail();
+  const lines = [
+    `Invoice request: ${invoice.id}`,
+    `Customer: ${invoice.customerName}`,
+    `Email: ${invoice.email}`,
+    invoice.company ? `Company: ${invoice.company}` : null,
+    `Country: ${invoice.country}`,
+    invoice.bookingId ? `Booking ID: ${invoice.bookingId}` : null,
+    `Service: ${invoice.serviceDescription}`,
+    "",
+    `Open admin dashboard: ${dashboardUrl}`,
+  ].filter(Boolean);
+
+  await sendAuthEmail({
+    to: destination,
+    subject: `New invoice request - ${invoice.customerName}`,
+    text: lines.join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+        <h2 style="margin:0 0 16px">New invoice request</h2>
+        <p><strong>Customer:</strong> ${escapeHtml(invoice.customerName)}</p>
+        <p><strong>Email:</strong> ${escapeHtml(invoice.email)}</p>
+        ${invoice.company ? `<p><strong>Company:</strong> ${escapeHtml(invoice.company)}</p>` : ""}
+        <p><strong>Country:</strong> ${escapeHtml(invoice.country)}</p>
+        ${invoice.bookingId ? `<p><strong>Booking ID:</strong> ${escapeHtml(invoice.bookingId)}</p>` : ""}
+        <p><strong>Service:</strong> ${escapeHtml(invoice.serviceDescription)}</p>
+        <p><a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;padding:12px 18px;background:#1e3a8a;color:#fff;text-decoration:none;border-radius:10px">Open admin dashboard</a></p>
+      </div>
+    `,
+  });
+}
+
+async function sendInvoiceIssuedNotification(invoice: InvoiceRecord, dashboardUrl: string) {
+  await sendAuthEmail({
+    to: invoice.email,
+    subject: `Your CVsolucion invoice is ready - ${invoice.invoiceNumber}`,
+    text: [
+      "Your CVsolucion invoice is ready.",
+      `Invoice number: ${invoice.invoiceNumber}`,
+      `Total: ${formatInvoiceAmount(invoice.totalAmount, invoice.currency)}`,
+      "",
+      "Please sign in to your CVsolucion account to download the PDF invoice:",
+      dashboardUrl,
+    ].join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+        <h2 style="margin:0 0 16px">Your invoice is ready</h2>
+        <p>Your CVsolucion invoice has been issued and is available in your account.</p>
+        <p><strong>Invoice number:</strong> ${escapeHtml(invoice.invoiceNumber || "")}</p>
+        <p><strong>Total:</strong> ${escapeHtml(formatInvoiceAmount(invoice.totalAmount, invoice.currency))}</p>
+        <p><a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;padding:12px 18px;background:#1e3a8a;color:#fff;text-decoration:none;border-radius:10px">Open my account</a></p>
+        <p style="color:#64748b">Sign in, open the invoices section, and download the PDF invoice.</p>
+      </div>
+    `,
+  });
+}
+
 function storeConfirmedContactLead(pendingLead: PendingContactLead) {
   return storeContactLead({
     name: pendingLead.name,
@@ -1446,7 +1540,6 @@ async function startServer() {
         });
 
       const userBookings = listBookingsForUser(auth.user.id, auth.user.email);
-      issueInvoicesForBookings(userBookings);
       const bookings = userBookings.map(serializeCustomerBooking);
       const invoices = listInvoicesForUser(auth.user.id, auth.user.email).map(
         serializeCustomerInvoice,
@@ -1492,6 +1585,100 @@ async function startServer() {
     },
   );
 
+  app.post(
+    "/api/customer/invoices/request",
+    rateLimit({
+      key: "customer-invoice-request",
+      windowMs: 1000 * 60 * 10,
+      limit: 20,
+    }),
+    (req, res, next) => {
+      try {
+        const auth = getCurrentUser(req);
+        if (!auth) {
+          return res.status(401).json({ error: "Authentication required." });
+        }
+
+        const customerType: InvoiceCustomerType =
+          req.body?.customerType === "company" ? "company" : "individual";
+        const customerName = String(req.body?.customerName || "").trim();
+        const country = String(req.body?.country || "").trim();
+        const billingAddress = String(req.body?.billingAddress || "").trim();
+        const bookingId = String(req.body?.bookingId || "").trim();
+
+        if (!customerName || !country || !billingAddress) {
+          return res.status(400).json({
+            error: "Customer name, country, and billing address are required.",
+          });
+        }
+
+        let booking: ReturnType<typeof getBookingById> | null = null;
+        if (bookingId) {
+          booking = getBookingById(bookingId);
+          if (
+            !booking ||
+            (booking.userId !== auth.user.id && booking.email !== auth.user.email)
+          ) {
+            return res.status(404).json({ error: "Booking not found." });
+          }
+        }
+
+        const invoice = createInvoiceRequest({
+          userId: auth.user.id,
+          email: auth.user.email,
+          booking,
+          customerType,
+          customerName,
+          phone: typeof req.body?.phone === "string" ? req.body.phone : null,
+          country,
+          countryCode: normalizeCountryCode(req.body?.countryCode),
+          company:
+            typeof req.body?.company === "string" ? req.body.company : null,
+          billingAddress,
+          city: typeof req.body?.city === "string" ? req.body.city : null,
+          region:
+            typeof req.body?.region === "string" ? req.body.region : null,
+          postalCode:
+            typeof req.body?.postalCode === "string"
+              ? req.body.postalCode
+              : null,
+          taxId: typeof req.body?.taxId === "string" ? req.body.taxId : null,
+          serviceDescription:
+            typeof req.body?.serviceDescription === "string"
+              ? req.body.serviceDescription
+              : null,
+          notes: typeof req.body?.notes === "string" ? req.body.notes : null,
+        });
+
+        recordEvent({
+          type: "invoice_requested",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "customer",
+          ip: getRequestIp(req),
+          userAgent: req.get("user-agent") || null,
+        });
+
+        void sendInvoiceRequestNotification(
+          invoice,
+          `${appOrigin(req)}/admin/dashboard`,
+        ).catch((error) => {
+          console.error("[invoice-request:admin-email-error]", {
+            invoiceId: invoice.id,
+            error: error instanceof Error ? error.stack || error.message : String(error),
+          });
+        });
+
+        return res.status(201).json({
+          ok: true,
+          invoice: serializeCustomerInvoice(invoice),
+        });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
   app.get(
     "/api/customer/invoices/:invoiceId/download",
     rateLimit({
@@ -1520,6 +1707,10 @@ async function startServer() {
           return res
             .status(403)
             .json({ error: "You do not have access to this invoice." });
+        }
+
+        if (invoice.status !== "issued") {
+          return res.status(409).json({ error: "Invoice is not ready yet." });
         }
 
         const pdf = await renderInvoicePdf(invoice);
@@ -3447,12 +3638,14 @@ async function startServer() {
       const visitors = getVisitorsSnapshot();
       const bookings = listBookings().map(serializeCustomerBooking);
       const leads = listContactLeads();
+      const invoices = listInvoicesForAdmin().map(serializeAdminInvoice);
       return res.json({
         admin: {
           email: auth.user.email,
         },
         ...getAdminSnapshot(),
         bookings,
+        invoices,
         bookingSchedule: getBookingScheduleSettings(),
         leads,
         visitors,
@@ -3462,6 +3655,179 @@ async function startServer() {
           enabled: isChatEnabled(),
         },
       });
+    },
+  );
+
+  app.patch(
+    "/api/admin/invoices/:invoiceId",
+    rateLimit({ key: "admin-invoice-update", windowMs: 1000 * 60 * 5, limit: 80 }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const invoiceId = String(req.params.invoiceId || "").trim();
+        const invoice = updateInvoiceByAdmin({
+          invoiceId,
+          customerType: req.body?.customerType,
+          customerName: req.body?.customerName,
+          email: req.body?.email,
+          phone: req.body?.phone,
+          country: req.body?.country,
+          countryCode: req.body?.countryCode,
+          company: req.body?.company,
+          billingAddress: req.body?.billingAddress,
+          city: req.body?.city,
+          region: req.body?.region,
+          postalCode: req.body?.postalCode,
+          taxId: req.body?.taxId,
+          serviceDescription: req.body?.serviceDescription,
+          notes: req.body?.notes,
+          adminNotes: req.body?.adminNotes,
+          sellerName: req.body?.sellerName,
+          sellerEmail: req.body?.sellerEmail,
+          sellerPhone: req.body?.sellerPhone,
+          sellerAddress: req.body?.sellerAddress,
+          sellerTaxId: req.body?.sellerTaxId,
+          sellerWebsite: req.body?.sellerWebsite,
+          paymentTerms: req.body?.paymentTerms,
+          dueDate: req.body?.dueDate,
+          currency: req.body?.currency,
+          subtotalAmount:
+            typeof req.body?.subtotalAmount === "number"
+              ? req.body.subtotalAmount
+              : undefined,
+          taxAmount:
+            typeof req.body?.taxAmount === "number"
+              ? req.body.taxAmount
+              : undefined,
+          taxLabel: req.body?.taxLabel,
+          taxRate:
+            typeof req.body?.taxRate === "number" ? req.body.taxRate : undefined,
+          lineItems: Array.isArray(req.body?.lineItems)
+            ? req.body.lineItems
+            : undefined,
+        });
+
+        recordEvent({
+          type: "admin_invoice_updated",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:invoice-update:${invoice.id}`,
+        });
+
+        return res.json({ ok: true, invoice: serializeAdminInvoice(invoice) });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/invoices/:invoiceId/issue",
+    rateLimit({ key: "admin-invoice-issue", windowMs: 1000 * 60 * 5, limit: 50 }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const invoiceId = String(req.params.invoiceId || "").trim();
+        const invoice = issueInvoiceByAdmin({
+          invoiceId,
+          customerType: req.body?.customerType,
+          customerName: req.body?.customerName,
+          email: req.body?.email,
+          phone: req.body?.phone,
+          country: req.body?.country,
+          countryCode: req.body?.countryCode,
+          company: req.body?.company,
+          billingAddress: req.body?.billingAddress,
+          city: req.body?.city,
+          region: req.body?.region,
+          postalCode: req.body?.postalCode,
+          taxId: req.body?.taxId,
+          serviceDescription: req.body?.serviceDescription,
+          notes: req.body?.notes,
+          adminNotes: req.body?.adminNotes,
+          sellerName: req.body?.sellerName,
+          sellerEmail: req.body?.sellerEmail,
+          sellerPhone: req.body?.sellerPhone,
+          sellerAddress: req.body?.sellerAddress,
+          sellerTaxId: req.body?.sellerTaxId,
+          sellerWebsite: req.body?.sellerWebsite,
+          paymentTerms: req.body?.paymentTerms,
+          dueDate: req.body?.dueDate,
+          currency: req.body?.currency,
+          subtotalAmount:
+            typeof req.body?.subtotalAmount === "number"
+              ? req.body.subtotalAmount
+              : undefined,
+          taxAmount:
+            typeof req.body?.taxAmount === "number"
+              ? req.body.taxAmount
+              : undefined,
+          taxLabel: req.body?.taxLabel,
+          taxRate:
+            typeof req.body?.taxRate === "number" ? req.body.taxRate : undefined,
+          lineItems: Array.isArray(req.body?.lineItems)
+            ? req.body.lineItems
+            : undefined,
+        });
+
+        recordEvent({
+          type: "admin_invoice_issued",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:invoice-issue:${invoice.id}`,
+        });
+
+        void sendInvoiceIssuedNotification(
+          invoice,
+          `${appOrigin(req)}/dashboard`,
+        ).catch((error) => {
+          console.error("[invoice-issued:customer-email-error]", {
+            invoiceId: invoice.id,
+            error: error instanceof Error ? error.stack || error.message : String(error),
+          });
+        });
+
+        return res.json({ ok: true, invoice: serializeAdminInvoice(invoice) });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/invoices/:invoiceId/download",
+    rateLimit({ key: "admin-invoice-download", windowMs: 1000 * 60, limit: 120 }),
+    async (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const invoice = getInvoiceById(String(req.params.invoiceId || "").trim());
+        if (!invoice) {
+          return res.status(404).json({ error: "Invoice not found." });
+        }
+        if (invoice.status !== "issued") {
+          return res.status(409).json({ error: "Invoice is not issued yet." });
+        }
+
+        const pdf = await renderInvoicePdf(invoice);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${buildInvoiceFilename(invoice)}"`,
+        );
+        return res.send(pdf);
+      } catch (error) {
+        return next(error);
+      }
     },
   );
 

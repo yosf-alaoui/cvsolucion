@@ -25,6 +25,7 @@ import {
   updateAdminUser,
   type AdminDashboardConversation,
   type AdminDashboardEvent,
+  type AdminDashboardInvoice,
   type AdminDashboardResponse,
   type AdminDashboardSession,
   type AdminDashboardUser,
@@ -64,6 +65,9 @@ const DesignersManager = lazy(
 );
 const TrainingOperationsManager = lazy(
   () => import("@/components/admin/TrainingOperationsManager"),
+);
+const InvoicesManager = lazy(
+  () => import("@/components/admin/InvoicesManager"),
 );
 
 function formatDate(value: string | null, locale: string) {
@@ -904,6 +908,27 @@ export default function AdminDashboard() {
       });
   }, [data?.bookings, query]);
 
+  const filteredInvoices = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return [...(data?.invoices ?? [])]
+      .sort((a, b) => (b.updatedAt || b.requestedAt).localeCompare(a.updatedAt || a.requestedAt))
+      .filter((invoice) => {
+        if (!normalizedQuery) return true;
+        return [
+          invoice.invoiceNumber,
+          invoice.customerName,
+          invoice.email,
+          invoice.company,
+          invoice.country,
+          invoice.serviceDescription,
+          invoice.status,
+          invoice.bookingId,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+      });
+  }, [data?.invoices, query]);
+
   const filteredLeads = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return [...(data?.leads ?? [])]
@@ -1157,6 +1182,20 @@ export default function AdminDashboard() {
     [],
   );
 
+  const handleAdminInvoiceSaved = useCallback((invoice: AdminDashboardInvoice) => {
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            invoices: [
+              invoice,
+              ...current.invoices.filter((item) => item.id !== invoice.id),
+            ],
+          }
+        : current,
+    );
+  }, []);
+
   const eventLabels: Record<string, string> = {
     signup:
       locale === "ar" ? "تسجيل" : locale === "fr" ? "Inscription" : "Signup",
@@ -1255,6 +1294,12 @@ export default function AdminDashboard() {
       : locale === "fr"
         ? "Heure reouverte par admin"
         : "Admin slot reopened";
+  eventLabels.invoice_requested =
+    locale === "fr" ? "Facture demandee" : "Invoice requested";
+  eventLabels.admin_invoice_updated =
+    locale === "fr" ? "Facture modifiee" : "Invoice updated";
+  eventLabels.admin_invoice_issued =
+    locale === "fr" ? "Facture emise" : "Invoice issued";
 
   const usersCsv = filteredUsers.map((item) => ({
     email: item.email,
@@ -1801,7 +1846,7 @@ export default function AdminDashboard() {
                     </Card>
 
                     <Tabs defaultValue="users" className="space-y-6">
-                      <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
+                      <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-8">
                         <TabsTrigger value="users">{copy.users}</TabsTrigger>
                         <TabsTrigger value="visitors">
                           {copy.visitors}
@@ -1810,6 +1855,7 @@ export default function AdminDashboard() {
                           {conversationCopy.conversations}
                         </TabsTrigger>
                         <TabsTrigger value="bookings">Bookings</TabsTrigger>
+                        <TabsTrigger value="invoices">Invoices</TabsTrigger>
                         <TabsTrigger value="requests">Requests</TabsTrigger>
                         <TabsTrigger value="sessions">
                           {copy.sessions}
@@ -1899,6 +1945,16 @@ export default function AdminDashboard() {
                             onLoadSlots={handleLoadBookingSlots}
                             onBlockSlot={handleBlockBookingSlot}
                             onUnblockSlot={handleUnblockBookingSlot}
+                          />
+                        </Suspense>
+                      </TabsContent>
+
+                      <TabsContent value="invoices">
+                        <Suspense fallback={<PanelFallback />}>
+                          <InvoicesManager
+                            locale={locale}
+                            invoices={filteredInvoices}
+                            onSave={handleAdminInvoiceSaved}
                           />
                         </Suspense>
                       </TabsContent>

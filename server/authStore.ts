@@ -68,7 +68,10 @@ export type AuthEventType =
   | "admin_booking_cancelled"
   | "admin_booking_refund_requested"
   | "admin_booking_slot_blocked"
-  | "admin_booking_slot_unblocked";
+  | "admin_booking_slot_unblocked"
+  | "invoice_requested"
+  | "admin_invoice_updated"
+  | "admin_invoice_issued";
 
 export type AuthEvent = {
   id: string;

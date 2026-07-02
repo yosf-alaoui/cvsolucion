@@ -26,19 +26,23 @@ export type CustomerDashboardResponse = {
 
 export type CustomerInvoice = {
   id: string;
-  bookingId: string;
-  invoiceNumber: string;
-  status: "issued";
-  issuedAt: string;
+  bookingId: string | null;
+  invoiceNumber: string | null;
+  status: "requested" | "issued";
+  requestedAt: string;
+  issuedAt: string | null;
   currency: string;
   subtotalAmount: number;
   taxAmount: number;
   totalAmount: number;
-  serviceType: BookingRecord["serviceType"];
-  priority: BookingRecord["priority"];
-  date: string;
-  hour: number;
-  downloadUrl: string;
+  serviceType: BookingRecord["serviceType"] | null;
+  priority: BookingRecord["priority"] | null;
+  date: string | null;
+  hour: number | null;
+  customerName: string;
+  company: string | null;
+  serviceDescription: string;
+  downloadUrl: string | null;
 };
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
@@ -71,6 +75,28 @@ export function updateCustomerProfile(payload: {
 }) {
   return request<{ ok: true; profile: CustomerProfile }>("/api/customer/profile", {
     method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function requestCustomerInvoice(payload: {
+  bookingId?: string | null;
+  customerType: "individual" | "company";
+  customerName: string;
+  phone?: string | null;
+  country: string;
+  countryCode?: string | null;
+  company?: string | null;
+  billingAddress: string;
+  city?: string | null;
+  region?: string | null;
+  postalCode?: string | null;
+  taxId?: string | null;
+  serviceDescription?: string | null;
+  notes?: string | null;
+}) {
+  return request<{ ok: true; invoice: CustomerInvoice }>("/api/customer/invoices/request", {
+    method: "POST",
     body: JSON.stringify(payload),
   });
 }
