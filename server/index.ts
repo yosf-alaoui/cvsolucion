@@ -95,6 +95,7 @@ import {
   unblockBookingSlotByAdmin,
   unassignDesignerFromBookings,
   type BookingPriority,
+  type BookingServiceType,
 } from "./bookingStore";
 import {
   getBookingScheduleSettings,
@@ -618,6 +619,137 @@ function syncTrainingPaymentIntent(payment: Stripe.PaymentIntent) {
   });
 
   return { invoice, enrollment, levelLabel };
+}
+
+function buildBookingInvoiceLineItems(
+  payment: Stripe.PaymentIntent,
+  bookingDescription: string,
+) {
+  const totalAmount = Math.max(0, payment.amount || 0);
+  const metadataSubtotal = parseStripeCents(
+    payment.metadata?.bookingSubtotalCents,
+  );
+  const metadataCardFee = parseStripeCents(
+    payment.metadata?.cardPaymentFeeCents,
+  );
+  const cardFee =
+    metadataCardFee !== null && metadataCardFee <= totalAmount
+      ? metadataCardFee
+      : 0;
+  const bookingAmount =
+    metadataSubtotal !== null && metadataSubtotal + cardFee <= totalAmount
+      ? metadataSubtotal
+      : Math.max(0, totalAmount - cardFee);
+
+  const lineItems: InvoiceLineItem[] = [];
+  if (bookingAmount > 0) {
+    lineItems.push({
+      id: `line_${payment.id}_booking`,
+      description: bookingDescription,
+      quantity: 1,
+      unitAmount: bookingAmount,
+      amount: bookingAmount,
+    });
+  }
+
+  if (cardFee > 0) {
+    lineItems.push({
+      id: `line_${payment.id}_card_fee`,
+      description: "Card payment processing fee",
+      quantity: 1,
+      unitAmount: cardFee,
+      amount: cardFee,
+    });
+  }
+
+  if (!lineItems.length && totalAmount > 0) {
+    lineItems.push({
+      id: `line_${payment.id}`,
+      description: bookingDescription,
+      quantity: 1,
+      unitAmount: totalAmount,
+      amount: totalAmount,
+    });
+  }
+
+  return lineItems;
+}
+
+function syncBookingPaymentIntent(payment: Stripe.PaymentIntent) {
+  if (payment.status !== "succeeded") return null;
+  if (payment.metadata?.type !== "booking") return null;
+
+  const email = (
+    normalizeStripeText(payment.metadata?.email) ||
+    normalizeStripeText(payment.receipt_email) ||
+    ""
+  ).toLowerCase();
+  if (!email) {
+    console.warn("[stripe:webhook] booking payment skipped without email", {
+      paymentIntentId: payment.id,
+    });
+    return null;
+  }
+
+  const metadataUserId = normalizeStripeText(payment.metadata?.userId);
+  const matchedUser = metadataUserId
+    ? getUserById(metadataUserId)
+    : getUserByEmail(email);
+  const userId = matchedUser?.id || metadataUserId || "";
+  const customerProfile = userId ? getCustomerProfile(userId) : null;
+  const countryCode = normalizeCountryCode(payment.metadata?.countryCode);
+  const serviceType: BookingServiceType =
+    payment.metadata?.serviceType === "support" ? "support" : "consultation";
+  const priority: BookingPriority =
+    payment.metadata?.priority === "express" ? "express" : "standard";
+  const priorityLabel = priority === "express" ? "Express" : "Standard";
+  const serviceLabel =
+    serviceType === "support" ? "Cabinet Vision support" : "Cabinet Vision consultation";
+  const slotCount = parseStripeCents(payment.metadata?.slotCount) || 1;
+  const bookingDescription = `${priorityLabel} ${serviceLabel}${
+    slotCount > 1 ? ` (${slotCount} sessions)` : ""
+  }`;
+  const lineItems = buildBookingInvoiceLineItems(payment, bookingDescription);
+  const subtotalAmount =
+    lineItems.reduce((total, item) => total + item.amount, 0) ||
+    Math.max(0, payment.amount || 0);
+  const locale = normalizeAuthLocale(
+    normalizeStripeText(payment.metadata?.locale) || "en",
+  );
+
+  const invoice = upsertInvoiceRequestFromPayment({
+    userId,
+    email,
+    customerType: customerProfile?.company ? "company" : "individual",
+    customerName: customerProfile?.name || null,
+    phone: customerProfile?.phone || null,
+    country:
+      customerProfile?.country ||
+      customerProfile?.countryCode ||
+      countryCode ||
+      "-",
+    countryCode: customerProfile?.countryCode || countryCode,
+    company: customerProfile?.company || null,
+    billingAddress: null,
+    city: null,
+    region: null,
+    postalCode: null,
+    taxId: null,
+    serviceDescription: `Booking payment - ${bookingDescription}`,
+    notes: `Stripe payment confirmed for ${bookingDescription}.`,
+    adminNotes: `Auto-created from Stripe successful booking payment ${payment.id}.`,
+    currency: payment.currency,
+    subtotalAmount,
+    taxAmount: 0,
+    paymentReference: payment.id,
+    paymentProvider: "stripe",
+    serviceType,
+    priority,
+    locale,
+    lineItems,
+  });
+
+  return { invoice, serviceLabel: bookingDescription };
 }
 
 function fallbackDisplayNameFromEmail(email: string) {
@@ -1392,14 +1524,19 @@ async function startServer() {
 
         if (event.type === "payment_intent.succeeded") {
           const payment = event.data.object as Stripe.PaymentIntent;
-          const syncResult = syncTrainingPaymentIntent(payment);
+          const syncResult =
+            syncTrainingPaymentIntent(payment) ||
+            syncBookingPaymentIntent(payment);
           console.log(
             "[stripe:webhook] payment_intent.succeeded",
             payment.id || null,
             syncResult
               ? {
-                  trainingInvoiceId: syncResult.invoice.id,
-                  trainingEnrollmentId: syncResult.enrollment?.id || null,
+                  invoiceId: syncResult.invoice.id,
+                  trainingEnrollmentId:
+                    "enrollment" in syncResult
+                      ? syncResult.enrollment?.id || null
+                      : null,
                 }
               : null,
           );
@@ -3251,6 +3388,8 @@ async function startServer() {
               company,
             });
 
+            syncBookingPaymentIntent(verifiedPayment);
+
             return res.status(201).json({
               ok: true,
               bookings: existingBookings,
@@ -3305,6 +3444,10 @@ async function startServer() {
           phone,
           company,
         });
+
+        if (verifiedPayment) {
+          syncBookingPaymentIntent(verifiedPayment);
+        }
 
         const slotLabel = bookings
           .map(
