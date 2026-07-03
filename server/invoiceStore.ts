@@ -53,6 +53,7 @@ export type InvoiceRecord = {
   paymentTerms: string | null;
   dueDate: string | null;
   paymentReference: string | null;
+  paymentReferences: string[];
   paymentProvider: BookingRecord["paymentProvider"] | null;
   serviceType: BookingRecord["serviceType"] | null;
   priority: BookingRecord["priority"] | null;
@@ -197,6 +198,32 @@ function normalizeTaxRate(value: unknown) {
   return Number.isFinite(rate) ? Math.max(0, rate) : null;
 }
 
+function uniqueTexts(values: Array<unknown>) {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const value of values) {
+    const text = normalizeText(value);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    normalized.push(text);
+  }
+  return normalized;
+}
+
+function normalizePaymentReferences(raw: any) {
+  return uniqueTexts([
+    raw.paymentReference,
+    ...(Array.isArray(raw.paymentReferences) ? raw.paymentReferences : []),
+  ]);
+}
+
+function invoicePaymentReferences(invoice: Pick<InvoiceRecord, "paymentReference" | "paymentReferences">) {
+  return uniqueTexts([
+    invoice.paymentReference,
+    ...(Array.isArray(invoice.paymentReferences) ? invoice.paymentReferences : []),
+  ]);
+}
+
 function defaultSellerEmail() {
   return normalizeText(process.env.CONTACT_EMAIL) || "contact@cvsolucion.com";
 }
@@ -304,6 +331,7 @@ function normalizeLegacyInvoice(raw: any): InvoiceRecord {
     paymentTerms: normalizeText(raw.paymentTerms) || "Due on receipt",
     dueDate: normalizeText(raw.dueDate),
     paymentReference: normalizeText(raw.paymentReference),
+    paymentReferences: normalizePaymentReferences(raw),
     paymentProvider: raw.paymentProvider || null,
     serviceType: raw.serviceType || null,
     priority: raw.priority || null,
@@ -399,6 +427,7 @@ export function createInvoiceRequest(input: InvoiceRequestInput) {
     paymentTerms: "Due on receipt",
     dueDate: null,
     paymentReference: input.booking?.paymentReference || null,
+    paymentReferences: input.booking?.paymentReference ? [input.booking.paymentReference] : [],
     paymentProvider: input.booking?.paymentProvider || null,
     serviceType: input.booking?.serviceType || null,
     priority: input.booking?.priority || null,
@@ -418,7 +447,7 @@ export function upsertInvoiceRequestFromPayment(input: PaidInvoiceRequestInput) 
   const paymentReference = normalizeRequiredText(input.paymentReference, "");
   const existing = db.invoices.find(
     (invoice) =>
-      invoice.paymentReference === paymentReference &&
+      invoicePaymentReferences(invoice).includes(paymentReference) &&
       invoice.paymentProvider === input.paymentProvider,
   );
   if (existing) return existing;
@@ -487,6 +516,7 @@ export function upsertInvoiceRequestFromPayment(input: PaidInvoiceRequestInput) 
     paymentTerms: "Paid by Stripe",
     dueDate: null,
     paymentReference,
+    paymentReferences: paymentReference ? [paymentReference] : [],
     paymentProvider: input.paymentProvider,
     serviceType: input.serviceType || null,
     priority: input.priority || null,
@@ -503,6 +533,83 @@ export function upsertInvoiceRequestFromPayment(input: PaidInvoiceRequestInput) 
   db.invoices.push(invoice);
   saveDb(db);
   return invoice;
+}
+
+export function mergeInvoicesByAdmin(input: {
+  targetInvoiceId: string;
+  sourceInvoiceIds: string[];
+}) {
+  const db = loadDb();
+  const targetInvoiceId = normalizeRequiredText(input.targetInvoiceId, "");
+  const sourceIds = uniqueTexts(input.sourceInvoiceIds).filter((id) => id !== targetInvoiceId);
+  if (!targetInvoiceId || !sourceIds.length) {
+    throw new Error("Choose at least one invoice to merge.");
+  }
+
+  const target = db.invoices.find((invoice) => invoice.id === targetInvoiceId);
+  if (!target) throw new Error("Target invoice not found.");
+
+  const sources = sourceIds.map((sourceId) => {
+    const source = db.invoices.find((invoice) => invoice.id === sourceId);
+    if (!source) throw new Error("One of the selected invoices was not found.");
+    return source;
+  });
+
+  const targetEmail = target.email.trim().toLowerCase();
+  const targetCurrency = target.currency.trim().toLowerCase();
+  for (const source of sources) {
+    if (source.email.trim().toLowerCase() !== targetEmail) {
+      throw new Error("Only invoices for the same customer email can be merged.");
+    }
+    if (source.currency.trim().toLowerCase() !== targetCurrency) {
+      throw new Error("Only invoices with the same currency can be merged.");
+    }
+  }
+
+  const timestamp = nowIso();
+  const existingLineIds = new Set(target.lineItems.map((line) => line.id));
+  const lineItems: InvoiceLineItem[] = [...target.lineItems];
+  let taxAmount = normalizeAmount(target.taxAmount);
+  const mergedReferences = new Set(invoicePaymentReferences(target));
+  const mergedNotes: string[] = [];
+
+  for (const source of sources) {
+    for (const reference of invoicePaymentReferences(source)) {
+      mergedReferences.add(reference);
+    }
+    for (const sourceLine of source.lineItems) {
+      let lineId = sourceLine.id || randomId("line");
+      if (existingLineIds.has(lineId)) {
+        lineId = `${lineId}_${source.id}`;
+      }
+      existingLineIds.add(lineId);
+      lineItems.push({
+        ...sourceLine,
+        id: lineId,
+      });
+    }
+    taxAmount += normalizeAmount(source.taxAmount);
+    mergedNotes.push(
+      `Merged invoice ${source.invoiceNumber || source.id} (${source.paymentReference || "no payment reference"}).`,
+    );
+  }
+
+  target.lineItems = normalizeLineItems(lineItems, target.serviceDescription, target.subtotalAmount);
+  target.subtotalAmount = target.lineItems.reduce((total, line) => total + normalizeAmount(line.amount), 0);
+  target.taxAmount = taxAmount;
+  target.totalAmount = target.subtotalAmount + target.taxAmount;
+  target.paymentReferences = Array.from(mergedReferences);
+  target.paymentReference = target.paymentReference || target.paymentReferences[0] || null;
+  target.adminNotes = uniqueTexts([target.adminNotes, ...mergedNotes]).join("\n") || null;
+  target.updatedAt = timestamp;
+
+  db.invoices = db.invoices.filter((invoice) => !sourceIds.includes(invoice.id));
+  saveDb(db);
+
+  return {
+    invoice: target,
+    removedInvoiceIds: sourceIds,
+  };
 }
 
 function applyAdminUpdate(invoice: InvoiceRecord, input: AdminInvoiceUpdateInput) {

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileCheck2, ReceiptText, Save } from "lucide-react";
+import { CheckSquare2, Download, FileCheck2, GitMerge, ReceiptText, Save, Square } from "lucide-react";
 import { toast } from "sonner";
 import {
   issueAdminInvoice,
+  mergeAdminInvoices,
   updateAdminInvoice,
   type AdminDashboardInvoice,
   type AdminDashboardInvoiceLineItem,
@@ -187,14 +188,18 @@ export default function InvoicesManager({
   locale,
   invoices,
   onSave,
+  onMerge,
 }: {
   locale: string;
   invoices: AdminDashboardInvoice[];
   onSave: (invoice: AdminDashboardInvoice) => void;
+  onMerge: (invoice: AdminDashboardInvoice, removedInvoiceIds: string[]) => void;
 }) {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [mergeSelection, setMergeSelection] = useState<string[]>([]);
   const [form, setForm] = useState<InvoiceForm | null>(null);
   const [saving, setSaving] = useState(false);
+  const [merging, setMerging] = useState(false);
 
   const selectedInvoice = useMemo(
     () => invoices.find((invoice) => invoice.id === selectedInvoiceId) || invoices[0] || null,
@@ -212,6 +217,28 @@ export default function InvoicesManager({
     }
     setForm(invoiceToForm(selectedInvoice));
   }, [selectedInvoice?.id]);
+
+  useEffect(() => {
+    const availableIds = new Set(invoices.map((invoice) => invoice.id));
+    setMergeSelection((current) =>
+      current.filter((invoiceId) => invoiceId !== selectedInvoiceId && availableIds.has(invoiceId)),
+    );
+  }, [invoices, selectedInvoiceId]);
+
+  const mergeCandidates = useMemo(() => {
+    if (!selectedInvoice) return [];
+    return invoices.filter(
+      (invoice) =>
+        invoice.id !== selectedInvoice.id &&
+        invoice.email.trim().toLowerCase() === selectedInvoice.email.trim().toLowerCase() &&
+        invoice.currency.trim().toLowerCase() === selectedInvoice.currency.trim().toLowerCase(),
+    );
+  }, [invoices, selectedInvoice]);
+
+  const selectedMergeInvoices = useMemo(
+    () => invoices.filter((invoice) => mergeSelection.includes(invoice.id)),
+    [invoices, mergeSelection],
+  );
 
   const subtotalAmount = useMemo(
     () =>
@@ -259,6 +286,14 @@ export default function InvoicesManager({
     );
   };
 
+  const toggleMergeSelection = (invoiceId: string) => {
+    setMergeSelection((current) =>
+      current.includes(invoiceId)
+        ? current.filter((item) => item !== invoiceId)
+        : [...current, invoiceId],
+    );
+  };
+
   const removeLine = (index: number) => {
     setForm((current) => {
       if (!current || current.lineItems.length <= 1) return current;
@@ -296,6 +331,29 @@ export default function InvoicesManager({
     }
   };
 
+  const mergeSelectedInvoices = async () => {
+    if (!selectedInvoice) return;
+    const sourceInvoiceIds = selectedMergeInvoices.map((invoice) => invoice.id);
+    if (!sourceInvoiceIds.length) {
+      toast.error("Select at least one invoice to merge into the current invoice.");
+      return;
+    }
+
+    try {
+      setMerging(true);
+      const response = await mergeAdminInvoices(selectedInvoice.id, sourceInvoiceIds);
+      onMerge(response.invoice, response.removedInvoiceIds);
+      setSelectedInvoiceId(response.invoice.id);
+      setMergeSelection([]);
+      setForm(invoiceToForm(response.invoice));
+      toast.success("Invoices merged into one invoice.");
+    } catch (error: any) {
+      toast.error(error?.message || "Invoice merge failed.");
+    } finally {
+      setMerging(false);
+    }
+  };
+
   if (!invoices.length) {
     return (
       <Card>
@@ -314,43 +372,84 @@ export default function InvoicesManager({
             <ReceiptText className="h-5 w-5 text-primary" />
             Invoices
           </CardTitle>
+          <div className="mt-3 space-y-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-center"
+              disabled={!selectedInvoice || !mergeSelection.length || merging}
+              onClick={() => void mergeSelectedInvoices()}
+            >
+              <GitMerge className="h-4 w-4" />
+              Merge selected
+            </Button>
+            <p className="text-xs leading-5 text-slate-500">
+              Current invoice is the target. Select matching invoices below to combine them into it.
+            </p>
+          </div>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[680px] pr-3">
             <div className="space-y-3">
-              {invoices.map((invoice) => (
-                <button
-                  key={invoice.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedInvoiceId(invoice.id);
-                    setForm(invoiceToForm(invoice));
-                  }}
-                  className={`w-full rounded-xl border px-4 py-3 text-left transition ${
-                    selectedInvoice?.id === invoice.id
-                      ? "border-primary bg-primary/5"
-                      : "border-slate-200 bg-white hover:border-primary/40 hover:bg-slate-50"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate font-semibold text-slate-900">
-                        {invoice.invoiceNumber || invoice.customerName}
-                      </div>
-                      <div className="mt-1 truncate text-sm text-slate-500">{invoice.email}</div>
+              {invoices.map((invoice) => {
+                const isSelected = selectedInvoice?.id === invoice.id;
+                const canMerge = mergeCandidates.some((candidate) => candidate.id === invoice.id);
+                const isMergeSelected = mergeSelection.includes(invoice.id);
+                return (
+                  <div
+                    key={invoice.id}
+                    className={`rounded-xl border px-3 py-3 transition ${
+                      isSelected
+                        ? "border-primary bg-primary/5"
+                        : "border-slate-200 bg-white hover:border-primary/40 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        aria-label={isMergeSelected ? "Remove from merge" : "Select for merge"}
+                        disabled={!canMerge || merging}
+                        onClick={() => toggleMergeSelection(invoice.id)}
+                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition ${
+                          isMergeSelected
+                            ? "border-primary bg-primary text-white"
+                            : canMerge
+                              ? "border-slate-200 bg-white text-slate-600 hover:border-primary/50"
+                              : "border-slate-100 bg-slate-50 text-slate-300"
+                        }`}
+                      >
+                        {isMergeSelected ? <CheckSquare2 className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedInvoiceId(invoice.id);
+                          setForm(invoiceToForm(invoice));
+                        }}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold text-slate-900">
+                              {invoice.invoiceNumber || invoice.customerName}
+                            </div>
+                            <div className="mt-1 truncate text-sm text-slate-500">{invoice.email}</div>
+                          </div>
+                          <Badge variant={invoice.status === "issued" ? "default" : "secondary"}>
+                            {invoice.status}
+                          </Badge>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+                          <span>{formatDate(invoice.requestedAt, locale)}</span>
+                          <span className="font-semibold text-slate-800">
+                            {formatMoney(invoice.totalAmount, invoice.currency, locale)}
+                          </span>
+                        </div>
+                      </button>
                     </div>
-                    <Badge variant={invoice.status === "issued" ? "default" : "secondary"}>
-                      {invoice.status}
-                    </Badge>
                   </div>
-                  <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                    <span>{formatDate(invoice.requestedAt, locale)}</span>
-                    <span className="font-semibold text-slate-800">
-                      {formatMoney(invoice.totalAmount, invoice.currency, locale)}
-                    </span>
-                  </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           </ScrollArea>
         </CardContent>

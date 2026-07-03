@@ -131,6 +131,7 @@ import {
   issueInvoiceByAdmin,
   listInvoicesForUser,
   listInvoicesForAdmin,
+  mergeInvoicesByAdmin,
   upsertInvoiceRequestFromPayment,
   updateInvoiceByAdmin,
   type InvoiceLineItem,
@@ -4024,6 +4025,43 @@ async function startServer() {
         });
 
         return res.json({ ok: true, invoice: serializeAdminInvoice(invoice) });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/invoices/:invoiceId/merge",
+    rateLimit({ key: "admin-invoice-merge", windowMs: 1000 * 60 * 5, limit: 40 }),
+    (req, res, next) => {
+      try {
+        const auth = requireAdmin(req, res);
+        if (!auth) return;
+
+        const invoiceId = String(req.params.invoiceId || "").trim();
+        const sourceInvoiceIds = Array.isArray(req.body?.sourceInvoiceIds)
+          ? req.body.sourceInvoiceIds.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+          : [];
+        const result = mergeInvoicesByAdmin({
+          targetInvoiceId: invoiceId,
+          sourceInvoiceIds,
+        });
+
+        recordEvent({
+          type: "admin_invoice_updated",
+          userId: auth.user.id,
+          email: auth.user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: `admin:invoice-merge:${result.invoice.id}`,
+        });
+
+        return res.json({
+          ok: true,
+          invoice: serializeAdminInvoice(result.invoice),
+          removedInvoiceIds: result.removedInvoiceIds,
+        });
       } catch (error) {
         return next(error);
       }

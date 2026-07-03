@@ -1196,6 +1196,26 @@ export default function AdminDashboard() {
     );
   }, []);
 
+  const handleAdminInvoicesMerged = useCallback(
+    (invoice: AdminDashboardInvoice, removedInvoiceIds: string[]) => {
+      const removed = new Set(removedInvoiceIds);
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              invoices: [
+                invoice,
+                ...current.invoices.filter(
+                  (item) => item.id !== invoice.id && !removed.has(item.id),
+                ),
+              ],
+            }
+          : current,
+      );
+    },
+    [],
+  );
+
   const eventLabels: Record<string, string> = {
     signup:
       locale === "ar" ? "تسجيل" : locale === "fr" ? "Inscription" : "Signup",
@@ -1955,6 +1975,7 @@ export default function AdminDashboard() {
                             locale={locale}
                             invoices={filteredInvoices}
                             onSave={handleAdminInvoiceSaved}
+                            onMerge={handleAdminInvoicesMerged}
                           />
                         </Suspense>
                       </TabsContent>

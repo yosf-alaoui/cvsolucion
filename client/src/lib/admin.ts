@@ -266,6 +266,7 @@ export type AdminDashboardInvoice = {
   paymentTerms: string | null;
   dueDate: string | null;
   paymentReference: string | null;
+  paymentReferences: string[];
   paymentProvider: BookingRecord["paymentProvider"] | null;
   serviceType: BookingRecord["serviceType"] | null;
   priority: BookingRecord["priority"] | null;
@@ -787,4 +788,15 @@ export function issueAdminInvoice(invoiceId: string, payload: AdminInvoicePayloa
       body: JSON.stringify(payload),
     },
   );
+}
+
+export function mergeAdminInvoices(invoiceId: string, sourceInvoiceIds: string[]) {
+  return adminRequest<{
+    ok: true;
+    invoice: AdminDashboardInvoice;
+    removedInvoiceIds: string[];
+  }>(`/api/admin/invoices/${encodeURIComponent(invoiceId)}/merge`, {
+    method: "POST",
+    body: JSON.stringify({ sourceInvoiceIds }),
+  });
 }

@@ -17,6 +17,20 @@ function invoiceDisplayNumber(invoice: InvoiceRecord) {
   return invoice.invoiceNumber || "DRAFT";
 }
 
+function invoicePaymentReferenceLabel(invoice: InvoiceRecord) {
+  const references = [
+    invoice.paymentReference,
+    ...(Array.isArray(invoice.paymentReferences) ? invoice.paymentReferences : []),
+  ]
+    .filter(Boolean)
+    .filter((reference, index, all) => all.indexOf(reference) === index);
+
+  if (!references.length) return null;
+  return references.length === 1
+    ? `Payment reference: ${references[0]}`
+    : `Payment references: ${references.join(", ")}`;
+}
+
 function writeLines(doc: PDFKit.PDFDocument, lines: Array<string | null>, x: number, y: number, width: number) {
   let cursor = y;
   for (const line of lines.filter(Boolean) as string[]) {
@@ -68,7 +82,7 @@ export function renderInvoicePdf(invoice: InvoiceRecord) {
         `Issue date: ${formatDate(invoice.issuedAt)}`,
         invoice.dueDate ? `Due date: ${formatDate(invoice.dueDate)}` : null,
         invoice.paymentTerms ? `Payment terms: ${invoice.paymentTerms}` : null,
-        invoice.paymentReference ? `Payment reference: ${invoice.paymentReference}` : null,
+        invoicePaymentReferenceLabel(invoice),
       ],
       left,
       160,
