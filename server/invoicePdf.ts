@@ -17,7 +17,7 @@ function invoiceDisplayNumber(invoice: InvoiceRecord) {
   return invoice.invoiceNumber || "DRAFT";
 }
 
-function invoicePaymentReferenceLabel(invoice: InvoiceRecord) {
+function invoicePaymentReferenceLines(invoice: InvoiceRecord) {
   const references = [
     invoice.paymentReference,
     ...(Array.isArray(invoice.paymentReferences) ? invoice.paymentReferences : []),
@@ -25,19 +25,40 @@ function invoicePaymentReferenceLabel(invoice: InvoiceRecord) {
     .filter(Boolean)
     .filter((reference, index, all) => all.indexOf(reference) === index);
 
-  if (!references.length) return null;
-  return references.length === 1
-    ? `Payment reference: ${references[0]}`
-    : `Payment references: ${references.join(", ")}`;
+  if (!references.length) return [];
+  if (references.length === 1) return [`Payment reference: ${references[0]}`];
+  return ["Payment references:", ...references.map((reference) => `- ${reference}`)];
 }
 
-function writeLines(doc: PDFKit.PDFDocument, lines: Array<string | null>, x: number, y: number, width: number) {
+function paymentTermsLabel(value: string | null) {
+  if (!value) return null;
+  const terms = value.replace(/^payment terms:\s*/i, "").trim();
+  return terms ? `Payment terms: ${terms}` : null;
+}
+
+function visibleLines(lines: Array<string | null>) {
+  return lines.filter(Boolean) as string[];
+}
+
+function measureLines(doc: PDFKit.PDFDocument, lines: Array<string | null>, width: number, gap = 4) {
+  return visibleLines(lines).reduce((height, line) => {
+    return height + doc.heightOfString(line, { width }) + gap;
+  }, 0);
+}
+
+function writeLines(doc: PDFKit.PDFDocument, lines: Array<string | null>, x: number, y: number, width: number, gap = 4) {
   let cursor = y;
-  for (const line of lines.filter(Boolean) as string[]) {
+  for (const line of visibleLines(lines)) {
     doc.text(line, x, cursor, { width });
-    cursor += 15;
+    cursor += doc.heightOfString(line, { width }) + gap;
   }
   return cursor;
+}
+
+function ensurePageSpace(doc: PDFKit.PDFDocument, y: number, neededHeight: number, top = 56, bottom = 780) {
+  if (y + neededHeight <= bottom) return y;
+  doc.addPage();
+  return top;
 }
 
 export function buildInvoiceFilename(invoice: InvoiceRecord) {
@@ -75,15 +96,16 @@ export function renderInvoicePdf(invoice: InvoiceRecord) {
     doc.fillColor(dark).font("Helvetica-Bold").fontSize(10);
     doc.text("Invoice details", left, 140);
     doc.font("Helvetica").fillColor("#334155").fontSize(10);
-    writeLines(
+    const detailLines = [
+      `Invoice number: ${invoiceDisplayNumber(invoice)}`,
+      `Issue date: ${formatDate(invoice.issuedAt)}`,
+      invoice.dueDate ? `Due date: ${formatDate(invoice.dueDate)}` : null,
+      paymentTermsLabel(invoice.paymentTerms),
+      ...invoicePaymentReferenceLines(invoice),
+    ];
+    const detailsEnd = writeLines(
       doc,
-      [
-        `Invoice number: ${invoiceDisplayNumber(invoice)}`,
-        `Issue date: ${formatDate(invoice.issuedAt)}`,
-        invoice.dueDate ? `Due date: ${formatDate(invoice.dueDate)}` : null,
-        invoice.paymentTerms ? `Payment terms: ${invoice.paymentTerms}` : null,
-        invoicePaymentReferenceLabel(invoice),
-      ],
+      detailLines,
       left,
       160,
       230,
@@ -91,59 +113,77 @@ export function renderInvoicePdf(invoice: InvoiceRecord) {
 
     doc.fillColor(dark).font("Helvetica-Bold").fontSize(10).text("Seller", 320, 140);
     doc.font("Helvetica").fillColor("#334155").fontSize(10);
-    writeLines(
+    const sellerLines = [
+      invoice.sellerName,
+      invoice.sellerAddress,
+      invoice.sellerEmail,
+      invoice.sellerPhone,
+      invoice.sellerWebsite,
+      invoice.sellerTaxId ? `Tax ID: ${invoice.sellerTaxId}` : null,
+    ];
+    const sellerEnd = writeLines(
       doc,
-      [
-        invoice.sellerName,
-        invoice.sellerAddress,
-        invoice.sellerEmail,
-        invoice.sellerPhone,
-        invoice.sellerWebsite,
-        invoice.sellerTaxId ? `Tax ID: ${invoice.sellerTaxId}` : null,
-      ],
+      sellerLines,
       320,
       160,
       230,
     );
 
-    doc.roundedRect(left, 270, right - left, 112, 8).fillAndStroke(fill, line);
-    doc.fillColor(dark).font("Helvetica-Bold").fontSize(10).text("Bill to", left + 16, 288);
+    const billLines = [
+      invoice.company && invoice.customerType === "company" ? invoice.company : invoice.customerName,
+      invoice.customerType === "company" && invoice.customerName ? `Contact: ${invoice.customerName}` : null,
+      invoice.billingAddress,
+      [invoice.city, invoice.region, invoice.postalCode].filter(Boolean).join(", "),
+      invoice.country,
+      invoice.email,
+      invoice.phone,
+      invoice.taxId ? `Tax/VAT ID: ${invoice.taxId}` : null,
+    ];
+    doc.font("Helvetica").fillColor("#334155").fontSize(10);
+    const billTextWidth = right - left - 32;
+    const billTop = Math.max(detailsEnd, sellerEnd, 246) + 28;
+    const billTextHeight = measureLines(doc, billLines, billTextWidth);
+    const billHeight = Math.max(128, billTextHeight + 64);
+    doc.roundedRect(left, billTop, right - left, billHeight, 8).fillAndStroke(fill, line);
+    doc.fillColor(dark).font("Helvetica-Bold").fontSize(10).text("Bill to", left + 16, billTop + 18);
     doc.font("Helvetica").fillColor("#334155").fontSize(10);
     writeLines(
       doc,
-      [
-        invoice.company && invoice.customerType === "company" ? invoice.company : invoice.customerName,
-        invoice.customerType === "company" && invoice.customerName ? `Contact: ${invoice.customerName}` : null,
-        invoice.billingAddress,
-        [invoice.city, invoice.region, invoice.postalCode].filter(Boolean).join(", "),
-        invoice.country,
-        invoice.email,
-        invoice.phone,
-        invoice.taxId ? `Tax/VAT ID: ${invoice.taxId}` : null,
-      ],
+      billLines,
       left + 16,
-      308,
-      right - left - 32,
+      billTop + 44,
+      billTextWidth,
     );
 
-    const tableTop = 430;
-    doc.fillColor(dark).font("Helvetica-Bold").fontSize(10);
-    doc.text("Description", left, tableTop);
-    doc.text("Qty", 330, tableTop, { width: 44, align: "right" });
-    doc.text("Unit price", 390, tableTop, { width: 70, align: "right" });
-    doc.text("Amount", 480, tableTop, { width: 70, align: "right" });
-    doc.moveTo(left, tableTop + 20).lineTo(right, tableTop + 20).strokeColor(line).stroke();
+    const drawTableHeader = (y: number) => {
+      doc.fillColor(dark).font("Helvetica-Bold").fontSize(10);
+      doc.text("Description", left, y);
+      doc.text("Qty", 330, y, { width: 44, align: "right" });
+      doc.text("Unit price", 390, y, { width: 70, align: "right" });
+      doc.text("Amount", 480, y, { width: 70, align: "right" });
+      doc.moveTo(left, y + 20).lineTo(right, y + 20).strokeColor(line).stroke();
+      return y + 38;
+    };
 
-    let cursor = tableTop + 38;
+    let tableTop = billTop + billHeight + 42;
+    tableTop = ensurePageSpace(doc, tableTop, 90);
+    let cursor = drawTableHeader(tableTop);
     doc.font("Helvetica").fillColor("#334155").fontSize(10);
     for (const item of invoice.lineItems) {
+      const rowHeight = Math.max(24, doc.heightOfString(item.description, { width: 260 }) + 10);
+      cursor = ensurePageSpace(doc, cursor, rowHeight + 20);
+      if (cursor === 56) {
+        cursor = drawTableHeader(cursor);
+        doc.font("Helvetica").fillColor("#334155").fontSize(10);
+      }
       doc.text(item.description, left, cursor, { width: 260 });
       doc.text(String(item.quantity), 330, cursor, { width: 44, align: "right" });
       doc.text(formatMoney(item.unitAmount, invoice.currency), 390, cursor, { width: 70, align: "right" });
       doc.text(formatMoney(item.amount, invoice.currency), 480, cursor, { width: 70, align: "right" });
-      cursor += Math.max(24, doc.heightOfString(item.description, { width: 260 }) + 10);
+      cursor += rowHeight;
     }
 
+    cursor = ensurePageSpace(doc, cursor, 120);
     doc.moveTo(left, cursor + 4).lineTo(right, cursor + 4).strokeColor(line).stroke();
     const totalsTop = cursor + 24;
     doc.font("Helvetica").fillColor("#334155").fontSize(10);
@@ -156,15 +196,14 @@ export function renderInvoicePdf(invoice: InvoiceRecord) {
     doc.fillColor(dark).font("Helvetica-Bold").fontSize(13).text("Total", 366, totalsTop + 66, { width: 80, align: "right" });
     doc.text(formatMoney(invoice.totalAmount, invoice.currency), 454, totalsTop + 66, { width: 84, align: "right" });
 
-    const noteTop = Math.max(totalsTop + 130, 675);
-    doc.fillColor(muted).font("Helvetica").fontSize(9);
-    doc.text(invoice.notes || "Thank you for your business.", left, noteTop, { width: right - left });
-    doc.text(
+    const noteLines = [
+      invoice.notes || "Thank you for your business.",
       "This invoice is issued in English for professional digital services. Please keep it for your accounting records.",
-      left,
-      noteTop + 34,
-      { width: right - left },
-    );
+    ];
+    let noteTop = totalsTop + 130;
+    noteTop = ensurePageSpace(doc, noteTop, measureLines(doc, noteLines, right - left, 12) + 24);
+    doc.fillColor(muted).font("Helvetica").fontSize(9);
+    writeLines(doc, noteLines, left, noteTop, right - left, 12);
 
     doc.end();
   });

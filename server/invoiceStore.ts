@@ -228,8 +228,30 @@ function defaultSellerEmail() {
   return normalizeText(process.env.CONTACT_EMAIL) || "contact@cvsolucion.com";
 }
 
+function defaultSellerName() {
+  return normalizeText(process.env.INVOICE_SELLER_NAME) || "Namdaja Service CVsolucion";
+}
+
+function defaultSellerPhone() {
+  return normalizeText(process.env.INVOICE_SELLER_PHONE) || "+1 (438) 80-8747";
+}
+
+function defaultSellerAddress() {
+  return normalizeText(process.env.INVOICE_SELLER_ADDRESS) || "377 Rue st pierre Rimouski, QC Canada";
+}
+
+function defaultSellerTaxId() {
+  return normalizeText(process.env.INVOICE_SELLER_TAX_ID) || "Not registered for GST/QST";
+}
+
 function defaultSellerWebsite() {
   return "https://cvsolucion.com";
+}
+
+function normalizeSellerName(value: unknown) {
+  const sellerName = normalizeText(value);
+  if (!sellerName || sellerName.toLowerCase() === "cvsolucion") return defaultSellerName();
+  return sellerName;
 }
 
 function defaultServiceDescription(booking?: BookingRecord | null) {
@@ -322,11 +344,11 @@ function normalizeLegacyInvoice(raw: any): InvoiceRecord {
     serviceDescription,
     notes: normalizeText(raw.notes),
     adminNotes: normalizeText(raw.adminNotes),
-    sellerName: normalizeRequiredText(raw.sellerName, "CVsolucion"),
+    sellerName: normalizeSellerName(raw.sellerName),
     sellerEmail: normalizeText(raw.sellerEmail) || defaultSellerEmail(),
-    sellerPhone: normalizeText(raw.sellerPhone),
-    sellerAddress: normalizeText(raw.sellerAddress),
-    sellerTaxId: normalizeText(raw.sellerTaxId),
+    sellerPhone: normalizeText(raw.sellerPhone) || defaultSellerPhone(),
+    sellerAddress: normalizeText(raw.sellerAddress) || defaultSellerAddress(),
+    sellerTaxId: normalizeText(raw.sellerTaxId) || defaultSellerTaxId(),
     sellerWebsite: normalizeText(raw.sellerWebsite) || defaultSellerWebsite(),
     paymentTerms: normalizeText(raw.paymentTerms) || "Due on receipt",
     dueDate: normalizeText(raw.dueDate),
@@ -418,11 +440,11 @@ export function createInvoiceRequest(input: InvoiceRequestInput) {
     serviceDescription,
     notes: input.notes?.trim() || null,
     adminNotes: null,
-    sellerName: "CVsolucion",
+    sellerName: defaultSellerName(),
     sellerEmail: defaultSellerEmail(),
-    sellerPhone: null,
-    sellerAddress: null,
-    sellerTaxId: null,
+    sellerPhone: defaultSellerPhone(),
+    sellerAddress: defaultSellerAddress(),
+    sellerTaxId: defaultSellerTaxId(),
     sellerWebsite: defaultSellerWebsite(),
     paymentTerms: "Due on receipt",
     dueDate: null,
@@ -507,11 +529,11 @@ export function upsertInvoiceRequestFromPayment(input: PaidInvoiceRequestInput) 
     adminNotes:
       normalizeText(input.adminNotes) ||
       `Auto-created from Stripe payment ${paymentReference}.`,
-    sellerName: "CVsolucion",
+    sellerName: defaultSellerName(),
     sellerEmail: defaultSellerEmail(),
-    sellerPhone: null,
-    sellerAddress: null,
-    sellerTaxId: null,
+    sellerPhone: defaultSellerPhone(),
+    sellerAddress: defaultSellerAddress(),
+    sellerTaxId: defaultSellerTaxId(),
     sellerWebsite: defaultSellerWebsite(),
     paymentTerms: "Paid by Stripe",
     dueDate: null,
@@ -628,12 +650,12 @@ function applyAdminUpdate(invoice: InvoiceRecord, input: AdminInvoiceUpdateInput
   if (typeof input.serviceDescription === "string") invoice.serviceDescription = input.serviceDescription.trim();
   if (typeof input.notes !== "undefined") invoice.notes = normalizeText(input.notes);
   if (typeof input.adminNotes !== "undefined") invoice.adminNotes = normalizeText(input.adminNotes);
-  if (typeof input.sellerName === "string") invoice.sellerName = input.sellerName.trim();
-  if (typeof input.sellerEmail !== "undefined") invoice.sellerEmail = normalizeText(input.sellerEmail);
-  if (typeof input.sellerPhone !== "undefined") invoice.sellerPhone = normalizeText(input.sellerPhone);
-  if (typeof input.sellerAddress !== "undefined") invoice.sellerAddress = normalizeText(input.sellerAddress);
-  if (typeof input.sellerTaxId !== "undefined") invoice.sellerTaxId = normalizeText(input.sellerTaxId);
-  if (typeof input.sellerWebsite !== "undefined") invoice.sellerWebsite = normalizeText(input.sellerWebsite);
+  if (typeof input.sellerName === "string") invoice.sellerName = normalizeSellerName(input.sellerName);
+  if (typeof input.sellerEmail !== "undefined") invoice.sellerEmail = normalizeText(input.sellerEmail) || defaultSellerEmail();
+  if (typeof input.sellerPhone !== "undefined") invoice.sellerPhone = normalizeText(input.sellerPhone) || defaultSellerPhone();
+  if (typeof input.sellerAddress !== "undefined") invoice.sellerAddress = normalizeText(input.sellerAddress) || defaultSellerAddress();
+  if (typeof input.sellerTaxId !== "undefined") invoice.sellerTaxId = normalizeText(input.sellerTaxId) || defaultSellerTaxId();
+  if (typeof input.sellerWebsite !== "undefined") invoice.sellerWebsite = normalizeText(input.sellerWebsite) || defaultSellerWebsite();
   if (typeof input.paymentTerms !== "undefined") invoice.paymentTerms = normalizeText(input.paymentTerms);
   if (typeof input.dueDate !== "undefined") invoice.dueDate = normalizeText(input.dueDate);
   if (typeof input.currency === "string") invoice.currency = normalizeCurrency(input.currency);

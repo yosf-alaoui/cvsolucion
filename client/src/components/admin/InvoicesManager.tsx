@@ -54,6 +54,15 @@ type InvoiceForm = {
   lineItems: InvoiceLineForm[];
 };
 
+const DEFAULT_SELLER = {
+  name: "Namdaja Service CVsolucion",
+  email: "contact@cvsolucion.com",
+  phone: "+1 (438) 80-8747",
+  address: "377 Rue st pierre Rimouski, QC Canada",
+  taxId: "Not registered for GST/QST",
+  website: "https://cvsolucion.com",
+};
+
 function formatDate(value: string | null, locale: string) {
   if (!value) return "-";
   return new Intl.DateTimeFormat(locale === "fr" ? "fr-CA" : "en-CA", {
@@ -116,12 +125,12 @@ function invoiceToForm(invoice: AdminDashboardInvoice): InvoiceForm {
     serviceDescription: invoice.serviceDescription || "",
     notes: invoice.notes || "",
     adminNotes: invoice.adminNotes || "",
-    sellerName: invoice.sellerName || "CVsolucion",
-    sellerEmail: invoice.sellerEmail || "",
-    sellerPhone: invoice.sellerPhone || "",
-    sellerAddress: invoice.sellerAddress || "",
-    sellerTaxId: invoice.sellerTaxId || "",
-    sellerWebsite: invoice.sellerWebsite || "https://cvsolucion.com",
+    sellerName: invoice.sellerName && invoice.sellerName !== "CVsolucion" ? invoice.sellerName : DEFAULT_SELLER.name,
+    sellerEmail: invoice.sellerEmail || DEFAULT_SELLER.email,
+    sellerPhone: invoice.sellerPhone || DEFAULT_SELLER.phone,
+    sellerAddress: invoice.sellerAddress || DEFAULT_SELLER.address,
+    sellerTaxId: invoice.sellerTaxId || DEFAULT_SELLER.taxId,
+    sellerWebsite: invoice.sellerWebsite || DEFAULT_SELLER.website,
     paymentTerms: invoice.paymentTerms || "Due on receipt",
     dueDate: invoice.dueDate || "",
     currency: (invoice.currency || "cad").toUpperCase(),
