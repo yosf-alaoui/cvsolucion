@@ -86,6 +86,36 @@ type InvoiceRequestInput = {
   notes?: string | null;
 };
 
+type PaidInvoiceRequestInput = {
+  userId: string;
+  email: string;
+  customerType?: InvoiceCustomerType | null;
+  customerName?: string | null;
+  phone?: string | null;
+  country?: string | null;
+  countryCode?: string | null;
+  company?: string | null;
+  billingAddress?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postalCode?: string | null;
+  taxId?: string | null;
+  serviceDescription: string;
+  notes?: string | null;
+  adminNotes?: string | null;
+  currency: string;
+  subtotalAmount: number;
+  taxAmount?: number | null;
+  taxLabel?: string | null;
+  taxRate?: number | null;
+  paymentReference: string;
+  paymentProvider: BookingRecord["paymentProvider"];
+  serviceType?: BookingRecord["serviceType"] | null;
+  priority?: BookingRecord["priority"] | null;
+  locale?: BookingRecord["locale"] | "en";
+  lineItems?: InvoiceLineItem[];
+};
+
 export type AdminInvoiceUpdateInput = {
   invoiceId: string;
   customerType?: InvoiceCustomerType;
@@ -376,6 +406,98 @@ export function createInvoiceRequest(input: InvoiceRequestInput) {
     hour: typeof input.booking?.hour === "number" ? input.booking.hour : null,
     locale: input.booking?.locale || "en",
     lineItems: normalizeLineItems(null, serviceDescription, subtotalAmount),
+  };
+
+  db.invoices.push(invoice);
+  saveDb(db);
+  return invoice;
+}
+
+export function upsertInvoiceRequestFromPayment(input: PaidInvoiceRequestInput) {
+  const db = loadDb();
+  const paymentReference = normalizeRequiredText(input.paymentReference, "");
+  const existing = db.invoices.find(
+    (invoice) =>
+      invoice.paymentReference === paymentReference &&
+      invoice.paymentProvider === input.paymentProvider,
+  );
+  if (existing) return existing;
+
+  const timestamp = nowIso();
+  const serviceDescription = normalizeRequiredText(
+    input.serviceDescription,
+    "Professional Cabinet Vision services",
+  );
+  const subtotalAmount = normalizeAmount(input.subtotalAmount);
+  const taxAmount = normalizeAmount(input.taxAmount);
+  const totalAmount = subtotalAmount + taxAmount;
+  const email = normalizeRequiredText(input.email, "").toLowerCase();
+  const customerName =
+    normalizeText(input.customerName) ||
+    (email ? email.split("@")[0] : null) ||
+    "Customer";
+  const customerType: InvoiceCustomerType =
+    input.customerType === "company" || normalizeText(input.company)
+      ? "company"
+      : "individual";
+
+  const invoice: InvoiceRecord = {
+    id: randomId(),
+    invoiceNumber: null,
+    bookingId: null,
+    userId: normalizeRequiredText(input.userId, ""),
+    status: "requested",
+    requestedAt: timestamp,
+    issuedAt: null,
+    updatedAt: timestamp,
+    currency: normalizeCurrency(input.currency),
+    subtotalAmount,
+    taxAmount,
+    totalAmount,
+    taxLabel: normalizeText(input.taxLabel),
+    taxRate: normalizeTaxRate(input.taxRate),
+    customerType,
+    customerName,
+    email,
+    phone: normalizeText(input.phone),
+    country: normalizeRequiredText(input.country || input.countryCode, "-"),
+    countryCode: normalizeCountryCode(input.countryCode),
+    company: normalizeText(input.company),
+    billingAddress: normalizeRequiredText(
+      input.billingAddress,
+      "Pending billing details",
+    ),
+    city: normalizeText(input.city),
+    region: normalizeText(input.region),
+    postalCode: normalizeText(input.postalCode),
+    taxId: normalizeText(input.taxId),
+    serviceDescription,
+    notes:
+      normalizeText(input.notes) ||
+      "Paid through Stripe. Please verify billing details before issuing.",
+    adminNotes:
+      normalizeText(input.adminNotes) ||
+      `Auto-created from Stripe payment ${paymentReference}.`,
+    sellerName: "CVsolucion",
+    sellerEmail: defaultSellerEmail(),
+    sellerPhone: null,
+    sellerAddress: null,
+    sellerTaxId: null,
+    sellerWebsite: defaultSellerWebsite(),
+    paymentTerms: "Paid by Stripe",
+    dueDate: null,
+    paymentReference,
+    paymentProvider: input.paymentProvider,
+    serviceType: input.serviceType || null,
+    priority: input.priority || null,
+    date: null,
+    hour: null,
+    locale: input.locale || "en",
+    lineItems: normalizeLineItems(
+      input.lineItems,
+      serviceDescription,
+      subtotalAmount,
+    ),
   };
 
   db.invoices.push(invoice);

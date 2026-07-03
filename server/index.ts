@@ -130,7 +130,9 @@ import {
   issueInvoiceByAdmin,
   listInvoicesForUser,
   listInvoicesForAdmin,
+  upsertInvoiceRequestFromPayment,
   updateInvoiceByAdmin,
+  type InvoiceLineItem,
   type InvoiceRecord,
   type InvoiceCustomerType,
 } from "./invoiceStore";
@@ -455,6 +457,167 @@ function formatInvoiceAmount(amount: number, currency: string) {
     style: "currency",
     currency: currency.toUpperCase(),
   }).format(amount / 100);
+}
+
+function normalizeStripeText(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function parseStripeCents(value: unknown) {
+  const amount = Number(value);
+  return Number.isInteger(amount) && amount >= 0 ? amount : null;
+}
+
+function buildTrainingInvoiceLineItems(
+  payment: Stripe.PaymentIntent,
+  trainingDescription: string,
+) {
+  const totalAmount = Math.max(0, payment.amount || 0);
+  const metadataSubtotal = parseStripeCents(
+    payment.metadata?.trainingSubtotalCents,
+  );
+  const metadataCardFee = parseStripeCents(
+    payment.metadata?.cardPaymentFeeCents,
+  );
+  const cardFee =
+    metadataCardFee !== null && metadataCardFee <= totalAmount
+      ? metadataCardFee
+      : 0;
+  const trainingAmount =
+    metadataSubtotal !== null && metadataSubtotal + cardFee <= totalAmount
+      ? metadataSubtotal
+      : Math.max(0, totalAmount - cardFee);
+
+  const lineItems: InvoiceLineItem[] = [];
+  if (trainingAmount > 0) {
+    lineItems.push({
+      id: `line_${payment.id}_training`,
+      description: trainingDescription,
+      quantity: 1,
+      unitAmount: trainingAmount,
+      amount: trainingAmount,
+    });
+  }
+
+  if (cardFee > 0) {
+    lineItems.push({
+      id: `line_${payment.id}_card_fee`,
+      description: "Card payment processing fee",
+      quantity: 1,
+      unitAmount: cardFee,
+      amount: cardFee,
+    });
+  }
+
+  if (!lineItems.length && totalAmount > 0) {
+    lineItems.push({
+      id: `line_${payment.id}`,
+      description: trainingDescription,
+      quantity: 1,
+      unitAmount: totalAmount,
+      amount: totalAmount,
+    });
+  }
+
+  return lineItems;
+}
+
+function syncTrainingPaymentIntent(payment: Stripe.PaymentIntent) {
+  if (payment.status !== "succeeded") return null;
+  if (payment.metadata?.type !== "training") return null;
+
+  const email = (
+    normalizeStripeText(payment.metadata?.email) ||
+    normalizeStripeText(payment.receipt_email) ||
+    ""
+  ).toLowerCase();
+  if (!email) {
+    console.warn("[stripe:webhook] training payment skipped without email", {
+      paymentIntentId: payment.id,
+    });
+    return null;
+  }
+
+  const countryCode = normalizeCountryCode(payment.metadata?.countryCode);
+  const programIdentifier =
+    normalizeStripeText(payment.metadata?.trainingProgramKey) ||
+    normalizeStripeText(payment.metadata?.trainingLevel) ||
+    normalizeStripeText(payment.metadata?.trainingProgramId) ||
+    "";
+  const program = programIdentifier
+    ? getCatalogTrainingProgram(programIdentifier, countryCode)
+    : null;
+  const programKey = program?.key || programIdentifier;
+  const programId = program?.id || normalizeStripeText(payment.metadata?.trainingProgramId);
+  const levelLabel =
+    program?.translations?.en?.title ||
+    program?.key ||
+    programIdentifier ||
+    "Training purchase";
+  const serviceDescription = `Training purchase - ${levelLabel}`;
+
+  const metadataUserId = normalizeStripeText(payment.metadata?.userId);
+  const matchedUser = metadataUserId
+    ? getUserById(metadataUserId)
+    : getUserByEmail(email);
+  const userId = matchedUser?.id || metadataUserId || "";
+  const customerProfile = userId ? getCustomerProfile(userId) : null;
+  const lineItems = buildTrainingInvoiceLineItems(payment, levelLabel);
+  const subtotalAmount =
+    lineItems.reduce((total, item) => total + item.amount, 0) ||
+    Math.max(0, payment.amount || 0);
+  const locale = normalizeAuthLocale(
+    normalizeStripeText(payment.metadata?.locale) || "en",
+  );
+
+  const enrollment =
+    userId && programKey
+      ? ensureTrainingEnrollmentFromPurchase({
+          userId,
+          userEmail: email,
+          customerName: customerProfile?.name,
+          company: customerProfile?.company,
+          country: customerProfile?.country,
+          countryCode: customerProfile?.countryCode || countryCode,
+          programKey,
+          programId,
+          paymentIntentId: payment.id,
+          purchaseAmount: payment.amount,
+          currency: payment.currency,
+        })
+      : null;
+
+  const invoice = upsertInvoiceRequestFromPayment({
+    userId,
+    email,
+    customerType: customerProfile?.company ? "company" : "individual",
+    customerName: customerProfile?.name || null,
+    phone: customerProfile?.phone || null,
+    country:
+      customerProfile?.country ||
+      customerProfile?.countryCode ||
+      countryCode ||
+      "-",
+    countryCode: customerProfile?.countryCode || countryCode,
+    company: customerProfile?.company || null,
+    billingAddress: null,
+    city: null,
+    region: null,
+    postalCode: null,
+    taxId: null,
+    serviceDescription,
+    notes: `Stripe payment confirmed for ${levelLabel}.`,
+    adminNotes: `Auto-created from Stripe successful training payment ${payment.id}.`,
+    currency: payment.currency,
+    subtotalAmount,
+    taxAmount: 0,
+    paymentReference: payment.id,
+    paymentProvider: "stripe",
+    locale,
+    lineItems,
+  });
+
+  return { invoice, enrollment, levelLabel };
 }
 
 function fallbackDisplayNameFromEmail(email: string) {
@@ -1228,9 +1391,17 @@ async function startServer() {
         }
 
         if (event.type === "payment_intent.succeeded") {
+          const payment = event.data.object as Stripe.PaymentIntent;
+          const syncResult = syncTrainingPaymentIntent(payment);
           console.log(
             "[stripe:webhook] payment_intent.succeeded",
-            event.data.object?.id || null,
+            payment.id || null,
+            syncResult
+              ? {
+                  trainingInvoiceId: syncResult.invoice.id,
+                  trainingEnrollmentId: syncResult.enrollment?.id || null,
+                }
+              : null,
           );
         }
 
@@ -2819,20 +2990,11 @@ async function startServer() {
         });
 
         const program = getCatalogTrainingProgram(level);
-        const customerProfile = getCustomerProfile(auth.user.id);
-        const enrollment = ensureTrainingEnrollmentFromPurchase({
-          userId: auth.user.id,
-          userEmail: auth.user.email,
-          customerName: customerProfile?.name,
-          company: customerProfile?.company,
-          country: customerProfile?.country,
-          countryCode: customerProfile?.countryCode,
-          programKey: level,
-          programId: program?.id || null,
-          paymentIntentId: payment.id,
-          purchaseAmount: payment.amount,
-          currency: payment.currency,
-        });
+        const syncResult = syncTrainingPaymentIntent(payment);
+        if (!syncResult?.enrollment) {
+          throw new Error("Training payment could not be linked to an enrollment.");
+        }
+        const enrollment = syncResult.enrollment;
         const levelLabel =
           program?.translations?.en?.title || program?.key || level;
         const amountLabel = new Intl.NumberFormat("en-CA", {
