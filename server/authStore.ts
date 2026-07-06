@@ -22,6 +22,7 @@ export type AuthSession = {
   userId: string;
   createdAt: string;
   expiresAt: string;
+  adminOtpVerifiedAt?: string | null;
 };
 
 export type AuthUserRole = "customer" | "designer" | "trainer" | "admin";
@@ -255,13 +256,18 @@ export function markUserEmailVerified(userId: string) {
   return user;
 }
 
-export function createSession(userId: string, maxAgeMs: number) {
+export function createSession(
+  userId: string,
+  maxAgeMs: number,
+  options: { adminOtpVerified?: boolean } = {},
+) {
   const db = loadDb();
   const session: AuthSession = {
     id: randomToken(24),
     userId,
     createdAt: nowIso(),
     expiresAt: addMs(maxAgeMs),
+    adminOtpVerifiedAt: options.adminOtpVerified ? nowIso() : null,
   };
   db.sessions.push(session);
   saveDb(db);

@@ -56,7 +56,15 @@ describe("SQLite document storage", () => {
           updatedAt: "2026-01-01T00:00:00.000Z",
         },
       ],
-      sessions: [],
+      sessions: [
+        {
+          id: "session_1",
+          userId: "user_1",
+          createdAt: "2026-01-01T00:01:00.000Z",
+          expiresAt: "2026-01-01T12:01:00.000Z",
+          adminOtpVerifiedAt: "2026-01-01T00:02:00.000Z",
+        },
+      ],
       tokens: [],
       events: [
         {
@@ -87,6 +95,16 @@ describe("SQLite document storage", () => {
     expect(
       db.prepare("SELECT COUNT(*) AS count FROM auth_events").get(),
     ).toMatchObject({ count: 1 });
+    expect(
+      db
+        .prepare(
+          "SELECT user_id, admin_otp_verified_at FROM auth_sessions WHERE id = ?",
+        )
+        .get("session_1"),
+    ).toMatchObject({
+      user_id: "user_1",
+      admin_otp_verified_at: "2026-01-01T00:02:00.000Z",
+    });
     const migrations = db
       .prepare("SELECT COUNT(*) AS count FROM schema_migrations")
       .get() as { count: number };

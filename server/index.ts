@@ -1068,6 +1068,10 @@ function getCurrentUser(req: express.Request) {
   }
   const role = getUserRole(user);
   const sessionAgeMs = Date.now() - new Date(session.createdAt).getTime();
+  if (role === "admin" && isAdminEmailOtpEnabled() && !session.adminOtpVerifiedAt) {
+    deleteSession(session.id);
+    return null;
+  }
   if (role === "admin" && sessionAgeMs > getAuthSessionMaxAgeMs(role)) {
     deleteSession(session.id);
     return null;
@@ -3854,7 +3858,7 @@ async function startServer() {
         return res.status(403).json({ error: "Admin access only." });
       }
 
-      if (adminOnly && role === "admin" && isAdminEmailOtpEnabled()) {
+      if (role === "admin" && isAdminEmailOtpEnabled()) {
         const code = createAdminLoginCode();
         createToken(user.id, "admin_login", ADMIN_LOGIN_CODE_MS, code);
         try {
@@ -3935,7 +3939,9 @@ async function startServer() {
 
       const role = getUserRole(user);
       const sessionMaxAgeMs = getAuthSessionMaxAgeMs(role);
-      const session = createSession(user.id, sessionMaxAgeMs);
+      const session = createSession(user.id, sessionMaxAgeMs, {
+        adminOtpVerified: true,
+      });
       setSessionCookie(req, res, session.id, sessionMaxAgeMs);
       recordEvent({
         type: "admin_login_completed",
@@ -4120,9 +4126,6 @@ async function startServer() {
 
     const user = markUserEmailVerified(tokenRecord.userId);
     const role = getUserRole(user);
-    const sessionMaxAgeMs = getAuthSessionMaxAgeMs(role);
-    const session = createSession(user.id, sessionMaxAgeMs);
-    setSessionCookie(req, res, session.id, sessionMaxAgeMs);
     recordEvent({
       type: "email_verified",
       userId: user.id,
@@ -4131,6 +4134,11 @@ async function startServer() {
       ip: getRequestIp(req),
       userAgent: req.get("user-agent") || null,
     });
+    if (role !== "admin" || !isAdminEmailOtpEnabled()) {
+      const sessionMaxAgeMs = getAuthSessionMaxAgeMs(role);
+      const session = createSession(user.id, sessionMaxAgeMs);
+      setSessionCookie(req, res, session.id, sessionMaxAgeMs);
+    }
     return res.redirect(302, redirectUrl);
   });
 

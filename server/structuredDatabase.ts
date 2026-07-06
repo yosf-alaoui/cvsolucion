@@ -16,6 +16,10 @@ export const structuredSchemaMigrations = [
     id: "2026-05-29-001-migration-ledger",
     description: "Track applied structured schema migrations.",
   },
+  {
+    id: "2026-07-06-001-admin-otp-sessions",
+    description: "Track admin email OTP verification on auth sessions.",
+  },
 ] as const;
 
 function text(value: unknown) {
@@ -120,7 +124,8 @@ export function ensureStructuredSchema(db: SqliteDatabase) {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL
+      expires_at TEXT NOT NULL,
+      admin_otp_verified_at TEXT
     );`,
     `CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id);`,
     `CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires_at);`,
@@ -405,6 +410,7 @@ export function ensureStructuredSchema(db: SqliteDatabase) {
   ]);
 
   ensureColumn(db, "bookings", "notes", "TEXT");
+  ensureColumn(db, "auth_sessions", "admin_otp_verified_at", "TEXT");
   ensureColumn(db, "bookings", "designer_assigned_at", "TEXT");
   ensureColumn(db, "bookings", "designer_assigned_by_user_id", "TEXT");
   ensureColumn(db, "bookings", "rescheduled_from_booking_id", "TEXT");
@@ -448,7 +454,7 @@ function replaceAuth(db: SqliteDatabase, data: JsonObject) {
       `INSERT INTO auth_users VALUES (@id, @email, @role, @emailVerifiedAt, @termsAcceptedAt, @termsVersion, @createdAt, @updatedAt)`,
     );
     const insertSession = db.prepare(
-      `INSERT INTO auth_sessions VALUES (@id, @userId, @createdAt, @expiresAt)`,
+      `INSERT INTO auth_sessions VALUES (@id, @userId, @createdAt, @expiresAt, @adminOtpVerifiedAt)`,
     );
     const insertToken = db.prepare(
       `INSERT INTO auth_tokens VALUES (@id, @userId, @type, @createdAt, @expiresAt, @usedAt)`,
@@ -474,6 +480,7 @@ function replaceAuth(db: SqliteDatabase, data: JsonObject) {
         userId: requiredText(session.userId),
         createdAt: requiredText(session.createdAt),
         expiresAt: requiredText(session.expiresAt),
+        adminOtpVerifiedAt: text(session.adminOtpVerifiedAt),
       });
     }
     for (const token of tokens) {
