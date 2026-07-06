@@ -16,6 +16,22 @@ export type CurrentUserResponse = {
   csrfToken?: string | null;
 };
 
+export type LoginResponse = {
+  user: AuthUser;
+  role?: AuthUser["role"];
+  isAdmin?: boolean;
+  isDesigner?: boolean;
+  isTrainer?: boolean;
+  csrfToken?: string | null;
+};
+
+export type AdminLoginResponse =
+  | LoginResponse
+  | {
+      requiresAdminCode: true;
+      email: string;
+    };
+
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
@@ -38,30 +54,23 @@ export function getCurrentUser() {
 }
 
 export function loginWithPassword(email: string, password: string) {
-  return request<{
-    user: AuthUser;
-    role?: AuthUser["role"];
-    isAdmin?: boolean;
-    isDesigner?: boolean;
-    isTrainer?: boolean;
-    csrfToken?: string | null;
-  }>("/api/auth/login", {
+  return request<LoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
 }
 
 export function loginWithPasswordForAdmin(email: string, password: string) {
-  return request<{
-    user: AuthUser;
-    role?: AuthUser["role"];
-    isAdmin?: boolean;
-    isDesigner?: boolean;
-    isTrainer?: boolean;
-    csrfToken?: string | null;
-  }>("/api/auth/login", {
+  return request<AdminLoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password, adminOnly: true }),
+  });
+}
+
+export function verifyAdminLoginCode(email: string, code: string) {
+  return request<LoginResponse>("/api/auth/admin-login-code", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
   });
 }
 

@@ -134,7 +134,7 @@ async function uploadFile(token, folderId, filePath, metadata) {
       `--${boundary}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({
         ...metadata,
         parents: [folderId],
-      })}\r\n--${boundary}\r\ncontent-type: application/gzip\r\n\r\n`,
+      })}\r\n--${boundary}\r\ncontent-type: application/octet-stream\r\n\r\n`,
     ),
     fileBytes,
     Buffer.from(`\r\n--${boundary}--\r\n`),
@@ -156,6 +156,50 @@ function assertCommandSucceeded(result, command) {
     const stderr = String(result.stderr || "").trim();
     throw new Error(`${command} failed${stderr ? `: ${stderr}` : ""}`);
   }
+}
+
+function isEnabled(value) {
+  return /^(1|true|yes|on)$/i.test(String(value || "").trim());
+}
+
+function encryptArchiveIfConfigured(archivePath) {
+  const passphrase = process.env.BACKUP_ENCRYPTION_PASSPHRASE || "";
+  if (!passphrase) {
+    if (isEnabled(process.env.REQUIRE_ENCRYPTED_BACKUPS)) {
+      throw new Error("BACKUP_ENCRYPTION_PASSPHRASE is required when REQUIRE_ENCRYPTED_BACKUPS=true.");
+    }
+    return archivePath;
+  }
+
+  const encryptedPath = `${archivePath}.enc`;
+  const result = spawnSync(
+    "openssl",
+    [
+      "enc",
+      "-aes-256-cbc",
+      "-salt",
+      "-pbkdf2",
+      "-iter",
+      "200000",
+      "-in",
+      archivePath,
+      "-out",
+      encryptedPath,
+      "-pass",
+      "env:BACKUP_ENCRYPTION_PASSPHRASE",
+    ],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        BACKUP_ENCRYPTION_PASSPHRASE: passphrase,
+      },
+    },
+  );
+  assertCommandSucceeded(result, "openssl backup encryption");
+  fs.chmodSync(encryptedPath, 0o600);
+  fs.rmSync(archivePath, { force: true });
+  return encryptedPath;
 }
 
 async function createArchive() {
@@ -252,10 +296,12 @@ async function main() {
   const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
   const token = await getAccessToken(serviceAccount);
   const folderId = await resolveBackupFolder(token, serviceAccount);
-  const archivePath = await createArchive();
+  const archivePath = encryptArchiveIfConfigured(await createArchive());
   const uploaded = await uploadFile(token, folderId, archivePath, {
     name: path.basename(archivePath),
-    description: "CVsolucion production SQLite backup",
+    description: archivePath.endsWith(".enc")
+      ? "CVsolucion encrypted production SQLite backup"
+      : "CVsolucion production SQLite backup",
   });
   const pruned = await pruneOldBackups(token, folderId);
 

@@ -98,6 +98,7 @@ Rules:
 
   const json = await callResponsesApi({
     model: getModel(),
+    store: false,
     max_output_tokens: 24000,
     reasoning: { effort: "low" },
     text: { verbosity: "low" },

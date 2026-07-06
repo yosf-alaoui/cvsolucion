@@ -108,7 +108,7 @@ const SANITIZE_CONFIG = {
     "code",
     "pre",
   ],
-  ALLOWED_ATTR: ["href", "target", "rel", "style", "src", "alt"],
+  ALLOWED_ATTR: ["href", "target", "rel", "src", "alt"],
   FORBID_TAGS: ["script", "style"],
   KEEP_CONTENT: true,
 };
@@ -129,7 +129,7 @@ export function sanitizeArticleHtml(input: string) {
     }
 
     anchor.setAttribute("target", "_blank");
-    anchor.setAttribute("rel", "noreferrer");
+    anchor.setAttribute("rel", "noopener noreferrer");
   });
 
   root.querySelectorAll("img").forEach((image) => {

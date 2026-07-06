@@ -105,6 +105,7 @@ type VisitorDb = {
 
 const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "visitors-db.json");
+const DEFAULT_VISITOR_RETENTION_DAYS = 180;
 
 function ensureDbFile() {
   ensureJsonFile(DB_PATH, { visitors: [] });
@@ -363,11 +364,29 @@ function loadDb(): VisitorDb {
 }
 
 function saveDb(db: VisitorDb) {
+  applyVisitorRetention(db);
   writeJsonFileAtomic(DB_PATH, db);
 }
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function getVisitorRetentionDays() {
+  const configured = Number(process.env.VISITOR_RETENTION_DAYS);
+  if (Number.isFinite(configured) && configured >= 0) return configured;
+  return DEFAULT_VISITOR_RETENTION_DAYS;
+}
+
+function applyVisitorRetention(db: VisitorDb) {
+  const retentionDays = getVisitorRetentionDays();
+  if (retentionDays <= 0) return;
+
+  const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  db.visitors = db.visitors.filter((visitor) => {
+    const lastSeen = new Date(visitor.lastSeenAt).getTime();
+    return Number.isFinite(lastSeen) && lastSeen >= cutoffMs;
+  });
 }
 
 export function createVisitorId() {

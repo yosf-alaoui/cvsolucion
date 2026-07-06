@@ -200,12 +200,49 @@ function localizeArticle(record: ArticleRecord, locale: ArticleLocale): Localize
     slug: record.slug,
     sourceLocale: record.sourceLocale,
     title: translation.title,
-    body: translation.body,
+    body: sanitizeStoredArticleHtml(translation.body),
     imageUrl: record.imageUrl,
     publishedAt: record.publishedAt,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
+}
+
+function sanitizeStoredArticleHtml(input: string) {
+  return String(input || "")
+    .trim()
+    .replace(
+      /<\s*(script|style|iframe|object|embed|link|meta|base)\b[\s\S]*?<\s*\/\s*\1\s*>/gi,
+      "",
+    )
+    .replace(
+      /<\s*(script|style|iframe|object|embed|link|meta|base)\b[^>]*\/?>/gi,
+      "",
+    )
+    .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s+style\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(
+      /\s+(href|src)\s*=\s*(["'])\s*(javascript:|vbscript:|data:text\/html)[\s\S]*?\2/gi,
+      "",
+    )
+    .replace(
+      /\s+(href|src)\s*=\s*[^\s>]*(?:javascript:|vbscript:|data:text\/html)[^\s>]*/gi,
+      "",
+    );
+}
+
+function sanitizeArticleTranslations(
+  translations: Record<ArticleLocale, ArticleTranslationRecord>,
+) {
+  return Object.fromEntries(
+    ARTICLE_LOCALES.map((locale) => [
+      locale,
+      {
+        title: translations[locale].title.trim(),
+        body: sanitizeStoredArticleHtml(translations[locale].body),
+      },
+    ]),
+  ) as Record<ArticleLocale, ArticleTranslationRecord>;
 }
 
 function canonicalSlugTitle(sourceLocale: ArticleLocale, translations: Record<ArticleLocale, ArticleTranslationRecord>) {
@@ -274,11 +311,11 @@ export async function backfillArticleTranslations(articleId?: string) {
 
     try {
       const source = article.translations[article.sourceLocale];
-      const translations = await translateArticleContent({
+      const translations = sanitizeArticleTranslations(await translateArticleContent({
         sourceLocale: article.sourceLocale,
         title: source.title.trim(),
-        body: source.body.trim(),
-      });
+        body: sanitizeStoredArticleHtml(source.body),
+      }));
 
       article.translations = translations;
       article.slug = uniqueSlug(db, canonicalSlugTitle(article.sourceLocale, translations), article.id);
@@ -310,11 +347,11 @@ export async function createArticle(input: {
 }) {
   const db = loadDb();
   const timestamp = nowIso();
-  const translations = await translateArticleContent({
+  const translations = sanitizeArticleTranslations(await translateArticleContent({
     sourceLocale: input.sourceLocale,
     title: input.title.trim(),
-    body: input.body.trim(),
-  });
+    body: sanitizeStoredArticleHtml(input.body),
+  }));
 
   const article: ArticleRecord = {
     id: randomId(),
@@ -348,11 +385,11 @@ export async function updateArticle(
     throw new Error("Article not found.");
   }
 
-  const translations = await translateArticleContent({
+  const translations = sanitizeArticleTranslations(await translateArticleContent({
     sourceLocale: input.sourceLocale,
     title: input.title.trim(),
-    body: input.body.trim(),
-  });
+    body: sanitizeStoredArticleHtml(input.body),
+  }));
 
   article.sourceLocale = input.sourceLocale;
   article.translations = translations;

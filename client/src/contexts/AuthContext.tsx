@@ -64,6 +64,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refresh,
       login: async (email, password, options) => {
         const response = options?.adminOnly ? await loginWithPasswordForAdmin(email, password) : await loginWithPassword(email, password);
+        if ("requiresAdminCode" in response) {
+          throw new Error("Admin sign-in code required.");
+        }
         setCsrfToken(response.csrfToken);
         setUser(response.user);
         const nextRole = response.user.role || response.role || null;

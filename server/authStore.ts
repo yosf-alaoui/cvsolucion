@@ -26,7 +26,11 @@ export type AuthSession = {
 
 export type AuthUserRole = "customer" | "designer" | "trainer" | "admin";
 
-export type AuthTokenType = "verify_email" | "magic_link" | "reset_password";
+export type AuthTokenType =
+  | "verify_email"
+  | "magic_link"
+  | "reset_password"
+  | "admin_login";
 
 export type AuthTokenRecord = {
   id: string;
@@ -43,6 +47,8 @@ export type AuthEventType =
   | "login"
   | "login_failed"
   | "admin_login_denied"
+  | "admin_login_code_sent"
+  | "admin_login_completed"
   | "logout"
   | "magic_link_requested"
   | "password_reset_requested"
@@ -165,10 +171,7 @@ function getConfiguredAdminEmails() {
 export function isAdminEmailAddress(email: string) {
   const normalizedEmail = email.trim().toLowerCase();
   const configured = getConfiguredAdminEmails();
-  if (configured.size > 0) {
-    return configured.has(normalizedEmail);
-  }
-  return normalizedEmail.endsWith("@cvsolucion.com");
+  return configured.has(normalizedEmail);
 }
 
 export function resolveStoredUserRole(role: unknown, email: string): AuthUserRole {
@@ -291,9 +294,13 @@ export function deleteUserSessions(userId: string) {
   return before - db.sessions.length;
 }
 
-export function createToken(userId: string, type: AuthTokenType, maxAgeMs: number) {
+export function createToken(
+  userId: string,
+  type: AuthTokenType,
+  maxAgeMs: number,
+  rawToken = randomToken(24),
+) {
   const db = loadDb();
-  const rawToken = randomToken(24);
   const token: AuthTokenRecord = {
     id: randomToken(12),
     userId,

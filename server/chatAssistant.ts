@@ -15,7 +15,9 @@ const DEFAULT_MODEL = "gpt-4.1";
 const DEFAULT_TEMPERATURE = 1;
 const DEFAULT_TOP_P = 1;
 const DEFAULT_MAX_OUTPUT_TOKENS = 2048;
-const DEFAULT_STORE = true;
+const DEFAULT_STORE =
+  String(process.env.OPENAI_STORE_RESPONSES || "").trim().toLowerCase() ===
+  "true";
 
 const DEFAULT_SYSTEM_PROMPT = String.raw`# ROLE & IDENTITY
 You are a Senior Advisor for CVsolucion (cvsolucion.com), experts in Cabinet Vision.

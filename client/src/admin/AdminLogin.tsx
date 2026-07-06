@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
+import { loginWithPasswordForAdmin, verifyAdminLoginCode } from "@/lib/auth";
+import { setCsrfToken } from "@/lib/csrf";
 import { validatePasswordPolicy } from "@shared/passwordPolicy";
 
-type LoginState = "login" | "reset" | "recovery";
+type LoginState = "login" | "reset" | "recovery" | "otp";
 
 function getSafeNextPath() {
   const params = new URLSearchParams(window.location.search);
@@ -19,13 +21,15 @@ function getSafeNextPath() {
 }
 
 export default function AdminLogin() {
-  const { user, isAdmin, loading, login, logout, sendReset, resetPassword } = useAuth();
+  const { user, isAdmin, loading, logout, sendReset, resetPassword } = useAuth();
   const [state, setState] = useState<LoginState>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [resetToken, setResetToken] = useState("");
+  const [adminCode, setAdminCode] = useState("");
+  const [pendingAdminEmail, setPendingAdminEmail] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<"success" | "error" | null>(null);
@@ -36,8 +40,9 @@ export default function AdminLogin() {
   const disabled = useMemo(() => {
     if (state === "reset") return !email;
     if (state === "recovery") return !resetToken || !newPassword || newPassword !== confirmPassword || Boolean(resetPasswordMessage);
+    if (state === "otp") return !pendingAdminEmail || !/^\d{6}$/.test(adminCode.trim());
     return !email || !password;
-  }, [confirmPassword, email, newPassword, password, resetPasswordMessage, resetToken, state]);
+  }, [adminCode, confirmPassword, email, newPassword, password, pendingAdminEmail, resetPasswordMessage, resetToken, state]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -101,7 +106,29 @@ export default function AdminLogin() {
         return;
       }
 
-      const nextUser = await login(email, password, { adminOnly: true });
+      if (state === "otp") {
+        const response = await verifyAdminLoginCode(pendingAdminEmail, adminCode);
+        setCsrfToken(response.csrfToken);
+        if (response.user.role !== "admin") {
+          await logout().catch(() => {});
+          setError("Admin access only.");
+          return;
+        }
+        window.location.href = getSafeNextPath();
+        return;
+      }
+
+      const response = await loginWithPasswordForAdmin(email, password);
+      if ("requiresAdminCode" in response) {
+        setPendingAdminEmail(response.email);
+        setAdminCode("");
+        setState("otp");
+        setStatus("A 6-digit admin sign-in code has been sent to your email.");
+        setStatusTone("success");
+        return;
+      }
+      setCsrfToken(response.csrfToken);
+      const nextUser = response.user;
       if (nextUser.role !== "admin") {
         await logout().catch(() => {});
         setError("Admin access only.");
@@ -141,7 +168,13 @@ export default function AdminLogin() {
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <CardTitle className="text-2xl">
-              {state === "recovery" ? "Create a new password" : state === "reset" ? "Reset admin password" : "Admin sign in"}
+              {state === "recovery"
+                ? "Create a new password"
+                : state === "reset"
+                  ? "Reset admin password"
+                  : state === "otp"
+                    ? "Enter admin code"
+                    : "Admin sign in"}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -172,6 +205,20 @@ export default function AdminLogin() {
                     />
                   </div>
                 </>
+              ) : state === "otp" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="admin-code">6-digit code</Label>
+                  <Input
+                    id="admin-code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={adminCode}
+                    onChange={(event) => setAdminCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    required
+                  />
+                  <p className="text-xs text-slate-500">The code was sent to {pendingAdminEmail} and expires in 10 minutes.</p>
+                </div>
               ) : (
                 <>
                   <div className="space-y-2">
@@ -214,7 +261,15 @@ export default function AdminLogin() {
               )}
 
               <Button type="submit" className="w-full" disabled={disabled || busy || loading}>
-                {busy ? "Working..." : state === "recovery" ? "Save password" : state === "reset" ? "Send reset link" : "Sign in"}
+                {busy
+                  ? "Working..."
+                  : state === "recovery"
+                    ? "Save password"
+                    : state === "reset"
+                      ? "Send reset link"
+                      : state === "otp"
+                        ? "Verify code"
+                        : "Sign in"}
               </Button>
             </form>
 
@@ -242,7 +297,7 @@ export default function AdminLogin() {
               >
                 Forgot password?
               </button>
-            ) : state === "reset" ? (
+            ) : state === "reset" || state === "otp" ? (
               <button
                 type="button"
                 className="mt-5 text-sm font-semibold text-primary hover:text-primary/80"
@@ -250,6 +305,8 @@ export default function AdminLogin() {
                   setState("login");
                   setStatus(null);
                   setStatusTone(null);
+                  setAdminCode("");
+                  setPendingAdminEmail("");
                 }}
               >
                 Return to sign in

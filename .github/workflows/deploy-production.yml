@@ -32,6 +32,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Secrets Audit
+        run: pnpm run secrets:audit
+
       - name: Type Check
         run: pnpm run check
 
@@ -40,6 +43,9 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+      - name: E2E Smoke
+        run: pnpm run test:e2e
 
       - name: Create Release Archive
         run: git archive --format=tar.gz -o "/tmp/cvsolucion-${GITHUB_SHA}.tar.gz" HEAD
@@ -110,9 +116,11 @@ jobs:
 
           pnpm install --frozen-lockfile
           pnpm test
+          pnpm run secrets:audit
           pnpm run check
           pnpm run audit:prod
           pnpm run build
+          pnpm run test:e2e
 
           pm2 stop "$PM2_APP"
           STOPPED=1

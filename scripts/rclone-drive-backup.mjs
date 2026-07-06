@@ -34,6 +34,50 @@ function run(command, args) {
   return result;
 }
 
+function isEnabled(value) {
+  return /^(1|true|yes|on)$/i.test(String(value || "").trim());
+}
+
+function encryptArchiveIfConfigured(archivePath) {
+  const passphrase = process.env.BACKUP_ENCRYPTION_PASSPHRASE || "";
+  if (!passphrase) {
+    if (isEnabled(process.env.REQUIRE_ENCRYPTED_BACKUPS)) {
+      throw new Error("BACKUP_ENCRYPTION_PASSPHRASE is required when REQUIRE_ENCRYPTED_BACKUPS=true.");
+    }
+    return archivePath;
+  }
+
+  const encryptedPath = `${archivePath}.enc`;
+  const result = spawnSync(
+    "openssl",
+    [
+      "enc",
+      "-aes-256-cbc",
+      "-salt",
+      "-pbkdf2",
+      "-iter",
+      "200000",
+      "-in",
+      archivePath,
+      "-out",
+      encryptedPath,
+      "-pass",
+      "env:BACKUP_ENCRYPTION_PASSPHRASE",
+    ],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        BACKUP_ENCRYPTION_PASSPHRASE: passphrase,
+      },
+    },
+  );
+  assertCommandSucceeded(result, "openssl backup encryption");
+  fs.chmodSync(encryptedPath, 0o600);
+  fs.rmSync(archivePath, { force: true });
+  return encryptedPath;
+}
+
 async function createArchive() {
   const dataDir = resolvePath(process.env.APP_DATA_DIR, path.join(process.cwd(), "data"));
   const databasePath = resolvePath(
@@ -119,7 +163,7 @@ async function main() {
     throw new Error("RCLONE_BACKUP_REMOTE is required, for example: cvsolucion-drive:cvsolucion-backups");
   }
 
-  const archivePath = await createArchive();
+  const archivePath = encryptArchiveIfConfigured(await createArchive());
   const retentionDays = Number(process.env.RCLONE_BACKUP_RETENTION_DAYS || DEFAULT_RETENTION_DAYS);
   const baseArgs = rcloneArgs();
 
@@ -145,7 +189,7 @@ async function main() {
       "delete",
       remote,
       "--include",
-      "cvsolucion-backup-*.tar.gz",
+      "cvsolucion-backup-*.tar.gz*",
       "--min-age",
       `${retentionDays}d`,
     ]);

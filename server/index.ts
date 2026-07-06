@@ -209,10 +209,37 @@ const MAGIC_LINK_MS = 1000 * 60 * 20;
 const VERIFY_LINK_MS = 1000 * 60 * 60 * 24;
 const CONTACT_CONFIRM_LINK_MS = 1000 * 60 * 60 * 24 * 3;
 const RESET_LINK_MS = 1000 * 60 * 30;
+const ADMIN_LOGIN_CODE_MS = 1000 * 60 * 10;
+const ADMIN_SESSION_DEFAULT_MS = 1000 * 60 * 60 * 12;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_MAX_BUCKETS = 10000;
 const QUEBEC_TIMEZONE = "America/Toronto";
+
+function readPositiveDurationMs(envKey: string, fallbackMs: number) {
+  const value = Number(process.env[envKey]);
+  return Number.isFinite(value) && value > 0 ? value : fallbackMs;
+}
+
+function getAuthSessionMaxAgeMs(role: AuthUserRole) {
+  if (role === "admin") {
+    return readPositiveDurationMs(
+      "ADMIN_SESSION_MAX_AGE_MS",
+      ADMIN_SESSION_DEFAULT_MS,
+    );
+  }
+  return readPositiveDurationMs("AUTH_SESSION_MAX_AGE_MS", ONE_YEAR_MS);
+}
+
+function isAdminEmailOtpEnabled() {
+  return /^(1|true|yes|on)$/i.test(
+    String(process.env.ADMIN_EMAIL_OTP_ENABLED || "").trim(),
+  );
+}
+
+function createAdminLoginCode() {
+  return String(crypto.randomInt(100000, 1000000));
+}
 
 function parseCookies(cookieHeader?: string) {
   const entries = (cookieHeader || "")
@@ -985,13 +1012,14 @@ function setSessionCookie(
   req: express.Request,
   res: express.Response,
   sessionId: string,
+  maxAgeMs: number,
 ) {
   const domain = getCookieDomain(req);
   res.cookie(COOKIE_NAME, sessionId, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    maxAge: ONE_YEAR_MS,
+    maxAge: maxAgeMs,
     path: "/",
     ...(domain ? { domain } : {}),
   });
@@ -1035,6 +1063,12 @@ function getCurrentUser(req: express.Request) {
   const user = getUserById(session.userId);
   if (!user) return null;
   if (!user.emailVerifiedAt) {
+    deleteSession(session.id);
+    return null;
+  }
+  const role = getUserRole(user);
+  const sessionAgeMs = Date.now() - new Date(session.createdAt).getTime();
+  if (role === "admin" && sessionAgeMs > getAuthSessionMaxAgeMs(role)) {
     deleteSession(session.id);
     return null;
   }
@@ -1086,6 +1120,54 @@ function requiresCsrf(req: express.Request) {
     ) ||
     /^\/api\/bookings\/[^/]+\/reschedule$/.test(req.path)
   );
+}
+
+function hostnameFromUrl(value: string | null | undefined) {
+  if (!value) return null;
+  try {
+    return new URL(value).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+function isTrustedBrowserMutation(req: express.Request) {
+  const secFetchSite = String(req.get("sec-fetch-site") || "").toLowerCase();
+  if (secFetchSite === "cross-site") return false;
+
+  const originHost = hostnameFromUrl(req.get("origin"));
+  if (!originHost) return true;
+
+  const requestHost = String(req.get("host") || "")
+    .split(":")[0]
+    .toLowerCase()
+    .replace(/^www\./, "");
+
+  if (!requestHost) return false;
+  if (originHost === requestHost) return true;
+  if (
+    requestHost === "cvsolucion.com" &&
+    originHost.endsWith(".cvsolucion.com")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function requireTrustedBrowserMutation(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  const method = req.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+    return next();
+  }
+  if (!isTrustedBrowserMutation(req)) {
+    return res.status(403).json({ error: "Cross-site request blocked." });
+  }
+  return next();
 }
 
 function getRequestIp(req: express.Request) {
@@ -1260,6 +1342,32 @@ async function sendLinkEmail(args: {
     subject: emailTemplate.subject,
     text: emailTemplate.text,
     html: emailTemplate.html,
+  });
+}
+
+async function sendAdminLoginCodeEmail(args: { email: string; code: string }) {
+  const subject = "Your CVsolucion admin sign-in code";
+  const text = [
+    "Use this code to finish signing in to the CVsolucion admin console:",
+    "",
+    args.code,
+    "",
+    "This code expires in 10 minutes. If you did not request it, reset your password and review active sessions.",
+  ].join("\n");
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+      <h2 style="margin:0 0 16px">Admin sign-in code</h2>
+      <p>Use this code to finish signing in to the CVsolucion admin console.</p>
+      <p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:20px 0">${escapeHtml(args.code)}</p>
+      <p style="color:#64748b">This code expires in 10 minutes. If you did not request it, reset your password and review active sessions.</p>
+    </div>
+  `;
+
+  await sendAuthEmail({
+    to: args.email,
+    subject,
+    text,
+    html,
   });
 }
 
@@ -1646,7 +1754,7 @@ async function startServer() {
     },
   );
 
-  app.use(express.json({ limit: "15mb" }));
+  app.use(express.json({ limit: "1mb" }));
 
   app.use((_req, res, next) => {
     const host = String(_req.get("host") || "").trim();
@@ -1794,6 +1902,23 @@ async function startServer() {
 
     return next();
   });
+
+  app.use(
+    [
+      "/api/visitor/track",
+      "/api/visitor/event",
+      "/api/chat/new-session",
+      "/api/chat/message",
+      "/api/chat/support-intake",
+      "/api/contact",
+      "/api/contact/confirm",
+      "/api/auth/login",
+      "/api/auth/admin-login-code",
+      "/api/auth/forgot-password",
+      "/api/auth/reset-password",
+    ],
+    requireTrustedBrowserMutation,
+  );
 
   app.get("/api/auth/me", (req, res) => {
     const auth = getCurrentUser(req);
@@ -3693,7 +3818,7 @@ async function startServer() {
       limit: 8,
       scope: requestBodyFieldScope("email"),
     }),
-    (req, res) => {
+    async (req, res, next) => {
       const email = String(req.body?.email || "").trim();
       const password = String(req.body?.password || "");
       const adminOnly = req.body?.adminOnly === true;
@@ -3729,8 +3854,31 @@ async function startServer() {
         return res.status(403).json({ error: "Admin access only." });
       }
 
-      const session = createSession(user.id, ONE_YEAR_MS);
-      setSessionCookie(req, res, session.id);
+      if (adminOnly && role === "admin" && isAdminEmailOtpEnabled()) {
+        const code = createAdminLoginCode();
+        createToken(user.id, "admin_login", ADMIN_LOGIN_CODE_MS, code);
+        try {
+          await sendAdminLoginCodeEmail({ email: user.email, code });
+        } catch (error) {
+          return next(error);
+        }
+        recordEvent({
+          type: "admin_login_code_sent",
+          userId: user.id,
+          email: user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: req.get("user-agent") || null,
+        });
+        return res.json({
+          requiresAdminCode: true,
+          email: user.email,
+        });
+      }
+
+      const sessionMaxAgeMs = getAuthSessionMaxAgeMs(role);
+      const session = createSession(user.id, sessionMaxAgeMs);
+      setSessionCookie(req, res, session.id, sessionMaxAgeMs);
       recordEvent({
         type: "login",
         userId: user.id,
@@ -3745,6 +3893,65 @@ async function startServer() {
         isAdmin: role === "admin",
         isDesigner: role === "designer",
         isTrainer: role === "trainer",
+        csrfToken: createCsrfToken({ session, user }),
+      });
+    },
+  );
+
+  app.post(
+    "/api/auth/admin-login-code",
+    rateLimit({ key: "admin-code-ip", windowMs: 1000 * 60 * 15, limit: 20 }),
+    rateLimit({
+      key: "admin-code-email",
+      windowMs: 1000 * 60 * 15,
+      limit: 8,
+      scope: requestBodyFieldScope("email"),
+    }),
+    (req, res) => {
+      const email = String(req.body?.email || "").trim().toLowerCase();
+      const code = String(req.body?.code || "").trim();
+      if (!EMAIL_REGEX.test(email) || !/^\d{6}$/.test(code)) {
+        return res.status(400).json({ error: "A valid code is required." });
+      }
+
+      const tokenRecord = consumeToken(code, "admin_login");
+      const user = tokenRecord ? getUserById(tokenRecord.userId) : null;
+      if (
+        !user ||
+        user.email.toLowerCase() !== email ||
+        !user.emailVerifiedAt ||
+        getUserRole(user) !== "admin"
+      ) {
+        recordEvent({
+          type: "login_failed",
+          userId: user?.id ?? null,
+          email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: req.get("user-agent") || null,
+        });
+        return res.status(401).json({ error: "Invalid or expired code." });
+      }
+
+      const role = getUserRole(user);
+      const sessionMaxAgeMs = getAuthSessionMaxAgeMs(role);
+      const session = createSession(user.id, sessionMaxAgeMs);
+      setSessionCookie(req, res, session.id, sessionMaxAgeMs);
+      recordEvent({
+        type: "admin_login_completed",
+        userId: user.id,
+        email: user.email,
+        locale: "admin",
+        ip: getRequestIp(req),
+        userAgent: req.get("user-agent") || null,
+      });
+
+      return res.json({
+        user: serializePublicUser(user),
+        role,
+        isAdmin: true,
+        isDesigner: false,
+        isTrainer: false,
         csrfToken: createCsrfToken({ session, user }),
       });
     },
@@ -3912,8 +4119,10 @@ async function startServer() {
     }
 
     const user = markUserEmailVerified(tokenRecord.userId);
-    const session = createSession(user.id, ONE_YEAR_MS);
-    setSessionCookie(req, res, session.id);
+    const role = getUserRole(user);
+    const sessionMaxAgeMs = getAuthSessionMaxAgeMs(role);
+    const session = createSession(user.id, sessionMaxAgeMs);
+    setSessionCookie(req, res, session.id, sessionMaxAgeMs);
     recordEvent({
       type: "email_verified",
       userId: user.id,
@@ -6240,6 +6449,10 @@ async function startServer() {
       maxAge: "30d",
       etag: true,
       lastModified: true,
+      setHeaders: (res) => {
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
+      },
     }),
   );
 

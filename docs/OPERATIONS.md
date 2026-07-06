@@ -10,6 +10,18 @@
 - SQLite database: `/var/www/cvsolucion_shared/data/cvsolucion.sqlite`
 - JSON mirror: optional. Keep `APP_SQLITE_JSON_MIRROR=false` after SQLite is verified to avoid stale JSON files becoming a deploy source.
 
+Recommended security environment:
+
+```bash
+ADMIN_SESSION_MAX_AGE_MS=43200000
+ADMIN_EMAIL_OTP_ENABLED=false
+VISITOR_RETENTION_DAYS=180
+OPENAI_STORE_RESPONSES=false
+```
+
+`ADMIN_SESSION_MAX_AGE_MS` defaults to 12 hours. Customer sessions still use `AUTH_SESSION_MAX_AGE_MS` or the one-year default.
+Set `ADMIN_EMAIL_OTP_ENABLED=true` only after SMTP delivery is verified, because admin sign-in will require a 6-digit email code after the password step.
+
 ## Storage Commands
 
 Run from the app directory:
@@ -41,6 +53,8 @@ RCLONE_CONFIG=/root/.config/rclone/rclone.conf
 RCLONE_BACKUP_REMOTE=cvsolucion-drive:cvsolucion-backups
 RCLONE_BACKUP_RETENTION_DAYS=30
 BACKUP_OUTPUT_DIR=/root/backups
+BACKUP_ENCRYPTION_PASSPHRASE=
+REQUIRE_ENCRYPTED_BACKUPS=true
 ```
 
 `RCLONE_BACKUP_REMOTE` must point to an already configured rclone remote and folder path. For a personal Google Drive, configure the remote with OAuth as the Google user who owns the storage. A service account still needs a Workspace Shared Drive or OAuth delegation; rclone does not give service accounts personal Drive quota.
@@ -70,13 +84,15 @@ GOOGLE_DRIVE_BACKUP_FOLDER_ID=
 GOOGLE_DRIVE_BACKUP_FOLDER_NAME=CVsolucion production backups
 GOOGLE_DRIVE_BACKUP_RETENTION_DAYS=30
 BACKUP_OUTPUT_DIR=/root/backups
+BACKUP_ENCRYPTION_PASSPHRASE=
+REQUIRE_ENCRYPTED_BACKUPS=true
 ```
 
 Prefer `GOOGLE_DRIVE_BACKUP_FOLDER_ID` because folder names are not unique. If using `GOOGLE_DRIVE_BACKUP_FOLDER_NAME`, the folder must already be shared with the service account email from the JSON key.
 
 Google service accounts cannot upload into a normal personal Drive quota. Use a Google Workspace Shared Drive folder, or switch this backup to an OAuth user flow if the target account is a personal Google Drive.
 
-The backup command creates a safe SQLite backup with `better-sqlite3`, includes the production `uploads/` directory when present, stores a local `.tar.gz` copy, uploads it to Drive, and prunes Drive backups older than the configured retention window.
+The backup command creates a safe SQLite backup with `better-sqlite3`, includes the production `uploads/` directory when present, stores a local `.tar.gz` copy, uploads it to Drive, and prunes Drive backups older than the configured retention window. Set `BACKUP_ENCRYPTION_PASSPHRASE` to upload `.tar.gz.enc` encrypted archives. Set `REQUIRE_ENCRYPTED_BACKUPS=true` in production so a missing passphrase fails the backup instead of uploading plain data.
 
 ## Scheduled Backup Timer
 
