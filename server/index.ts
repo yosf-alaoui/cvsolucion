@@ -1632,6 +1632,9 @@ async function sendContactLeadNotification(args: {
     .trim();
   const fields = parseLeadMessageFields(args.lead.message);
   const country = leadField(fields, ["Country"]) || "-";
+  const communicationLanguage = leadField(fields, [
+    "Preferred communication language",
+  ]);
   const currentRole =
     leadField(fields, ["Current Role"]) || args.lead.company || "";
   const worksInShop = leadField(fields, ["Works in cabinet shop"]);
@@ -1657,6 +1660,9 @@ async function sendContactLeadNotification(args: {
     phone.whatsappUrl ? `WhatsApp link: ${phone.whatsappUrl}` : null,
     `Email: ${args.lead.email}`,
     `Country: ${country}`,
+    communicationLanguage
+      ? `Preferred communication language: ${communicationLanguage}`
+      : null,
     "",
     "REQUEST DETAILS",
     mainGoal ? `Main goal: ${mainGoal}` : null,
@@ -1724,6 +1730,7 @@ async function sendContactLeadNotification(args: {
                 ${renderLeadInfoRow("Phone / WhatsApp", phone.display || args.lead.phone || "-")}
                 ${renderLeadInfoRow("Email", args.lead.email)}
                 ${renderLeadInfoRow("Country", country)}
+                ${renderLeadInfoRow("Preferred communication language", communicationLanguage)}
               </table>
               ${whatsappButton}
             </div>

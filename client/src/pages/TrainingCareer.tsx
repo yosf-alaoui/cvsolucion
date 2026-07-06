@@ -64,6 +64,7 @@ type CareerCopy = {
   usesCabinetVision: string;
   mainGoal: string;
   preferredTime: string;
+  communicationLanguage: string;
   notes: string;
   notesPlaceholder: string;
   submit: string;
@@ -79,6 +80,7 @@ type CareerCopy = {
   experienceOptions: SelectOption[];
   goalOptions: SelectOption[];
   timeOptions: SelectOption[];
+  languageOptions: SelectOption[];
   audienceKicker: string;
   audienceTitle: string;
   audienceBody: string;
@@ -147,6 +149,13 @@ const enOptions = {
   times: ["Morning", "Afternoon", "Evening", "Weekend", "Flexible"],
 };
 
+const communicationLanguageOptions: SelectOption[] = [
+  { value: "English", label: "English" },
+  { value: "French", label: "French" },
+  { value: "Spanish", label: "Spanish" },
+  { value: "Arabic", label: "Arabic" },
+];
+
 function options(values: string[]): SelectOption[] {
   return values.map((value) => ({ value, label: value }));
 }
@@ -195,6 +204,7 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     usesCabinetVision: "Do you already use Cabinet Vision?",
     mainGoal: "Main goal",
     preferredTime: "Preferred time",
+    communicationLanguage: "Preferred communication language",
     notes: "Message / notes",
     notesPlaceholder:
       "Tell us anything that would help us understand your current role or goal.",
@@ -215,6 +225,7 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     experienceOptions: options(enOptions.experience),
     goalOptions: options(enOptions.goals),
     timeOptions: options(enOptions.times),
+    languageOptions: communicationLanguageOptions,
     audienceKicker: "Who this is for",
     audienceTitle: "Built for people who already understand the shop.",
     audienceBody:
@@ -376,6 +387,7 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     usesCabinetVision: "Utilisez-vous deja Cabinet Vision ?",
     mainGoal: "Objectif principal",
     preferredTime: "Moment prefere",
+    communicationLanguage: "Langue de communication preferee",
     notes: "Message / notes",
     notesPlaceholder:
       "Ajoutez tout detail utile sur votre role actuel ou votre objectif.",
@@ -423,6 +435,7 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
       "Fin de semaine",
       "Flexible",
     ]),
+    languageOptions: communicationLanguageOptions,
     audienceKicker: "Pour qui",
     audienceTitle: "Concu pour les personnes qui connaissent deja l'atelier.",
     audienceBody:
@@ -545,6 +558,7 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     usesCabinetVision: "هل تستعمل Cabinet Vision حاليا؟",
     mainGoal: "هدفك الرئيسي",
     preferredTime: "الوقت المفضل",
+    communicationLanguage: "لغة التواصل المفضلة",
     notes: "رسالة / ملاحظات",
     notesPlaceholder: "أضف أي تفاصيل تساعدنا على فهم دورك الحالي أو هدفك.",
     submit: "اطلب تقييمي المجاني",
@@ -584,6 +598,7 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
       "تطوير مستواي الحالي في Cabinet Vision",
     ]),
     timeOptions: options(["الصباح", "بعد الظهر", "المساء", "نهاية الأسبوع", "مرن"]),
+    languageOptions: communicationLanguageOptions,
     audienceKicker: "لمن هذا التدريب",
     audienceTitle: "مصمم للأشخاص الذين يعرفون الورشة من الداخل.",
     audienceBody:
@@ -734,6 +749,7 @@ export default function TrainingCareer() {
     cabinetVisionExperience: "",
     mainGoal: "",
     preferredTime: "",
+    communicationLanguage: "",
     notes: "",
   });
   const tracking = useMemo(() => {
@@ -848,6 +864,7 @@ export default function TrainingCareer() {
       `Cabinet Vision experience: ${form.cabinetVisionExperience}`,
       `Main goal: ${form.mainGoal}`,
       `Preferred time: ${form.preferredTime}`,
+      `Preferred communication language: ${form.communicationLanguage}`,
       `Message: ${form.notes || "-"}`,
     ].join("\n");
 
@@ -1133,6 +1150,17 @@ export default function TrainingCareer() {
                       options={copy.timeOptions}
                       onChange={(value) =>
                         updateForm("preferredTime", value)
+                      }
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <FieldSelect
+                      id="career-communication-language"
+                      label={copy.communicationLanguage}
+                      value={form.communicationLanguage}
+                      options={copy.languageOptions}
+                      onChange={(value) =>
+                        updateForm("communicationLanguage", value)
                       }
                     />
                   </div>
