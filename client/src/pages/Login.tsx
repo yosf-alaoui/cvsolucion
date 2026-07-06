@@ -10,18 +10,23 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useI18n } from "@/i18n/i18n";
 import { useAuth } from "@/contexts/AuthContext";
+import { loginWithPassword, verifyAdminLoginCode } from "@/lib/auth";
 import { getBookingCountryLabel, getBookingCountryOptions, guessBookingCountryCode } from "@/lib/bookingTime";
 import { getDetectedCountry } from "@/lib/geo";
+import { setCsrfToken } from "@/lib/csrf";
 import { validatePasswordPolicy } from "@shared/passwordPolicy";
 
 type AuthMode = "login" | "signup";
 
 export default function Login() {
   const { t, locale } = useI18n();
-  const { login, signup, sendReset, resetPassword } = useAuth();
+  const { signup, sendReset, resetPassword, refresh } = useAuth();
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [adminOtpMode, setAdminOtpMode] = useState(false);
+  const [adminCode, setAdminCode] = useState("");
+  const [pendingAdminEmail, setPendingAdminEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -38,13 +43,17 @@ export default function Login() {
   const resetPasswordMessage = recoveryMode && newPassword ? validatePasswordPolicy(newPassword).message : null;
 
   const disabled = useMemo(() => {
+    if (adminOtpMode) return !pendingAdminEmail || !/^\d{6}$/.test(adminCode.trim());
     if (recoveryMode) return !resetToken || !newPassword || Boolean(resetPasswordMessage) || newPassword !== confirmPassword;
     if (resetMode) return !email;
     if (mode === "signup") return !email || !password || Boolean(signupPasswordMessage) || !acceptTerms || !countryCode;
     return !email || !password;
   }, [
+    adminCode,
+    adminOtpMode,
     email,
     password,
+    pendingAdminEmail,
     resetMode,
     recoveryMode,
     newPassword,
@@ -181,8 +190,26 @@ export default function Login() {
         return;
       }
 
+      if (adminOtpMode) {
+        const response = await verifyAdminLoginCode(pendingAdminEmail, adminCode);
+        setCsrfToken(response.csrfToken);
+        await refresh();
+        window.location.href = nextHref;
+        return;
+      }
+
       if (mode === "login") {
-        await login(email, password);
+        const response = await loginWithPassword(email, password);
+        if ("requiresAdminCode" in response) {
+          setPendingAdminEmail(response.email);
+          setAdminCode("");
+          setAdminOtpMode(true);
+          setStatus(adminOtpSentMessage);
+          setStatusTone("success");
+          return;
+        }
+        setCsrfToken(response.csrfToken);
+        await refresh();
         window.location.href = nextHref;
       } else {
         if (!acceptTerms) {
@@ -221,6 +248,7 @@ export default function Login() {
 
   const handleResetPassword = () => {
     setResetMode(true);
+    clearAdminOtp();
     setStatus(null);
     setStatusTone(null);
     emailRef.current?.focus();
@@ -230,6 +258,14 @@ export default function Login() {
   const termsLabel = locale === "ar" ? "أوافق على الشروط والأحكام" : locale === "fr" ? "J'accepte les conditions d'utilisation" : "I agree to the Terms and Conditions";
   const termsHint = locale === "ar" ? "مطلوب لإنشاء الحساب." : locale === "fr" ? "Obligatoire pour créer le compte." : "Required to create the account.";
   const termsLinkLabel = locale === "ar" ? "قراءة الشروط" : locale === "fr" ? "Lire les conditions" : "Read terms";
+
+  const adminOtpSentMessage = "A 6-digit admin code has been sent to your email.";
+
+  const clearAdminOtp = () => {
+    setAdminOtpMode(false);
+    setAdminCode("");
+    setPendingAdminEmail("");
+  };
 
   return (
     <div className="site-page min-h-screen flex flex-col bg-transparent">
@@ -261,6 +297,7 @@ export default function Login() {
                       setResetMode(false);
                       setRecoveryMode(false);
                       setResetToken("");
+                      clearAdminOtp();
                     setStatus(null);
                     setStatusTone(null);
                   }}
@@ -277,6 +314,7 @@ export default function Login() {
                       setResetMode(false);
                       setRecoveryMode(false);
                       setResetToken("");
+                      clearAdminOtp();
                       setStatus(null);
                       setStatusTone(null);
                     }}
@@ -317,6 +355,39 @@ export default function Login() {
                     <Button type="submit" className="w-full" disabled={disabled || busy}>
                       {busy ? t("auth.working") : t("auth.savePassword")}
                     </Button>
+                  </>
+                ) : adminOtpMode ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-login-code">6-digit admin code</Label>
+                      <Input
+                        id="admin-login-code"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        value={adminCode}
+                        onChange={(event) => setAdminCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="000000"
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        The code was sent to {pendingAdminEmail} and expires in 10 minutes.
+                      </p>
+                    </div>
+                    <Button type="submit" className="w-full" disabled={disabled || busy}>
+                      {busy ? t("auth.working") : "Verify code"}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearAdminOtp();
+                        setStatus(null);
+                        setStatusTone(null);
+                      }}
+                      className="text-xs font-semibold text-primary hover:text-primary/80"
+                    >
+                      Use a different email
+                    </button>
                   </>
                 ) : (
                   <>

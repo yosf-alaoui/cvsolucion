@@ -54,7 +54,7 @@ export function getCurrentUser() {
 }
 
 export function loginWithPassword(email: string, password: string) {
-  return request<LoginResponse>("/api/auth/login", {
+  return request<AdminLoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
