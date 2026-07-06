@@ -1837,6 +1837,87 @@ function storeConfirmedContactLead(pendingLead: PendingContactLead) {
   });
 }
 
+function getWhatsAppWebhookVerifyToken() {
+  return String(process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "").trim();
+}
+
+function verifyMetaWebhookSignature(signatureHeader: string, payload: Buffer) {
+  const appSecret = String(process.env.WHATSAPP_APP_SECRET || "").trim();
+  if (!appSecret) return true;
+
+  const match = /^sha256=([a-f0-9]{64})$/i.exec(signatureHeader);
+  if (!match) return false;
+
+  const expected = crypto
+    .createHmac("sha256", appSecret)
+    .update(payload)
+    .digest("hex");
+  const actualBuffer = Buffer.from(match[1], "hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+
+  return (
+    actualBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(actualBuffer, expectedBuffer)
+  );
+}
+
+function handleWhatsAppWebhookVerification(
+  req: express.Request,
+  res: express.Response,
+) {
+  const mode = String(req.query["hub.mode"] || "").trim();
+  const token = String(req.query["hub.verify_token"] || "").trim();
+  const challenge = String(req.query["hub.challenge"] || "").trim();
+  const verifyToken = getWhatsAppWebhookVerifyToken();
+
+  if (!verifyToken) {
+    console.error("[whatsapp:webhook] missing WHATSAPP_WEBHOOK_VERIFY_TOKEN");
+    return res.status(503).send("WhatsApp webhook is not configured.");
+  }
+
+  if (mode === "subscribe" && token === verifyToken && challenge) {
+    return res.status(200).type("text/plain").send(challenge);
+  }
+
+  console.warn("[whatsapp:webhook] verification failed", {
+    mode,
+    hasChallenge: Boolean(challenge),
+    tokenMatched: Boolean(verifyToken && token === verifyToken),
+  });
+  return res.status(403).send("Forbidden");
+}
+
+function handleWhatsAppWebhookEvent(
+  req: express.Request,
+  res: express.Response,
+) {
+  const payload = Buffer.isBuffer(req.body)
+    ? req.body
+    : Buffer.from(JSON.stringify(req.body || {}));
+  const signature = String(req.get("x-hub-signature-256") || "").trim();
+
+  if (!verifyMetaWebhookSignature(signature, payload)) {
+    console.warn("[whatsapp:webhook] invalid signature");
+    return res.status(403).json({ error: "Invalid signature." });
+  }
+
+  let body: unknown = {};
+  try {
+    body = payload.length ? JSON.parse(payload.toString("utf8")) : {};
+  } catch {
+    return res.status(400).json({ error: "Invalid JSON payload." });
+  }
+
+  console.log("[whatsapp:webhook] event received", {
+    object:
+      body && typeof body === "object" && "object" in body
+        ? (body as { object?: unknown }).object
+        : null,
+  });
+
+  return res.status(200).json({ ok: true });
+}
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
@@ -1980,6 +2061,17 @@ async function startServer() {
           .send(error?.message || "Webhook verification failed.");
       }
     },
+  );
+
+  app.get(
+    ["/webhooks/whatsapp", "/api/webhooks/whatsapp"],
+    handleWhatsAppWebhookVerification,
+  );
+
+  app.post(
+    ["/webhooks/whatsapp", "/api/webhooks/whatsapp"],
+    express.raw({ type: "application/json", limit: "1mb" }),
+    handleWhatsAppWebhookEvent,
   );
 
   app.use(express.json({ limit: "1mb" }));
