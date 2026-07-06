@@ -7,6 +7,13 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import type Stripe from "stripe";
 import { getCountry as getTimezoneCountry } from "countries-and-timezones";
+import {
+  getCountries,
+  getCountryCallingCode,
+  isSupportedCountry,
+  parsePhoneNumberFromString,
+  type CountryCode,
+} from "libphonenumber-js";
 import { COOKIE_NAME, ONE_YEAR_MS, VISITOR_COOKIE_NAME } from "../shared/const";
 import {
   PASSWORD_POLICY_MESSAGE,
@@ -1476,6 +1483,144 @@ function renderContactConfirmationEmail(args: {
   return { subject: copy.subject, text, html };
 }
 
+function normalizeComparableText(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0600-\u06ff]+/g, "");
+}
+
+function parseLeadMessageFields(message: string) {
+  const fields = new Map<string, string>();
+  for (const line of message.split(/\r?\n/)) {
+    const separatorIndex = line.indexOf(":");
+    if (separatorIndex <= 0) continue;
+    const key = line.slice(0, separatorIndex).trim();
+    const value = line.slice(separatorIndex + 1).trim();
+    if (key && value) {
+      fields.set(normalizeComparableText(key), value);
+    }
+  }
+  return fields;
+}
+
+function leadField(fields: Map<string, string>, labels: string[]) {
+  for (const label of labels) {
+    const value = fields.get(normalizeComparableText(label));
+    if (value) return value;
+  }
+  return "";
+}
+
+function resolveCountryCodeFromName(country: string): CountryCode | null {
+  const normalizedCode = normalizeCountryCode(country);
+  if (normalizedCode && isSupportedCountry(normalizedCode)) {
+    return normalizedCode as CountryCode;
+  }
+
+  const normalizedCountry = normalizeComparableText(country);
+  if (!normalizedCountry) return null;
+
+  const aliases: Record<string, CountryCode> = {
+    america: "US",
+    emirates: "AE",
+    maroc: "MA",
+    morocco: "MA",
+    uk: "GB",
+    uae: "AE",
+    unitedarabemirates: "AE",
+    unitedkingdom: "GB",
+    unitedstates: "US",
+    unitedstatesofamerica: "US",
+    usa: "US",
+  };
+  if (aliases[normalizedCountry]) return aliases[normalizedCountry];
+
+  const locales = ["en", "fr", "ar"];
+  for (const code of getCountries()) {
+    for (const locale of locales) {
+      const label = new Intl.DisplayNames([locale], { type: "region" }).of(
+        code,
+      );
+      if (label && normalizeComparableText(label) === normalizedCountry) {
+        return code;
+      }
+    }
+  }
+
+  return null;
+}
+
+function getLeadPhoneDetails(rawPhone: string | null, country: string) {
+  const raw = rawPhone?.trim() || "";
+  if (!raw) {
+    return {
+      display: "",
+      whatsappUrl: "",
+      whatsappNumber: "",
+    };
+  }
+
+  const countryCode = resolveCountryCodeFromName(country);
+  const normalizedRaw = raw.replace(/^00/, "+");
+  const parsed = parsePhoneNumberFromString(
+    normalizedRaw,
+    countryCode ?? undefined,
+  );
+  if (parsed?.isPossible()) {
+    const whatsappNumber = parsed.number.replace(/[^\d]/g, "");
+    return {
+      display: parsed.formatInternational(),
+      whatsappUrl: buildWhatsAppLeadUrl(whatsappNumber),
+      whatsappNumber,
+    };
+  }
+
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits) {
+    return {
+      display: raw,
+      whatsappUrl: "",
+      whatsappNumber: "",
+    };
+  }
+
+  let whatsappNumber = digits;
+  let display = raw;
+  if (raw.trim().startsWith("+")) {
+    display = `+${digits}`;
+  } else if (countryCode) {
+    const callingCode = getCountryCallingCode(countryCode);
+    const localDigits = digits.replace(/^0+/, "");
+    whatsappNumber = `${callingCode}${localDigits}`;
+    display = `+${callingCode} ${raw}`;
+  }
+
+  return {
+    display,
+    whatsappUrl:
+      whatsappNumber.length >= 8 ? buildWhatsAppLeadUrl(whatsappNumber) : "",
+    whatsappNumber,
+  };
+}
+
+function buildWhatsAppLeadUrl(whatsappNumber: string) {
+  const message = encodeURIComponent(
+    "Hello, this is CVsolucion about your free Cabinet Vision career evaluation request.",
+  );
+  return `https://wa.me/${whatsappNumber}?text=${message}`;
+}
+
+function renderLeadInfoRow(label: string, value: string) {
+  return `
+    <tr>
+      <td style="padding:10px 0;color:#64748b;font-size:13px;width:190px">${escapeHtml(label)}</td>
+      <td style="padding:10px 0;color:#0f172a;font-size:15px;font-weight:700">${escapeHtml(value || "-")}</td>
+    </tr>
+  `;
+}
+
 async function sendContactLeadNotification(args: {
   lead: ContactLead;
   sourceType: ContactSourceType;
@@ -1485,60 +1630,132 @@ async function sendContactLeadNotification(args: {
 }) {
   const destination = (process.env.CONTACT_EMAIL || "contact@cvsolucion.com")
     .trim();
+  const fields = parseLeadMessageFields(args.lead.message);
+  const country = leadField(fields, ["Country"]) || "-";
+  const currentRole =
+    leadField(fields, ["Current Role"]) || args.lead.company || "";
+  const worksInShop = leadField(fields, ["Works in cabinet shop"]);
+  const cabinetVisionExperience = leadField(fields, [
+    "Cabinet Vision experience",
+  ]);
+  const mainGoal = leadField(fields, ["Main goal"]);
+  const preferredTime = leadField(fields, ["Preferred time"]);
+  const notes = leadField(fields, ["Message"]) || args.lead.message;
+  const phone = getLeadPhoneDetails(args.lead.phone, country);
   const trackingLines = Object.entries(args.tracking).map(
     ([key, value]) => `${key}: ${value}`,
   );
 
   const lines = [
-    `Lead ID: ${args.lead.id}`,
+    args.sourceType === "career_evaluation"
+      ? "NEW CAREER EVALUATION REQUEST"
+      : "NEW CVSOLUCION CONTACT REQUEST",
+    "",
+    "IMPORTANT CONTACT INFO",
     `Name: ${args.lead.name}`,
+    `Phone / WhatsApp: ${phone.display || args.lead.phone || "-"}`,
+    phone.whatsappUrl ? `WhatsApp link: ${phone.whatsappUrl}` : null,
     `Email: ${args.lead.email}`,
-    args.lead.company ? `Company: ${args.lead.company}` : null,
-    args.lead.phone ? `Phone: ${args.lead.phone}` : null,
+    `Country: ${country}`,
+    "",
+    "REQUEST DETAILS",
+    mainGoal ? `Main goal: ${mainGoal}` : null,
+    currentRole ? `Current role: ${currentRole}` : null,
+    worksInShop ? `Works in cabinet shop: ${worksInShop}` : null,
+    cabinetVisionExperience
+      ? `Cabinet Vision experience: ${cabinetVisionExperience}`
+      : null,
+    preferredTime ? `Preferred time: ${preferredTime}` : null,
     args.lead.interest ? `Interest: ${args.lead.interest}` : null,
+    `Lead ID: ${args.lead.id}`,
     `Locale: ${args.locale}`,
     `Source: ${args.source}`,
     ...(trackingLines.length ? ["", "Tracking:", ...trackingLines] : []),
     "",
-    args.lead.message,
+    "NOTES",
+    notes,
   ].filter(Boolean);
+
+  const title =
+    args.sourceType === "career_evaluation"
+      ? "New Free Career Evaluation Request"
+      : "New CVsolucion Contact Request";
+  const subject =
+    args.sourceType === "career_evaluation"
+      ? `New Career Evaluation Request - ${args.lead.name}`
+      : `New CVsolucion contact request - ${args.lead.name}`;
+  const whatsappButton = phone.whatsappUrl
+    ? `
+      <a href="${escapeHtml(phone.whatsappUrl)}" style="display:inline-block;margin-top:12px;border-radius:8px;background:#16a34a;color:#ffffff;font-size:15px;font-weight:800;text-decoration:none;padding:12px 18px">
+        Open WhatsApp Chat
+      </a>
+    `
+    : "";
+  const trackingHtml = trackingLines.length
+    ? `
+      <div style="margin-top:18px;border-top:1px solid #e2e8f0;padding-top:16px">
+        <h3 style="margin:0 0 8px;color:#0f172a;font-size:16px">Tracking</h3>
+        <table role="presentation" style="width:100%;border-collapse:collapse">
+          ${Object.entries(args.tracking)
+            .map(([key, value]) => renderLeadInfoRow(key, value))
+            .join("")}
+        </table>
+      </div>
+    `
+    : "";
 
   await sendAuthEmail({
     to: destination,
-    subject:
-      args.sourceType === "career_evaluation"
-        ? `New Career Evaluation Request - ${args.lead.name}`
-        : `New CVsolucion contact request - ${args.lead.name}`,
+    subject,
     text: lines.join("\n"),
     html: `
-      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
-        <h2 style="margin:0 0 16px">${
-          args.sourceType === "career_evaluation"
-            ? "New Free Career Evaluation Request"
-            : "New CVsolucion contact request"
-        }</h2>
-        <p><strong>Lead ID:</strong> ${escapeHtml(args.lead.id)}</p>
-        <p><strong>Name:</strong> ${escapeHtml(args.lead.name)}</p>
-        <p><strong>Email:</strong> ${escapeHtml(args.lead.email)}</p>
-        ${args.lead.company ? `<p><strong>Company:</strong> ${escapeHtml(args.lead.company)}</p>` : ""}
-        ${args.lead.phone ? `<p><strong>Phone:</strong> ${escapeHtml(args.lead.phone)}</p>` : ""}
-        ${args.lead.interest ? `<p><strong>Interest:</strong> ${escapeHtml(args.lead.interest)}</p>` : ""}
-        <p><strong>Locale:</strong> ${escapeHtml(args.locale)}</p>
-        <p><strong>Source:</strong> ${escapeHtml(args.source)}</p>
-        ${
-          trackingLines.length
-            ? `<h3 style="margin:24px 0 8px">Tracking</h3>${Object.entries(
-                args.tracking,
-              )
-                .map(
-                  ([key, value]) =>
-                    `<p><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</p>`,
-                )
-                .join("")}`
-            : ""
-        }
-        <hr style="margin:24px 0;border:none;border-top:1px solid #cbd5e1" />
-        <p style="white-space:pre-wrap">${escapeHtml(args.lead.message)}</p>
+      <div style="margin:0;background:#f1f5f9;padding:24px;font-family:Arial,sans-serif;color:#0f172a;line-height:1.55">
+        <div style="max-width:760px;margin:0 auto;border-radius:16px;overflow:hidden;background:#ffffff;border:1px solid #dbe4ef">
+          <div style="background:#102a56;padding:22px 24px;color:#ffffff">
+            <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#a7f3d0">CVsolucion lead</div>
+            <h2 style="margin:8px 0 0;font-size:24px;line-height:1.25;color:#ffffff">${escapeHtml(title)}</h2>
+          </div>
+
+          <div style="padding:24px">
+            <div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:12px;padding:18px">
+              <div style="margin-bottom:12px;font-size:13px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#15803d">Contact first</div>
+              <table role="presentation" style="width:100%;border-collapse:collapse">
+                ${renderLeadInfoRow("Name", args.lead.name)}
+                ${renderLeadInfoRow("Phone / WhatsApp", phone.display || args.lead.phone || "-")}
+                ${renderLeadInfoRow("Email", args.lead.email)}
+                ${renderLeadInfoRow("Country", country)}
+              </table>
+              ${whatsappButton}
+            </div>
+
+            <div style="margin-top:18px;border:1px solid #dbe4ef;background:#f8fafc;border-radius:12px;padding:18px">
+              <div style="margin-bottom:12px;font-size:13px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#1e3a8a">Request details</div>
+              <table role="presentation" style="width:100%;border-collapse:collapse">
+                ${renderLeadInfoRow("Main goal", mainGoal)}
+                ${renderLeadInfoRow("Current role", currentRole)}
+                ${renderLeadInfoRow("Works in cabinet shop", worksInShop)}
+                ${renderLeadInfoRow("Cabinet Vision experience", cabinetVisionExperience)}
+                ${renderLeadInfoRow("Preferred time", preferredTime)}
+                ${renderLeadInfoRow("Interest", args.lead.interest || "")}
+              </table>
+            </div>
+
+            <div style="margin-top:18px;border:1px solid #dbe4ef;border-radius:12px;padding:18px">
+              <div style="margin-bottom:10px;font-size:13px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#334155">Client notes</div>
+              <div style="white-space:pre-wrap;color:#0f172a;font-size:15px">${escapeHtml(notes || "-")}</div>
+            </div>
+
+            <div style="margin-top:18px;border-top:1px solid #e2e8f0;padding-top:16px">
+              <table role="presentation" style="width:100%;border-collapse:collapse">
+                ${renderLeadInfoRow("Lead ID", args.lead.id)}
+                ${renderLeadInfoRow("Locale", args.locale)}
+                ${renderLeadInfoRow("Source", args.source)}
+              </table>
+            </div>
+
+            ${trackingHtml}
+          </div>
+        </div>
       </div>
     `,
   });
