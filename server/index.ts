@@ -1621,6 +1621,224 @@ function renderLeadInfoRow(label: string, value: string) {
   `;
 }
 
+function getWhatsAppApiVersion() {
+  return String(process.env.WHATSAPP_API_VERSION || "v23.0")
+    .trim()
+    .replace(/^\/+/, "");
+}
+
+function getWhatsAppTemplateName(sourceType: ContactSourceType) {
+  const sourceSpecific =
+    sourceType === "career_evaluation"
+      ? process.env.WHATSAPP_CAREER_TEMPLATE_NAME
+      : "";
+  return String(sourceSpecific || process.env.WHATSAPP_TEMPLATE_NAME || "").trim();
+}
+
+function getWhatsAppTemplateLanguage(sourceType: ContactSourceType) {
+  const sourceSpecific =
+    sourceType === "career_evaluation"
+      ? process.env.WHATSAPP_CAREER_TEMPLATE_LANGUAGE
+      : "";
+  return String(
+    sourceSpecific || process.env.WHATSAPP_TEMPLATE_LANGUAGE || "en_US",
+  ).trim();
+}
+
+function getWhatsAppCareerTemplateBodyParameterKeys() {
+  return String(process.env.WHATSAPP_CAREER_TEMPLATE_BODY_PARAMETERS || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+type WhatsAppTemplateComponent = {
+  type: "body";
+  parameters: Array<{ type: "text"; text: string }>;
+};
+
+type WhatsAppLeadSendResult =
+  | { sent: true; messageId: string }
+  | {
+      sent: false;
+      reason:
+        | "invalid_phone"
+        | "missing_config"
+        | "missing_template"
+        | "unsupported_source";
+    };
+
+function resolveWhatsAppTemplateParameter(
+  key: string,
+  args: {
+    lead: ContactLead;
+    fields: Map<string, string>;
+    phone: ReturnType<typeof getLeadPhoneDetails>;
+    country: string;
+    communicationLanguage: string;
+  },
+) {
+  const mainGoal = leadField(args.fields, ["Main goal"]);
+  const currentRole =
+    leadField(args.fields, ["Current Role"]) || args.lead.company || "";
+  const values: Record<string, string> = {
+    name: args.lead.name,
+    email: args.lead.email,
+    phone: args.phone.display || args.lead.phone || "",
+    whatsapp_number: args.phone.whatsappNumber,
+    country: args.country,
+    communication_language: args.communicationLanguage,
+    language: args.communicationLanguage,
+    main_goal: mainGoal,
+    goal: mainGoal,
+    current_role: currentRole,
+    role: currentRole,
+  };
+
+  return values[key] || "";
+}
+
+function buildWhatsAppTemplateComponents(args: {
+  lead: ContactLead;
+  fields: Map<string, string>;
+  phone: ReturnType<typeof getLeadPhoneDetails>;
+  country: string;
+  communicationLanguage: string;
+}): WhatsAppTemplateComponent[] | undefined {
+  const parameterKeys = getWhatsAppCareerTemplateBodyParameterKeys();
+  if (!parameterKeys.length) return undefined;
+
+  return [
+    {
+      type: "body",
+      parameters: parameterKeys.map((key) => ({
+        type: "text",
+        text: resolveWhatsAppTemplateParameter(key, args) || "-",
+      })),
+    },
+  ];
+}
+
+async function sendWhatsAppTemplateMessage(args: {
+  to: string;
+  templateName: string;
+  languageCode: string;
+  components?: WhatsAppTemplateComponent[];
+}): Promise<WhatsAppLeadSendResult> {
+  const accessToken = String(process.env.WHATSAPP_ACCESS_TOKEN || "").trim();
+  const phoneNumberId = String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
+  if (!accessToken || !phoneNumberId) {
+    return { sent: false, reason: "missing_config" as const };
+  }
+
+  const response = await fetch(
+    `https://graph.facebook.com/${getWhatsAppApiVersion()}/${encodeURIComponent(
+      phoneNumberId,
+    )}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: args.to,
+        type: "template",
+        template: {
+          name: args.templateName,
+          language: {
+            code: args.languageCode,
+          },
+          ...(args.components?.length ? { components: args.components } : {}),
+        },
+      }),
+    },
+  );
+
+  const responseText = await response.text();
+  let payload: any = {};
+  try {
+    payload = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    payload = { raw: responseText };
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `WhatsApp API failed with ${response.status}: ${JSON.stringify(payload).slice(0, 600)}`,
+    );
+  }
+
+  return {
+    sent: true,
+    messageId: payload?.messages?.[0]?.id ? String(payload.messages[0].id) : "",
+  };
+}
+
+async function sendWhatsAppLeadTemplate(args: {
+  lead: ContactLead;
+  sourceType: ContactSourceType;
+}): Promise<WhatsAppLeadSendResult> {
+  if (args.sourceType !== "career_evaluation") {
+    return { sent: false, reason: "unsupported_source" as const };
+  }
+
+  const templateName = getWhatsAppTemplateName(args.sourceType);
+  if (!templateName) {
+    return { sent: false, reason: "missing_template" as const };
+  }
+
+  const fields = parseLeadMessageFields(args.lead.message);
+  const country = leadField(fields, ["Country"]) || "-";
+  const communicationLanguage = leadField(fields, [
+    "Preferred communication language",
+  ]);
+  const phone = getLeadPhoneDetails(args.lead.phone, country);
+  if (!phone.whatsappNumber || phone.whatsappNumber.length < 8) {
+    return { sent: false, reason: "invalid_phone" as const };
+  }
+
+  return sendWhatsAppTemplateMessage({
+    to: phone.whatsappNumber,
+    templateName,
+    languageCode: getWhatsAppTemplateLanguage(args.sourceType),
+    components: buildWhatsAppTemplateComponents({
+      lead: args.lead,
+      fields,
+      phone,
+      country,
+      communicationLanguage,
+    }),
+  });
+}
+
+function queueWhatsAppLeadTemplate(args: {
+  lead: ContactLead;
+  sourceType: ContactSourceType;
+}) {
+  void sendWhatsAppLeadTemplate(args)
+    .then((result) => {
+      if (result.sent) {
+        console.log("[whatsapp:lead] template sent", {
+          leadId: args.lead.id,
+          messageId: result.messageId || null,
+        });
+        return;
+      }
+      console.log("[whatsapp:lead] template skipped", {
+        leadId: args.lead.id,
+        reason: result.reason,
+      });
+    })
+    .catch((error) => {
+      console.error("[whatsapp:lead:error]", {
+        leadId: args.lead.id,
+        error: error instanceof Error ? error.stack || error.message : String(error),
+      });
+    });
+}
+
 async function sendContactLeadNotification(args: {
   lead: ContactLead;
   sourceType: ContactSourceType;
@@ -3379,6 +3597,7 @@ async function startServer() {
           source,
           tracking,
         });
+        queueWhatsAppLeadTemplate({ lead, sourceType });
 
         return res.status(201).json({ ok: true, leadId: lead.id });
       } catch (error) {
@@ -3414,6 +3633,10 @@ async function startServer() {
             leadId: lead.id,
             error: error instanceof Error ? error.stack || error.message : String(error),
           });
+        });
+        queueWhatsAppLeadTemplate({
+          lead,
+          sourceType: pendingLead.sourceType,
         });
 
         return res.redirect(
