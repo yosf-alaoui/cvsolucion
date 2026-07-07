@@ -115,6 +115,12 @@ import {
   type ContactLead,
 } from "./contactStore";
 import {
+  getWhatsAppCareerConversationByPhone,
+  recordWhatsAppCareerAnswer,
+  startWhatsAppCareerConversation,
+  type WhatsAppCareerStep,
+} from "./whatsappCareerStore";
+import {
   createPendingContactLead,
   getPendingContactLeadByToken,
   markPendingContactLeadConfirmed,
@@ -2008,11 +2014,122 @@ function findLatestCareerLeadByWhatsAppNumber(whatsappNumber: string) {
   return null;
 }
 
-function renderCareerQnaFirstQuestion(args: {
+function findContactLeadById(leadId: string) {
+  return listContactLeads().find((lead) => lead.id === leadId) ?? null;
+}
+
+function getNextWhatsAppCareerStep(step: WhatsAppCareerStep) {
+  const nextStep: Record<WhatsAppCareerStep, WhatsAppCareerStep> = {
+    level: "goal",
+    goal: "schedule",
+    schedule: "complete",
+    complete: "complete",
+  };
+  return nextStep[step];
+}
+
+function renderCareerQnaQuestion(args: {
+  step: WhatsAppCareerStep;
   lead: ContactLead;
   language: ReturnType<typeof normalizeCommunicationLanguage>;
 }) {
   const firstName = args.lead.name.trim().split(/\s+/)[0] || "there";
+
+  if (args.step === "goal") {
+    if (args.language === "fr") {
+      return [
+        "Merci. Deuxieme question: quel est votre objectif principal ?",
+        "",
+        "Repondez avec un numero:",
+        "1 - Passer de l'atelier au bureau de design",
+        "2 - Apprendre les bases de Cabinet Vision",
+        "3 - Comprendre CNC / S2M",
+        "4 - Ameliorer mon workflow actuel",
+      ].join("\n");
+    }
+
+    if (args.language === "es") {
+      return [
+        "Gracias. Segunda pregunta: cual es tu objetivo principal?",
+        "",
+        "Responde con un numero:",
+        "1 - Pasar del taller a la oficina de diseno",
+        "2 - Aprender las bases de Cabinet Vision",
+        "3 - Entender CNC / S2M",
+        "4 - Mejorar mi flujo de trabajo actual",
+      ].join("\n");
+    }
+
+    if (args.language === "ar") {
+      return [
+        "شكرا. السؤال الثاني: ما هو هدفك الرئيسي؟",
+        "",
+        "أجب برقم واحد:",
+        "1 - الانتقال من الورشة إلى مكتب التصميم",
+        "2 - تعلم أساسيات Cabinet Vision",
+        "3 - فهم CNC / S2M",
+        "4 - تحسين سير العمل الحالي",
+      ].join("\n");
+    }
+
+    return [
+      "Thanks. Second question: what is your main goal?",
+      "",
+      "Reply with one number:",
+      "1 - Move from shop floor to design office",
+      "2 - Learn Cabinet Vision basics",
+      "3 - Understand CNC / S2M",
+      "4 - Improve my current workflow",
+    ].join("\n");
+  }
+
+  if (args.step === "schedule") {
+    if (args.language === "fr") {
+      return [
+        "Derniere question: quel est le meilleur moment pour vous contacter ?",
+        "",
+        "Repondez avec un numero:",
+        "1 - Matin",
+        "2 - Apres-midi",
+        "3 - Soir",
+        "4 - Fin de semaine / flexible",
+      ].join("\n");
+    }
+
+    if (args.language === "es") {
+      return [
+        "Ultima pregunta: cual es el mejor momento para contactarte?",
+        "",
+        "Responde con un numero:",
+        "1 - Manana",
+        "2 - Tarde",
+        "3 - Noche",
+        "4 - Fin de semana / flexible",
+      ].join("\n");
+    }
+
+    if (args.language === "ar") {
+      return [
+        "السؤال الأخير: ما هو أفضل وقت للتواصل معك؟",
+        "",
+        "أجب برقم واحد:",
+        "1 - الصباح",
+        "2 - بعد الظهر",
+        "3 - المساء",
+        "4 - نهاية الأسبوع / وقت مرن",
+      ].join("\n");
+    }
+
+    return [
+      "Last question: what is the best time to contact you?",
+      "",
+      "Reply with one number:",
+      "1 - Morning",
+      "2 - Afternoon",
+      "3 - Evening",
+      "4 - Weekend / flexible",
+    ].join("\n");
+  }
 
   if (args.language === "fr") {
     return [
@@ -2061,12 +2178,142 @@ function renderCareerQnaFirstQuestion(args: {
   ].join("\n");
 }
 
+function renderCareerQnaCompletion(language: ReturnType<typeof normalizeCommunicationLanguage>) {
+  if (language === "fr") {
+    return "Merci. Nous avons recu vos reponses. Notre equipe va les examiner et vous contacter prochainement.";
+  }
+  if (language === "es") {
+    return "Gracias. Recibimos tus respuestas. Nuestro equipo las revisara y te contactara pronto.";
+  }
+  if (language === "ar") {
+    return "شكرا. توصلنا بإجاباتك، وسيقوم فريقنا بمراجعتها والتواصل معك قريبا.";
+  }
+  return "Thanks. We received your answers. Our team will review them and contact you shortly.";
+}
+
+async function sendWhatsAppCareerQnaNotification(args: {
+  lead: ContactLead;
+  phone: string;
+  language: string;
+  answers: Partial<Record<WhatsAppCareerStep, string>>;
+}) {
+  const destination = getAdminNotificationEmail();
+  const subject = `WhatsApp career Q&A completed - ${args.lead.name}`;
+  const lines = [
+    "WHATSAPP CAREER Q&A COMPLETED",
+    "",
+    `Name: ${args.lead.name}`,
+    `Email: ${args.lead.email}`,
+    `Phone: +${args.phone}`,
+    `Language: ${args.language}`,
+    `Lead ID: ${args.lead.id}`,
+    "",
+    "ANSWERS",
+    `Cabinet Vision level: ${args.answers.level || "-"}`,
+    `Main goal: ${args.answers.goal || "-"}`,
+    `Best contact time: ${args.answers.schedule || "-"}`,
+  ];
+
+  await sendAuthEmail({
+    to: destination,
+    subject,
+    text: lines.join("\n"),
+    html: `
+      <div style="margin:0;background:#f1f5f9;padding:24px;font-family:Arial,sans-serif;color:#0f172a;line-height:1.55">
+        <div style="max-width:720px;margin:0 auto;border-radius:16px;overflow:hidden;background:#ffffff;border:1px solid #dbe4ef">
+          <div style="background:#0f766e;padding:22px 24px;color:#ffffff">
+            <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#ccfbf1">WhatsApp career Q&A</div>
+            <h2 style="margin:8px 0 0;font-size:24px;line-height:1.25;color:#ffffff">${escapeHtml(args.lead.name)}</h2>
+          </div>
+          <div style="padding:24px">
+            <table role="presentation" style="width:100%;border-collapse:collapse">
+              ${renderLeadInfoRow("Email", args.lead.email)}
+              ${renderLeadInfoRow("Phone", `+${args.phone}`)}
+              ${renderLeadInfoRow("Language", args.language)}
+              ${renderLeadInfoRow("Lead ID", args.lead.id)}
+            </table>
+            <div style="margin-top:18px;border:1px solid #dbe4ef;background:#f8fafc;border-radius:12px;padding:18px">
+              <div style="margin-bottom:12px;font-size:13px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#0f766e">WhatsApp answers</div>
+              <table role="presentation" style="width:100%;border-collapse:collapse">
+                ${renderLeadInfoRow("Cabinet Vision level", args.answers.level || "")}
+                ${renderLeadInfoRow("Main goal", args.answers.goal || "")}
+                ${renderLeadInfoRow("Best contact time", args.answers.schedule || "")}
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    `,
+  });
+}
+
 async function processWhatsAppWebhookMessages(body: unknown) {
   const incomingMessages = extractWhatsAppIncomingMessages(body);
   for (const message of incomingMessages) {
-    if (!isCareerQnaStartMessage(message.text)) continue;
+    const phone = normalizePhoneDigits(message.from);
 
-    const match = findLatestCareerLeadByWhatsAppNumber(message.from);
+    if (!isCareerQnaStartMessage(message.text)) {
+      const conversation = getWhatsAppCareerConversationByPhone(phone);
+      if (!conversation || conversation.step === "complete") continue;
+
+      const lead = findContactLeadById(conversation.leadId);
+      if (!lead) {
+        console.log("[whatsapp:qna] answer ignored; lead not found", {
+          conversationId: conversation.id,
+          messageId: message.messageId || null,
+        });
+        continue;
+      }
+
+      const nextStep = getNextWhatsAppCareerStep(conversation.step);
+      const updatedConversation = recordWhatsAppCareerAnswer({
+        phone,
+        answer: message.text,
+        nextStep,
+      });
+      if (!updatedConversation) continue;
+
+      const language = normalizeCommunicationLanguage(updatedConversation.language);
+      const reply =
+        nextStep === "complete"
+          ? renderCareerQnaCompletion(language)
+          : renderCareerQnaQuestion({
+              step: nextStep,
+              lead,
+              language,
+            });
+      const result = await sendWhatsAppTextMessage({
+        to: phone,
+        body: reply,
+      });
+
+      if (nextStep === "complete") {
+        void sendWhatsAppCareerQnaNotification({
+          lead,
+          phone,
+          language: updatedConversation.language,
+          answers: updatedConversation.answers,
+        }).catch((error) => {
+          console.error("[whatsapp:qna:admin-email-error]", {
+            leadId: lead.id,
+            error:
+              error instanceof Error ? error.stack || error.message : String(error),
+          });
+        });
+      }
+
+      console.log("[whatsapp:qna] answer processed", {
+        leadId: lead.id,
+        step: conversation.step,
+        nextStep,
+        sent: result.sent,
+        messageId: result.sent ? result.messageId || null : null,
+        reason: result.sent ? null : result.reason,
+      });
+      continue;
+    }
+
+    const match = findLatestCareerLeadByWhatsAppNumber(phone);
     if (!match) {
       console.log("[whatsapp:qna] start ignored; no matching career lead", {
         messageId: message.messageId || null,
@@ -2078,9 +2325,15 @@ async function processWhatsAppWebhookMessages(body: unknown) {
       "Preferred communication language",
     ]);
     const language = normalizeCommunicationLanguage(communicationLanguage);
+    startWhatsAppCareerConversation({
+      phone,
+      leadId: match.lead.id,
+      language,
+    });
     const result = await sendWhatsAppTextMessage({
-      to: message.from,
-      body: renderCareerQnaFirstQuestion({
+      to: phone,
+      body: renderCareerQnaQuestion({
+        step: "level",
         lead: match.lead,
         language,
       }),
