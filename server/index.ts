@@ -1635,7 +1635,45 @@ function getWhatsAppTemplateName(sourceType: ContactSourceType) {
   return String(sourceSpecific || process.env.WHATSAPP_TEMPLATE_NAME || "").trim();
 }
 
-function getWhatsAppTemplateLanguage(sourceType: ContactSourceType) {
+function normalizeCommunicationLanguage(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.includes("french") || normalized.includes("franc")) {
+    return "fr";
+  }
+  if (normalized.includes("spanish") || normalized.includes("espa")) {
+    return "es";
+  }
+  if (normalized.includes("arabic") || normalized.includes("arab")) {
+    return "ar";
+  }
+  return "en";
+}
+
+function isCareerEvaluationLead(lead: ContactLead) {
+  const fields = parseLeadMessageFields(lead.message);
+  return Boolean(
+    leadField(fields, ["Preferred communication language"]) ||
+      leadField(fields, ["Main goal"]) ||
+      lead.interest?.toLowerCase().includes("career evaluation"),
+  );
+}
+
+function getWhatsAppTemplateLanguage(
+  sourceType: ContactSourceType,
+  communicationLanguage?: string,
+) {
+  if (sourceType === "career_evaluation" && communicationLanguage) {
+    const language = normalizeCommunicationLanguage(communicationLanguage);
+    const languageEnv: Record<string, string | undefined> = {
+      en: process.env.WHATSAPP_CAREER_TEMPLATE_LANGUAGE_EN,
+      fr: process.env.WHATSAPP_CAREER_TEMPLATE_LANGUAGE_FR,
+      es: process.env.WHATSAPP_CAREER_TEMPLATE_LANGUAGE_ES,
+      ar: process.env.WHATSAPP_CAREER_TEMPLATE_LANGUAGE_AR,
+    };
+    const configuredLanguage = languageEnv[language];
+    if (configuredLanguage?.trim()) return configuredLanguage.trim();
+  }
+
   const sourceSpecific =
     sourceType === "career_evaluation"
       ? process.env.WHATSAPP_CAREER_TEMPLATE_LANGUAGE
@@ -1666,6 +1704,13 @@ type WhatsAppLeadSendResult =
         | "missing_config"
         | "missing_template"
         | "unsupported_source";
+    };
+
+type WhatsAppTextSendResult =
+  | { sent: true; messageId: string }
+  | {
+      sent: false;
+      reason: "empty_message" | "invalid_phone" | "missing_config";
     };
 
 function resolveWhatsAppTemplateParameter(
@@ -1719,16 +1764,11 @@ function buildWhatsAppTemplateComponents(args: {
   ];
 }
 
-async function sendWhatsAppTemplateMessage(args: {
-  to: string;
-  templateName: string;
-  languageCode: string;
-  components?: WhatsAppTemplateComponent[];
-}): Promise<WhatsAppLeadSendResult> {
+async function postWhatsAppMessage(payload: Record<string, unknown>) {
   const accessToken = String(process.env.WHATSAPP_ACCESS_TOKEN || "").trim();
   const phoneNumberId = String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
   if (!accessToken || !phoneNumberId) {
-    return { sent: false, reason: "missing_config" as const };
+    return { ok: false, reason: "missing_config" as const };
   }
 
   const response = await fetch(
@@ -1741,38 +1781,81 @@ async function sendWhatsAppTemplateMessage(args: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: args.to,
-        type: "template",
-        template: {
-          name: args.templateName,
-          language: {
-            code: args.languageCode,
-          },
-          ...(args.components?.length ? { components: args.components } : {}),
-        },
-      }),
+      body: JSON.stringify(payload),
     },
   );
 
   const responseText = await response.text();
-  let payload: any = {};
+  let responsePayload: any = {};
   try {
-    payload = responseText ? JSON.parse(responseText) : {};
+    responsePayload = responseText ? JSON.parse(responseText) : {};
   } catch {
-    payload = { raw: responseText };
+    responsePayload = { raw: responseText };
   }
 
   if (!response.ok) {
     throw new Error(
-      `WhatsApp API failed with ${response.status}: ${JSON.stringify(payload).slice(0, 600)}`,
+      `WhatsApp API failed with ${response.status}: ${JSON.stringify(responsePayload).slice(0, 600)}`,
     );
   }
 
   return {
+    ok: true,
+    messageId: responsePayload?.messages?.[0]?.id
+      ? String(responsePayload.messages[0].id)
+      : "",
+  } as const;
+}
+
+async function sendWhatsAppTemplateMessage(args: {
+  to: string;
+  templateName: string;
+  languageCode: string;
+  components?: WhatsAppTemplateComponent[];
+}): Promise<WhatsAppLeadSendResult> {
+  const payload = await postWhatsAppMessage({
+    messaging_product: "whatsapp",
+    to: args.to,
+    type: "template",
+    template: {
+      name: args.templateName,
+      language: {
+        code: args.languageCode,
+      },
+      ...(args.components?.length ? { components: args.components } : {}),
+    },
+  });
+  if (!payload.ok) return { sent: false, reason: payload.reason };
+
+  return {
     sent: true,
-    messageId: payload?.messages?.[0]?.id ? String(payload.messages[0].id) : "",
+    messageId: payload.messageId || "",
+  };
+}
+
+async function sendWhatsAppTextMessage(args: {
+  to: string;
+  body: string;
+}): Promise<WhatsAppTextSendResult> {
+  const to = args.to.replace(/[^\d]/g, "");
+  const body = args.body.trim();
+  if (!to || to.length < 8) return { sent: false, reason: "invalid_phone" };
+  if (!body) return { sent: false, reason: "empty_message" };
+
+  const payload = await postWhatsAppMessage({
+    messaging_product: "whatsapp",
+    to,
+    type: "text",
+    text: {
+      preview_url: false,
+      body,
+    },
+  });
+  if (!payload.ok) return { sent: false, reason: payload.reason };
+
+  return {
+    sent: true,
+    messageId: payload.messageId || "",
   };
 }
 
@@ -1802,7 +1885,10 @@ async function sendWhatsAppLeadTemplate(args: {
   return sendWhatsAppTemplateMessage({
     to: phone.whatsappNumber,
     templateName,
-    languageCode: getWhatsAppTemplateLanguage(args.sourceType),
+    languageCode: getWhatsAppTemplateLanguage(
+      args.sourceType,
+      communicationLanguage,
+    ),
     components: buildWhatsAppTemplateComponents({
       lead: args.lead,
       fields,
@@ -1837,6 +1923,177 @@ function queueWhatsAppLeadTemplate(args: {
         error: error instanceof Error ? error.stack || error.message : String(error),
       });
     });
+}
+
+type WhatsAppIncomingMessage = {
+  from: string;
+  messageId: string;
+  text: string;
+};
+
+function normalizePhoneDigits(value: string | null | undefined) {
+  return String(value || "").replace(/[^\d]/g, "");
+}
+
+function sameWhatsAppNumber(candidate: string, target: string) {
+  if (!candidate || !target) return false;
+  return candidate === target || candidate.endsWith(target) || target.endsWith(candidate);
+}
+
+function extractWhatsAppIncomingMessages(body: unknown): WhatsAppIncomingMessage[] {
+  const entries =
+    body && typeof body === "object" && Array.isArray((body as any).entry)
+      ? (body as any).entry
+      : [];
+  const incoming: WhatsAppIncomingMessage[] = [];
+
+  for (const entry of entries) {
+    const changes = Array.isArray(entry?.changes) ? entry.changes : [];
+    for (const change of changes) {
+      const messages = Array.isArray(change?.value?.messages)
+        ? change.value.messages
+        : [];
+      for (const message of messages) {
+        const from = normalizePhoneDigits(message?.from);
+        const text =
+          String(message?.text?.body || "").trim() ||
+          String(message?.button?.payload || message?.button?.text || "").trim() ||
+          String(
+            message?.interactive?.button_reply?.id ||
+              message?.interactive?.button_reply?.title ||
+              "",
+          ).trim();
+        if (!from || !text) continue;
+        incoming.push({
+          from,
+          messageId: String(message?.id || ""),
+          text,
+        });
+      }
+    }
+  }
+
+  return incoming;
+}
+
+function isCareerQnaStartMessage(text: string) {
+  const normalized = normalizeComparableText(text);
+  return [
+    "start",
+    "begin",
+    "commencer",
+    "debuter",
+    "empezar",
+    "iniciar",
+    "ابدا",
+  ].includes(normalized);
+}
+
+function findLatestCareerLeadByWhatsAppNumber(whatsappNumber: string) {
+  const target = normalizePhoneDigits(whatsappNumber);
+  if (!target) return null;
+
+  for (const lead of listContactLeads()) {
+    if (!isCareerEvaluationLead(lead)) continue;
+    const fields = parseLeadMessageFields(lead.message);
+    const country = leadField(fields, ["Country"]) || "";
+    const phone = getLeadPhoneDetails(lead.phone, country);
+    const candidate =
+      normalizePhoneDigits(phone.whatsappNumber) || normalizePhoneDigits(lead.phone);
+    if (sameWhatsAppNumber(candidate, target)) {
+      return { lead, fields };
+    }
+  }
+
+  return null;
+}
+
+function renderCareerQnaFirstQuestion(args: {
+  lead: ContactLead;
+  language: ReturnType<typeof normalizeCommunicationLanguage>;
+}) {
+  const firstName = args.lead.name.trim().split(/\s+/)[0] || "there";
+
+  if (args.language === "fr") {
+    return [
+      `Merci ${firstName}. Premiere question: quel est votre niveau actuel avec Cabinet Vision ?`,
+      "",
+      "Repondez avec un numero:",
+      "1 - Je debute",
+      "2 - Niveau de base",
+      "3 - Niveau intermediaire",
+      "4 - Niveau avance",
+    ].join("\n");
+  }
+
+  if (args.language === "es") {
+    return [
+      `Gracias ${firstName}. Primera pregunta: cual es tu nivel actual con Cabinet Vision?`,
+      "",
+      "Responde con un numero:",
+      "1 - Soy principiante",
+      "2 - Nivel basico",
+      "3 - Nivel intermedio",
+      "4 - Nivel avanzado",
+    ].join("\n");
+  }
+
+  if (args.language === "ar") {
+    return [
+      `شكرا ${firstName}. السؤال الأول: ما هو مستواك الحالي في Cabinet Vision؟`,
+      "",
+      "أجب برقم واحد:",
+      "1 - جديد",
+      "2 - مستوى أساسي",
+      "3 - مستوى متوسط",
+      "4 - مستوى متقدم",
+    ].join("\n");
+  }
+
+  return [
+    `Thanks ${firstName}. First question: what is your current Cabinet Vision level?`,
+    "",
+    "Reply with one number:",
+    "1 - New",
+    "2 - Basic",
+    "3 - Intermediate",
+    "4 - Advanced",
+  ].join("\n");
+}
+
+async function processWhatsAppWebhookMessages(body: unknown) {
+  const incomingMessages = extractWhatsAppIncomingMessages(body);
+  for (const message of incomingMessages) {
+    if (!isCareerQnaStartMessage(message.text)) continue;
+
+    const match = findLatestCareerLeadByWhatsAppNumber(message.from);
+    if (!match) {
+      console.log("[whatsapp:qna] start ignored; no matching career lead", {
+        messageId: message.messageId || null,
+      });
+      continue;
+    }
+
+    const communicationLanguage = leadField(match.fields, [
+      "Preferred communication language",
+    ]);
+    const language = normalizeCommunicationLanguage(communicationLanguage);
+    const result = await sendWhatsAppTextMessage({
+      to: message.from,
+      body: renderCareerQnaFirstQuestion({
+        lead: match.lead,
+        language,
+      }),
+    });
+
+    console.log("[whatsapp:qna] first question processed", {
+      leadId: match.lead.id,
+      language,
+      sent: result.sent,
+      messageId: result.sent ? result.messageId || null : null,
+      reason: result.sent ? null : result.reason,
+    });
+  }
 }
 
 async function sendContactLeadNotification(args: {
@@ -2131,6 +2388,12 @@ function handleWhatsAppWebhookEvent(
       body && typeof body === "object" && "object" in body
         ? (body as { object?: unknown }).object
         : null,
+  });
+
+  void processWhatsAppWebhookMessages(body).catch((error) => {
+    console.error("[whatsapp:qna:error]", {
+      error: error instanceof Error ? error.stack || error.message : String(error),
+    });
   });
 
   return res.status(200).json({ ok: true });
