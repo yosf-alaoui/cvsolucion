@@ -39,6 +39,9 @@ export default function Footer() {
               {content.footer.aboutTitle}
             </h3>
             <p className="text-white/80 text-sm">{content.footer.aboutText}</p>
+            <p className="mt-3 text-xs leading-relaxed text-white/65">
+              CVSolucion is a service operated by Namdaja.
+            </p>
           </div>
 
           {/* Services Links */}

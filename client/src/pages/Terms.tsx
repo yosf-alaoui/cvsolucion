@@ -47,6 +47,15 @@ export default function Terms() {
             <p className="text-slate-600">{copy.subtitle}</p>
           </header>
 
+          <section className="glass-card-strong card-static rounded-2xl p-6">
+            <p className="text-sm text-slate-500 uppercase tracking-wide">
+              Legal business name
+            </p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">
+              Namdaja
+            </p>
+          </section>
+
           <section className="glass-card-strong card-static rounded-2xl p-8">
             <div className="prose max-w-none prose-slate prose-headings:mt-8 prose-headings:font-semibold">
               <TermsContent locale={locale as "en" | "fr" | "ar"} />
