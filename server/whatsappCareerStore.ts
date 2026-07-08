@@ -35,13 +35,17 @@ function saveDb(db: WhatsAppCareerDb) {
   writeJsonFileAtomic(DB_PATH, db);
 }
 
-export function getWhatsAppCareerConversationByPhone(phone: string) {
-  const db = loadDb();
+function findLatestConversationByPhone(db: WhatsAppCareerDb, phone: string) {
   return (
     db.conversations
       .filter((conversation) => conversation.phone === phone)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
   );
+}
+
+export function getWhatsAppCareerConversationByPhone(phone: string) {
+  const db = loadDb();
+  return findLatestConversationByPhone(db, phone);
 }
 
 export function startWhatsAppCareerConversation(input: {
@@ -51,7 +55,7 @@ export function startWhatsAppCareerConversation(input: {
 }) {
   const db = loadDb();
   const now = new Date().toISOString();
-  const existing = getWhatsAppCareerConversationByPhone(input.phone);
+  const existing = findLatestConversationByPhone(db, input.phone);
 
   if (existing) {
     existing.leadId = input.leadId;
@@ -90,7 +94,7 @@ export function recordWhatsAppCareerAnswer(input: {
   nextStep: WhatsAppCareerStep;
 }) {
   const db = loadDb();
-  const conversation = getWhatsAppCareerConversationByPhone(input.phone);
+  const conversation = findLatestConversationByPhone(db, input.phone);
   if (!conversation) return null;
 
   conversation.answers[conversation.step] = input.answer.trim();

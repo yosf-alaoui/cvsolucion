@@ -2275,7 +2275,13 @@ async function processWhatsAppWebhookMessages(body: unknown) {
       });
       if (!updatedConversation) continue;
 
-      const language = normalizeCommunicationLanguage(updatedConversation.language);
+      const leadFields = parseLeadMessageFields(lead.message);
+      const leadCommunicationLanguage = leadField(leadFields, [
+        "Preferred communication language",
+      ]);
+      const language = normalizeCommunicationLanguage(
+        leadCommunicationLanguage || updatedConversation.language,
+      );
       const reply =
         nextStep === "complete"
           ? renderCareerQnaCompletion(language)
@@ -2293,7 +2299,7 @@ async function processWhatsAppWebhookMessages(body: unknown) {
         void sendWhatsAppCareerQnaNotification({
           lead,
           phone,
-          language: updatedConversation.language,
+          language,
           answers: updatedConversation.answers,
         }).catch((error) => {
           console.error("[whatsapp:qna:admin-email-error]", {
@@ -2306,6 +2312,7 @@ async function processWhatsAppWebhookMessages(body: unknown) {
 
       console.log("[whatsapp:qna] answer processed", {
         leadId: lead.id,
+        language,
         step: conversation.step,
         nextStep,
         sent: result.sent,
