@@ -28,6 +28,10 @@ import {
   markCareerLeadForThankYou,
   trackCampaignEvent,
 } from "@/lib/campaignTracking";
+import {
+  getBookingCountryLabel,
+  getBookingCountryOptions,
+} from "@/lib/bookingTime";
 import { submitContactLead } from "@/lib/contact";
 
 type PageLocale = "en" | "fr" | "ar";
@@ -744,6 +748,7 @@ export default function TrainingCareer() {
     email: "",
     phone: "",
     country: "",
+    countryCode: "",
     currentRole: "",
     worksInShop: "",
     cabinetVisionExperience: "",
@@ -768,6 +773,14 @@ export default function TrainingCareer() {
   const whatsappHref = buildWhatsAppLink(
     "+1 438 807 8747",
     copy.whatsappMessage,
+  );
+  const countryOptions = useMemo(
+    () =>
+      getBookingCountryOptions(pageLocale).map((country) => ({
+        value: country.code,
+        label: `${country.label} (${country.code})`,
+      })),
+    [pageLocale],
   );
 
   useEffect(() => {
@@ -847,6 +860,16 @@ export default function TrainingCareer() {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  const updateCountry = (countryCode: string) => {
+    startForm();
+    setVerificationEmail(null);
+    setForm((current) => ({
+      ...current,
+      countryCode,
+      country: getBookingCountryLabel(countryCode, "en"),
+    }));
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -859,6 +882,7 @@ export default function TrainingCareer() {
       `Email: ${form.email}`,
       `Phone / WhatsApp: ${form.phone}`,
       `Country: ${form.country}`,
+      `Country code: ${form.countryCode}`,
       `Current Role: ${form.currentRole}`,
       `Works in cabinet shop: ${form.worksInShop}`,
       `Cabinet Vision experience: ${form.cabinetVisionExperience}`,
@@ -873,6 +897,8 @@ export default function TrainingCareer() {
         name: form.name,
         email: form.email,
         phone: form.phone,
+        country: form.country,
+        countryCode: form.countryCode,
         company: form.currentRole,
         interest: "Cabinet Vision career evaluation",
         message,
@@ -1101,15 +1127,12 @@ export default function TrainingCareer() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="career-country">{copy.country}</Label>
-                    <Input
+                    <FieldSelect
                       id="career-country"
-                      autoComplete="country-name"
-                      value={form.country}
-                      onChange={(event) =>
-                        updateForm("country", event.target.value)
-                      }
-                      required
+                      label={copy.country}
+                      value={form.countryCode}
+                      options={countryOptions}
+                      onChange={updateCountry}
                     />
                   </div>
                   <FieldSelect

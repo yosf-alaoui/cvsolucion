@@ -5,6 +5,8 @@ type ContactPayload = {
   email: string;
   company?: string;
   phone?: string;
+  country?: string;
+  countryCode?: string;
   interest?: string;
   message: string;
   locale?: string;

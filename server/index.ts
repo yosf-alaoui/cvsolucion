@@ -1880,10 +1880,11 @@ async function sendWhatsAppLeadTemplate(args: {
 
   const fields = parseLeadMessageFields(args.lead.message);
   const country = leadField(fields, ["Country"]) || "-";
+  const countryCode = leadField(fields, ["Country code"]);
   const communicationLanguage = leadField(fields, [
     "Preferred communication language",
   ]);
-  const phone = getLeadPhoneDetails(args.lead.phone, country);
+  const phone = getLeadPhoneDetails(args.lead.phone, countryCode || country);
   if (!phone.whatsappNumber || phone.whatsappNumber.length < 8) {
     return { sent: false, reason: "invalid_phone" as const };
   }
@@ -2003,7 +2004,8 @@ function findLatestCareerLeadByWhatsAppNumber(whatsappNumber: string) {
     if (!isCareerEvaluationLead(lead)) continue;
     const fields = parseLeadMessageFields(lead.message);
     const country = leadField(fields, ["Country"]) || "";
-    const phone = getLeadPhoneDetails(lead.phone, country);
+    const countryCode = leadField(fields, ["Country code"]);
+    const phone = getLeadPhoneDetails(lead.phone, countryCode || country);
     const candidate =
       normalizePhoneDigits(phone.whatsappNumber) || normalizePhoneDigits(lead.phone);
     if (sameWhatsAppNumber(candidate, target)) {
@@ -2360,6 +2362,7 @@ async function sendContactLeadNotification(args: {
     .trim();
   const fields = parseLeadMessageFields(args.lead.message);
   const country = leadField(fields, ["Country"]) || "-";
+  const countryCode = leadField(fields, ["Country code"]);
   const communicationLanguage = leadField(fields, [
     "Preferred communication language",
   ]);
@@ -2372,7 +2375,7 @@ async function sendContactLeadNotification(args: {
   const mainGoal = leadField(fields, ["Main goal"]);
   const preferredTime = leadField(fields, ["Preferred time"]);
   const notes = leadField(fields, ["Message"]) || args.lead.message;
-  const phone = getLeadPhoneDetails(args.lead.phone, country);
+  const phone = getLeadPhoneDetails(args.lead.phone, countryCode || country);
   const trackingLines = Object.entries(args.tracking).map(
     ([key, value]) => `${key}: ${value}`,
   );
@@ -2388,6 +2391,7 @@ async function sendContactLeadNotification(args: {
     phone.whatsappUrl ? `WhatsApp link: ${phone.whatsappUrl}` : null,
     `Email: ${args.lead.email}`,
     `Country: ${country}`,
+    countryCode ? `Country code: ${countryCode}` : null,
     communicationLanguage
       ? `Preferred communication language: ${communicationLanguage}`
       : null,
@@ -4005,13 +4009,24 @@ async function startServer() {
         const email = String(req.body?.email || "").trim();
         const company = String(req.body?.company || "").trim();
         const phone = String(req.body?.phone || "").trim();
+        const countryCode = normalizeCountryCode(req.body?.countryCode);
         const interest = String(req.body?.interest || "").trim();
-        const message = String(req.body?.message || "").trim();
+        const rawMessage = String(req.body?.message || "").trim();
         const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
         const sourceType: ContactSourceType =
           String(req.body?.source || "").trim() === "career_evaluation"
             ? "career_evaluation"
             : "contact";
+        const countryRecord =
+          sourceType === "career_evaluation" && countryCode
+            ? getTimezoneCountry(countryCode)
+            : null;
+        const message =
+          sourceType === "career_evaluation" &&
+          countryCode &&
+          !/^Country code:/im.test(rawMessage)
+            ? `${rawMessage}\nCountry code: ${countryCode}`
+            : rawMessage;
         const rawTracking =
           req.body?.tracking && typeof req.body.tracking === "object"
             ? req.body.tracking
@@ -4040,9 +4055,14 @@ async function startServer() {
         if (!EMAIL_REGEX.test(email)) {
           return res.status(400).json({ error: "A valid email is required." });
         }
-        if (message.length < 10) {
+        if (rawMessage.length < 10) {
           return res.status(400).json({
             error: "Please provide a little more context in your message.",
+          });
+        }
+        if (sourceType === "career_evaluation" && (!countryCode || !countryRecord)) {
+          return res.status(400).json({
+            error: "Select a valid country from the list.",
           });
         }
 
