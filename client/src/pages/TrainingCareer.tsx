@@ -198,7 +198,7 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     formIntro:
       "Tell us about your current shop experience, your goals, and your preferred time. We will review the request and contact you with the best next step.",
     formNotice:
-      "This is not a free training session or a confirmed appointment. It is a free evaluation to determine whether the program fits your situation.",
+      "The evaluation is free, takes less than one minute to request, and helps us recommend the right next step before you commit to training.",
     fullName: "Full name",
     email: "Email",
     phone: "Phone / WhatsApp",
@@ -381,7 +381,7 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     formIntro:
       "Decrivez votre experience, votre objectif et votre disponibilite. Nous examinerons la demande et vous contacterons avec la prochaine etape adaptee.",
     formNotice:
-      "Ce formulaire n'est pas une session gratuite ni un rendez-vous confirme. Il sert a verifier si le programme correspond a votre situation.",
+      "L'evaluation est gratuite, prend moins d'une minute a demander, et nous aide a recommander la bonne prochaine etape avant tout engagement.",
     fullName: "Nom complet",
     email: "Email",
     phone: "Telephone / WhatsApp",
@@ -552,7 +552,7 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     formIntro:
       "أخبرنا عن خبرتك الحالية وهدفك والوقت الذي تفضله. سنراجع الطلب ونتواصل معك لتحديد أفضل خطوة تالية.",
     formNotice:
-      "هذا ليس تدريبا مجانيا ولا موعدا مؤكدا. إنه تقييم مجاني لمعرفة هل البرنامج مناسب لوضعك.",
+      "التقييم مجاني، وطلبه يستغرق أقل من دقيقة، ويساعدنا على اقتراح الخطوة المناسبة قبل أي التزام بالتدريب.",
     fullName: "الاسم الكامل",
     email: "البريد الإلكتروني",
     phone: "الهاتف / واتساب",
@@ -701,12 +701,14 @@ function FieldSelect({
   value,
   options: fieldOptions,
   onChange,
+  required = true,
 }: {
   id: string;
   label: string;
   value: string;
   options: SelectOption[];
   onChange: (value: string) => void;
+  required?: boolean;
 }) {
   return (
     <div className="space-y-2">
@@ -715,7 +717,7 @@ function FieldSelect({
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        required
+        required={required}
         className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
       >
         <option value="" disabled>
@@ -938,7 +940,7 @@ export default function TrainingCareer() {
         structuredData={structuredData}
       />
       <Header />
-      <main className="pb-20 pt-28">
+      <main className="pb-28 pt-28 md:pb-20">
         <section className={pageSectionClass}>
           <div className="grid gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
             <div className="py-5">
@@ -1141,6 +1143,7 @@ export default function TrainingCareer() {
                     value={form.currentRole}
                     options={copy.roleOptions}
                     onChange={(value) => updateForm("currentRole", value)}
+                    required={false}
                   />
                   <FieldSelect
                     id="career-shop"
@@ -1148,6 +1151,7 @@ export default function TrainingCareer() {
                     value={form.worksInShop}
                     options={copy.shopOptions}
                     onChange={(value) => updateForm("worksInShop", value)}
+                    required={false}
                   />
                   <FieldSelect
                     id="career-experience"
@@ -1157,6 +1161,7 @@ export default function TrainingCareer() {
                     onChange={(value) =>
                       updateForm("cabinetVisionExperience", value)
                     }
+                    required={false}
                   />
                   <FieldSelect
                     id="career-goal"
@@ -1164,6 +1169,7 @@ export default function TrainingCareer() {
                     value={form.mainGoal}
                     options={copy.goalOptions}
                     onChange={(value) => updateForm("mainGoal", value)}
+                    required={false}
                   />
                   <div className="sm:col-span-2">
                     <FieldSelect
@@ -1174,6 +1180,7 @@ export default function TrainingCareer() {
                       onChange={(value) =>
                         updateForm("preferredTime", value)
                       }
+                      required={false}
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -1481,6 +1488,38 @@ export default function TrainingCareer() {
           </div>
         </section>
       </main>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-3 shadow-[0_-12px_35px_rgba(15,23,42,0.14)] backdrop-blur md:hidden">
+        <div className="mx-auto flex max-w-lg items-center gap-2">
+          <Button
+            type="button"
+            className="h-11 flex-1 rounded-md bg-primary px-4 text-sm font-black text-white hover:bg-primary/90"
+            onClick={() => goToForm("mobile_sticky_request")}
+          >
+            <ClipboardCheck className="me-2 h-4 w-4" />
+            {copy.formKicker}
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            className="h-11 w-12 shrink-0 rounded-md bg-white p-0"
+          >
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={copy.help}
+              onClick={() =>
+                trackCampaignEvent("Contact", {
+                  contact_method: "whatsapp_sticky",
+                  locale: pageLocale,
+                })
+              }
+            >
+              <MessageCircle className="h-5 w-5" />
+            </a>
+          </Button>
+        </div>
+      </div>
       <Footer />
     </div>
   );
