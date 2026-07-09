@@ -48,6 +48,13 @@ export function getWhatsAppCareerConversationByPhone(phone: string) {
   return findLatestConversationByPhone(db, phone);
 }
 
+export function listWhatsAppCareerConversations() {
+  const db = loadDb();
+  return [...db.conversations].sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt),
+  );
+}
+
 export function startWhatsAppCareerConversation(input: {
   phone: string;
   leadId: string;

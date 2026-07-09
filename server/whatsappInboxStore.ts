@@ -332,3 +332,84 @@ export function markWhatsAppInboxConversationRead(conversationId: string) {
   saveDb(db);
   return db.conversations[index];
 }
+
+export function backfillWhatsAppInboxConversation(input: {
+  phone: string;
+  contactName?: string | null;
+  leadId?: string | null;
+  email?: string | null;
+  language?: string | null;
+  status?: WhatsAppInboxConversationStatus;
+  messages: Array<{
+    id: string;
+    direction: WhatsAppInboxMessageDirection;
+    type?: WhatsAppInboxMessageType;
+    body: string;
+    status?: WhatsAppInboxMessageStatus;
+    occurredAt: string;
+  }>;
+}) {
+  const db = loadDb();
+  const sortedMessages = [...input.messages]
+    .filter((message) => message.id.trim() && message.body.trim())
+    .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+  const timestamp =
+    sortedMessages[sortedMessages.length - 1]?.occurredAt ||
+    new Date().toISOString();
+  const conversation = getOrCreateConversation(db, {
+    phone: input.phone,
+    contactName: input.contactName,
+    leadId: input.leadId,
+    email: input.email,
+    language: input.language,
+    timestamp,
+  });
+
+  let added = 0;
+  for (const item of sortedMessages) {
+    const legacyMessageId = `legacy:${item.id.trim()}`;
+    if (hasMessage(conversation, legacyMessageId)) continue;
+
+    const message: WhatsAppInboxMessage = {
+      id: createMessageId(item.direction === "inbound" ? "wa_legacy_in" : "wa_legacy_out"),
+      direction: item.direction,
+      type: item.type || "text",
+      whatsappMessageId: legacyMessageId,
+      body: item.body.trim(),
+      status:
+        item.status ||
+        (item.direction === "inbound" ? "received" : "sent"),
+      error: null,
+      createdAt: item.occurredAt,
+      updatedAt: item.occurredAt,
+      sentByUserId: null,
+      sentByEmail: null,
+    };
+    conversation.messages.push(message);
+    added += 1;
+  }
+
+  if (added > 0) {
+    conversation.messages.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const inboundMessages = conversation.messages.filter(
+      (message) => message.direction === "inbound",
+    );
+    const outboundMessages = conversation.messages.filter(
+      (message) => message.direction === "outbound",
+    );
+    conversation.lastInboundAt =
+      inboundMessages[inboundMessages.length - 1]?.createdAt ||
+      conversation.lastInboundAt;
+    conversation.lastOutboundAt =
+      outboundMessages[outboundMessages.length - 1]?.createdAt ||
+      conversation.lastOutboundAt;
+    conversation.lastMessageAt =
+      conversation.messages[conversation.messages.length - 1]?.createdAt ||
+      conversation.lastMessageAt;
+    conversation.status = input.status || conversation.status;
+    conversation.updatedAt = new Date().toISOString();
+    saveDb(db);
+  }
+
+  return { conversation, added };
+}

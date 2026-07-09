@@ -116,11 +116,13 @@ import {
 } from "./contactStore";
 import {
   getWhatsAppCareerConversationByPhone,
+  listWhatsAppCareerConversations,
   recordWhatsAppCareerAnswer,
   startWhatsAppCareerConversation,
   type WhatsAppCareerStep,
 } from "./whatsappCareerStore";
 import {
+  backfillWhatsAppInboxConversation,
   listWhatsAppInboxConversations,
   getWhatsAppInboxConversation,
   markWhatsAppInboxConversationRead,
@@ -2297,6 +2299,127 @@ function renderCareerQnaCompletion(language: ReturnType<typeof normalizeCommunic
     return "شكرا. توصلنا بإجاباتك، وسيقوم فريقنا بمراجعتها والتواصل معك قريبا.";
   }
   return "Thanks. We received your answers. Our team will review them and contact you shortly.";
+}
+
+function addSecondsToIso(value: string | null | undefined, seconds: number) {
+  const base = value ? new Date(value) : new Date();
+  if (Number.isNaN(base.getTime())) {
+    return new Date(Date.now() + seconds * 1000).toISOString();
+  }
+  return new Date(base.getTime() + seconds * 1000).toISOString();
+}
+
+function ensureWhatsAppInboxBackfilledFromCareer() {
+  for (const conversation of listWhatsAppCareerConversations()) {
+    const lead =
+      findContactLeadById(conversation.leadId) ||
+      ({
+        id: conversation.leadId,
+        name: "WhatsApp contact",
+        email: "",
+        company: null,
+        phone: conversation.phone,
+        interest: "Cabinet Vision career evaluation",
+        message: "",
+        createdAt: conversation.createdAt,
+      } satisfies ContactLead);
+    const fields = parseLeadMessageFields(lead.message);
+    const communicationLanguage = leadField(fields, [
+      "Preferred communication language",
+    ]);
+    const language = normalizeCommunicationLanguage(
+      communicationLanguage || conversation.language,
+    );
+    const messages: Parameters<
+      typeof backfillWhatsAppInboxConversation
+    >[0]["messages"] = [
+      {
+        id: `${conversation.id}:start`,
+        direction: "inbound",
+        body: "START",
+        occurredAt: addSecondsToIso(conversation.createdAt, 0),
+      },
+      {
+        id: `${conversation.id}:q-level`,
+        direction: "outbound",
+        body: renderCareerQnaQuestion({
+          step: "level",
+          lead,
+          language,
+        }),
+        occurredAt: addSecondsToIso(conversation.createdAt, 1),
+      },
+    ];
+
+    if (conversation.answers.level) {
+      messages.push(
+        {
+          id: `${conversation.id}:a-level`,
+          direction: "inbound",
+          body: conversation.answers.level,
+          occurredAt: addSecondsToIso(conversation.createdAt, 2),
+        },
+        {
+          id: `${conversation.id}:q-goal`,
+          direction: "outbound",
+          body: renderCareerQnaQuestion({
+            step: "goal",
+            lead,
+            language,
+          }),
+          occurredAt: addSecondsToIso(conversation.createdAt, 3),
+        },
+      );
+    }
+
+    if (conversation.answers.goal) {
+      messages.push(
+        {
+          id: `${conversation.id}:a-goal`,
+          direction: "inbound",
+          body: conversation.answers.goal,
+          occurredAt: addSecondsToIso(conversation.createdAt, 4),
+        },
+        {
+          id: `${conversation.id}:q-schedule`,
+          direction: "outbound",
+          body: renderCareerQnaQuestion({
+            step: "schedule",
+            lead,
+            language,
+          }),
+          occurredAt: addSecondsToIso(conversation.createdAt, 5),
+        },
+      );
+    }
+
+    if (conversation.answers.schedule) {
+      messages.push(
+        {
+          id: `${conversation.id}:a-schedule`,
+          direction: "inbound",
+          body: conversation.answers.schedule,
+          occurredAt: addSecondsToIso(conversation.createdAt, 6),
+        },
+        {
+          id: `${conversation.id}:complete`,
+          direction: "outbound",
+          body: renderCareerQnaCompletion(language),
+          occurredAt: addSecondsToIso(conversation.updatedAt, 7),
+        },
+      );
+    }
+
+    backfillWhatsAppInboxConversation({
+      phone: conversation.phone,
+      contactName: lead.name,
+      leadId: lead.id,
+      email: lead.email || null,
+      language,
+      status: "needs_reply",
+      messages,
+    });
+  }
 }
 
 async function sendWhatsAppCareerQnaNotification(args: {
@@ -5394,6 +5517,7 @@ async function startServer() {
       const bookings = listBookings().map(serializeCustomerBooking);
       const leads = listContactLeads();
       const invoices = listInvoicesForAdmin().map(serializeAdminInvoice);
+      ensureWhatsAppInboxBackfilledFromCareer();
       return res.json({
         admin: {
           email: auth.user.email,
