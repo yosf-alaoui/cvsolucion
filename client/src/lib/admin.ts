@@ -208,6 +208,38 @@ export type AdminDashboardConversation = {
   } | null;
 };
 
+export type AdminWhatsAppInboxMessage = {
+  id: string;
+  direction: "inbound" | "outbound";
+  type: "text" | "button" | "interactive" | "template" | "system";
+  whatsappMessageId: string | null;
+  body: string;
+  status: "received" | "sent" | "delivered" | "read" | "failed";
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  sentByUserId: string | null;
+  sentByEmail: string | null;
+};
+
+export type AdminWhatsAppInboxConversation = {
+  id: string;
+  phone: string;
+  displayPhone: string;
+  contactName: string | null;
+  leadId: string | null;
+  email: string | null;
+  language: string | null;
+  status: "needs_reply" | "waiting_customer" | "open";
+  unreadCount: number;
+  lastMessageAt: string;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messages: AdminWhatsAppInboxMessage[];
+};
+
 export type AdminContactLead = {
   id: string;
   name: string;
@@ -318,6 +350,10 @@ export type AdminDashboardResponse = {
   insights: AdminDashboardInsights;
   visitors: AdminDashboardVisitor[];
   conversations: AdminDashboardConversation[];
+  whatsappInbox: {
+    enabled: boolean;
+    conversations: AdminWhatsAppInboxConversation[];
+  };
   ga4: AdminDashboardGa4;
   chat: {
     enabled: boolean;
@@ -799,4 +835,33 @@ export function mergeAdminInvoices(invoiceId: string, sourceInvoiceIds: string[]
     method: "POST",
     body: JSON.stringify({ sourceInvoiceIds }),
   });
+}
+
+export function sendAdminWhatsAppMessage(conversationId: string, body: string) {
+  return adminRequest<{
+    ok: true;
+    conversation: AdminWhatsAppInboxConversation;
+  }>(
+    `/api/admin/whatsapp/conversations/${encodeURIComponent(
+      conversationId,
+    )}/messages`,
+    {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    },
+  );
+}
+
+export function markAdminWhatsAppConversationRead(conversationId: string) {
+  return adminRequest<{
+    ok: true;
+    conversation: AdminWhatsAppInboxConversation;
+  }>(
+    `/api/admin/whatsapp/conversations/${encodeURIComponent(
+      conversationId,
+    )}/read`,
+    {
+      method: "PATCH",
+    },
+  );
 }

@@ -16,10 +16,12 @@ import {
   deleteAdminUser,
   getAdminBookingSlots,
   getAdminDashboard,
+  markAdminWhatsAppConversationRead,
   refundAdminBooking,
   resendAdminVerification,
   revokeAdminSession,
   revokeAdminUserSessions,
+  sendAdminWhatsAppMessage,
   unblockAdminBookingSlot,
   updateAdminBookingSchedule,
   updateAdminUser,
@@ -30,6 +32,7 @@ import {
   type AdminDashboardSession,
   type AdminDashboardUser,
   type AdminDashboardVisitor,
+  type AdminWhatsAppInboxConversation,
 } from "@/lib/admin";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +52,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const ConversationsPanel = lazy(
   () => import("@/components/admin/ConversationsPanel"),
+);
+const WhatsAppInboxPanel = lazy(
+  () => import("@/components/admin/WhatsAppInboxPanel"),
 );
 const ArticlesManager = lazy(
   () => import("@/components/admin/ArticlesManager"),
@@ -229,6 +235,9 @@ export default function AdminDashboard() {
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null
   >(null);
+  const [selectedWhatsAppConversationId, setSelectedWhatsAppConversationId] =
+    useState<string | null>(null);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   const copy = useMemo(() => {
     if (locale === "fr") {
@@ -339,6 +348,25 @@ export default function AdminDashboard() {
         dashboardLoadError: "Impossible de charger le tableau de bord.",
         updateError: "Impossible de mettre a jour le compte.",
         deleteError: "Impossible de supprimer le compte.",
+        whatsappInbox: "WhatsApp",
+        whatsappConversation: "Conversation WhatsApp",
+        enabled: "Active",
+        notConfigured: "Non configure",
+        whatsappNotConfigured:
+          "WhatsApp n'est pas configure sur le serveur. Verifiez WHATSAPP_ACCESS_TOKEN et WHATSAPP_PHONE_NUMBER_ID.",
+        noWhatsAppConversations: "Aucune conversation WhatsApp pour l'instant.",
+        noMessages: "Aucun message.",
+        writeWhatsAppReply: "Ecrire une reponse WhatsApp...",
+        sendWhatsApp: "Envoyer sur WhatsApp",
+        sending: "Envoi...",
+        whatsappSent: "Message WhatsApp envoye.",
+        whatsappSendError: "Impossible d'envoyer le message WhatsApp.",
+        unread: "Non lus",
+        needs_reply: "A repondre",
+        waiting_customer: "En attente client",
+        open: "Ouverte",
+        whatsappWindowNote:
+          "Les reponses texte libres fonctionnent normalement dans les 24 heures apres le dernier message du client. Au-dela, Meta peut exiger un modele approuve.",
       };
     }
 
@@ -449,6 +477,25 @@ export default function AdminDashboard() {
         dashboardLoadError: "تعذر تحميل لوحة التحكم.",
         updateError: "تعذر تحديث الحساب.",
         deleteError: "تعذر حذف الحساب.",
+        whatsappInbox: "واتساب",
+        whatsappConversation: "محادثة واتساب",
+        enabled: "مفعل",
+        notConfigured: "غير مهيأ",
+        whatsappNotConfigured:
+          "واتساب غير مهيأ على الخادم. تحقق من WHATSAPP_ACCESS_TOKEN و WHATSAPP_PHONE_NUMBER_ID.",
+        noWhatsAppConversations: "لا توجد محادثات واتساب حالياً.",
+        noMessages: "لا توجد رسائل.",
+        writeWhatsAppReply: "اكتب رد واتساب...",
+        sendWhatsApp: "إرسال عبر واتساب",
+        sending: "جار الإرسال...",
+        whatsappSent: "تم إرسال رسالة واتساب.",
+        whatsappSendError: "تعذر إرسال رسالة واتساب.",
+        unread: "غير مقروءة",
+        needs_reply: "تحتاج رداً",
+        waiting_customer: "بانتظار العميل",
+        open: "مفتوحة",
+        whatsappWindowNote:
+          "الردود النصية الحرة تعمل عادة خلال 24 ساعة بعد آخر رسالة من العميل. بعد ذلك قد تطلب Meta استعمال قالب معتمد.",
       };
     }
 
@@ -558,6 +605,25 @@ export default function AdminDashboard() {
       dashboardLoadError: "Failed to load dashboard.",
       updateError: "Failed to update user.",
       deleteError: "Failed to delete user.",
+      whatsappInbox: "WhatsApp",
+      whatsappConversation: "WhatsApp conversation",
+      enabled: "Enabled",
+      notConfigured: "Not configured",
+      whatsappNotConfigured:
+        "WhatsApp is not configured on the server. Check WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID.",
+      noWhatsAppConversations: "No WhatsApp conversations yet.",
+      noMessages: "No messages yet.",
+      writeWhatsAppReply: "Write a WhatsApp reply...",
+      sendWhatsApp: "Send on WhatsApp",
+      sending: "Sending...",
+      whatsappSent: "WhatsApp message sent.",
+      whatsappSendError: "Could not send the WhatsApp message.",
+      unread: "Unread",
+      needs_reply: "Needs reply",
+      waiting_customer: "Waiting customer",
+      open: "Open",
+      whatsappWindowNote:
+        "Free-form text replies normally work within 24 hours after the customer's last message. After that, Meta may require an approved template.",
     };
   }, [locale]);
 
@@ -802,6 +868,20 @@ export default function AdminDashboard() {
     }
   }, [data, selectedConversationId]);
 
+  useEffect(() => {
+    const conversations = data?.whatsappInbox?.conversations ?? [];
+    if (!conversations.length) {
+      setSelectedWhatsAppConversationId(null);
+      return;
+    }
+    if (
+      !selectedWhatsAppConversationId ||
+      !conversations.some((item) => item.id === selectedWhatsAppConversationId)
+    ) {
+      setSelectedWhatsAppConversationId(conversations[0].id);
+    }
+  }, [data?.whatsappInbox?.conversations, selectedWhatsAppConversationId]);
+
   const trainingTabLabel =
     locale === "ar" ? "التكوين" : locale === "fr" ? "Formations" : "Training";
 
@@ -964,9 +1044,26 @@ export default function AdminDashboard() {
         item.lastPath,
       ]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+      .some((value) => String(value).toLowerCase().includes(normalizedQuery));
     });
   }, [data?.conversations, query]);
+
+  const filteredWhatsAppConversations = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return (data?.whatsappInbox?.conversations ?? []).filter((item) => {
+      if (!normalizedQuery) return true;
+      return [
+        item.contactName,
+        item.email,
+        item.phone,
+        item.displayPhone,
+        item.language,
+        item.messages[item.messages.length - 1]?.body,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+    });
+  }, [data?.whatsappInbox?.conversations, query]);
 
   const selectedUser = useMemo(
     () =>
@@ -1007,6 +1104,60 @@ export default function AdminDashboard() {
   const eventTypes = useMemo(
     () => Array.from(new Set((data?.events ?? []).map((item) => item.type))),
     [data?.events],
+  );
+
+  const updateWhatsAppConversation = useCallback(
+    (conversation: AdminWhatsAppInboxConversation) => {
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              whatsappInbox: {
+                ...current.whatsappInbox,
+                conversations: [
+                  conversation,
+                  ...current.whatsappInbox.conversations.filter(
+                    (item) => item.id !== conversation.id,
+                  ),
+                ].sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt)),
+              },
+            }
+          : current,
+      );
+    },
+    [],
+  );
+
+  const handleSelectWhatsAppConversation = useCallback(
+    (conversationId: string) => {
+      setSelectedWhatsAppConversationId(conversationId);
+      void markAdminWhatsAppConversationRead(conversationId)
+        .then((response) => updateWhatsAppConversation(response.conversation))
+        .catch(() => {
+          // The next scheduled dashboard refresh will reconcile read state.
+        });
+    },
+    [updateWhatsAppConversation],
+  );
+
+  const handleSendWhatsAppMessage = useCallback(
+    async (conversationId: string, body: string) => {
+      setSendingWhatsApp(true);
+      setError(null);
+      try {
+        const response = await sendAdminWhatsAppMessage(conversationId, body);
+        updateWhatsAppConversation(response.conversation);
+        toast.success(copy.whatsappSent);
+      } catch (err: any) {
+        const message = err?.message || copy.whatsappSendError;
+        setError(message);
+        toast.error(message);
+        await load(true);
+      } finally {
+        setSendingWhatsApp(false);
+      }
+    },
+    [copy.whatsappSendError, copy.whatsappSent, load, updateWhatsAppConversation],
   );
 
   const handleSelectUser = (next: AdminDashboardUser) => {
@@ -1866,13 +2017,16 @@ export default function AdminDashboard() {
                     </Card>
 
                     <Tabs defaultValue="users" className="space-y-6">
-                      <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-8">
+                      <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-9">
                         <TabsTrigger value="users">{copy.users}</TabsTrigger>
                         <TabsTrigger value="visitors">
                           {copy.visitors}
                         </TabsTrigger>
                         <TabsTrigger value="conversations">
                           {conversationCopy.conversations}
+                        </TabsTrigger>
+                        <TabsTrigger value="whatsapp">
+                          {copy.whatsappInbox}
                         </TabsTrigger>
                         <TabsTrigger value="bookings">Bookings</TabsTrigger>
                         <TabsTrigger value="invoices">Invoices</TabsTrigger>
@@ -1943,6 +2097,23 @@ export default function AdminDashboard() {
                             conversations={filteredConversations}
                             selectedConversationId={selectedConversationId}
                             onSelect={setSelectedConversationId}
+                          />
+                        </Suspense>
+                      </TabsContent>
+
+                      <TabsContent value="whatsapp">
+                        <Suspense fallback={<PanelFallback />}>
+                          <WhatsAppInboxPanel
+                            copy={copy}
+                            locale={locale}
+                            enabled={Boolean(data?.whatsappInbox?.enabled)}
+                            conversations={filteredWhatsAppConversations}
+                            selectedConversationId={
+                              selectedWhatsAppConversationId
+                            }
+                            sending={sendingWhatsApp}
+                            onSelect={handleSelectWhatsAppConversation}
+                            onSend={handleSendWhatsAppMessage}
                           />
                         </Suspense>
                       </TabsContent>

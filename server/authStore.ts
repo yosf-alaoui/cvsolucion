@@ -78,7 +78,8 @@ export type AuthEventType =
   | "admin_booking_slot_unblocked"
   | "invoice_requested"
   | "admin_invoice_updated"
-  | "admin_invoice_issued";
+  | "admin_invoice_issued"
+  | "admin_whatsapp_message_sent";
 
 export type AuthEvent = {
   id: string;
