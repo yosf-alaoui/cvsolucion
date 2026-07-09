@@ -2,6 +2,7 @@ type CampaignEventName =
   | "ViewContent"
   | "CTA_Click"
   | "Form_Start"
+  | "Country_Autofill"
   | "Lead"
   | "Contact"
   | "Scroll_50"

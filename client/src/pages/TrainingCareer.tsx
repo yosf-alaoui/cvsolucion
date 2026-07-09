@@ -31,8 +31,10 @@ import {
 import {
   getBookingCountryLabel,
   getBookingCountryOptions,
+  guessBookingCountryCode,
 } from "@/lib/bookingTime";
 import { submitContactLead } from "@/lib/contact";
+import { getDetectedCountry } from "@/lib/geo";
 
 type PageLocale = "en" | "fr" | "ar";
 type SelectOption = { value: string; label: string };
@@ -739,6 +741,7 @@ export default function TrainingCareer() {
   const copy = copyByLocale[pageLocale];
   const isRtl = pageLocale === "ar";
   const formStarted = useRef(false);
+  const countryManuallySelected = useRef(false);
   const scrollEvents = useRef({ fifty: false, ninety: false });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -791,6 +794,48 @@ export default function TrainingCareer() {
       setError(copy.confirmationExpired);
     }
   }, [copy.confirmationExpired]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDetectedCountry()
+      .then((response) => {
+        if (cancelled || countryManuallySelected.current) return;
+        const detectedCountryCode = guessBookingCountryCode(response.countryCode);
+        if (!detectedCountryCode) return;
+        setForm((current) => {
+          if (current.countryCode || countryManuallySelected.current) {
+            return current;
+          }
+          return {
+            ...current,
+            countryCode: detectedCountryCode,
+            country: getBookingCountryLabel(detectedCountryCode, "en"),
+          };
+        });
+        trackCampaignEvent("Country_Autofill", {
+          country_code: detectedCountryCode,
+          source: response.source,
+          locale: pageLocale,
+        });
+      })
+      .catch(() => {
+        if (cancelled || countryManuallySelected.current) return;
+        const fallbackCountryCode = guessBookingCountryCode(null);
+        setForm((current) => {
+          if (current.countryCode || countryManuallySelected.current) {
+            return current;
+          }
+          return {
+            ...current,
+            countryCode: fallbackCountryCode,
+            country: getBookingCountryLabel(fallbackCountryCode, "en"),
+          };
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pageLocale]);
 
   useEffect(() => {
     trackCampaignEvent("ViewContent", {
@@ -863,6 +908,7 @@ export default function TrainingCareer() {
   };
 
   const updateCountry = (countryCode: string) => {
+    countryManuallySelected.current = true;
     startForm();
     setVerificationEmail(null);
     setForm((current) => ({
