@@ -2310,6 +2310,8 @@ function addSecondsToIso(value: string | null | undefined, seconds: number) {
 }
 
 function ensureWhatsAppInboxBackfilledFromCareer() {
+  let totalAdded = 0;
+
   for (const conversation of listWhatsAppCareerConversations()) {
     const lead =
       findContactLeadById(conversation.leadId) ||
@@ -2410,7 +2412,7 @@ function ensureWhatsAppInboxBackfilledFromCareer() {
       );
     }
 
-    backfillWhatsAppInboxConversation({
+    const result = backfillWhatsAppInboxConversation({
       phone: conversation.phone,
       contactName: lead.name,
       leadId: lead.id,
@@ -2419,7 +2421,10 @@ function ensureWhatsAppInboxBackfilledFromCareer() {
       status: "needs_reply",
       messages,
     });
+    totalAdded += result.added;
   }
+
+  return totalAdded;
 }
 
 async function sendWhatsAppCareerQnaNotification(args: {
@@ -8004,6 +8009,16 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
     console.log("Security headers enabled");
+    try {
+      const backfilledMessages = ensureWhatsAppInboxBackfilledFromCareer();
+      if (backfilledMessages > 0) {
+        console.log(
+          `[whatsapp:inbox] backfilled ${backfilledMessages} legacy message(s)`,
+        );
+      }
+    } catch (error) {
+      console.error("[whatsapp:inbox] legacy backfill failed", error);
+    }
     void backfillArticleTranslations()
       .then(({ translated }) => {
         if (translated > 0) {
