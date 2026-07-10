@@ -214,7 +214,7 @@ export type AdminWhatsAppInboxMessage = {
   type: "text" | "button" | "interactive" | "template" | "system";
   whatsappMessageId: string | null;
   body: string;
-  status: "received" | "sent" | "delivered" | "read" | "failed";
+  status: "received" | "sending" | "sent" | "delivered" | "read" | "failed";
   error: string | null;
   createdAt: string;
   updatedAt: string;

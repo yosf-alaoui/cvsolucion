@@ -128,6 +128,7 @@ import {
   markWhatsAppInboxConversationRead,
   recordWhatsAppInboundMessage,
   recordWhatsAppOutboundMessage,
+  updateWhatsAppInboxLocalMessageStatus,
   updateWhatsAppInboxMessageStatus,
   upsertWhatsAppInboxLeadContext,
   type WhatsAppInboxMessageStatus,
@@ -2104,6 +2105,14 @@ function isCareerQnaStartMessage(text: string) {
   ].includes(normalized);
 }
 
+function normalizeCareerQnaAnswer(text: string) {
+  const normalizedDigits = text
+    .trim()
+    .replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0));
+  return /^[1-4]$/.test(normalizedDigits) ? normalizedDigits : null;
+}
+
 function findLatestCareerLeadByWhatsAppNumber(whatsappNumber: string) {
   const target = normalizePhoneDigits(whatsappNumber);
   if (!target) return null;
@@ -2510,10 +2519,20 @@ async function processWhatsAppWebhookMessages(body: unknown) {
         continue;
       }
 
+      const answer = normalizeCareerQnaAnswer(message.text);
+      if (!answer) {
+        console.log("[whatsapp:qna] free text ignored for automation", {
+          conversationId: conversation.id,
+          step: conversation.step,
+          messageId: message.messageId || null,
+        });
+        continue;
+      }
+
       const nextStep = getNextWhatsAppCareerStep(conversation.step);
       const updatedConversation = recordWhatsAppCareerAnswer({
         phone,
-        answer: message.text,
+        answer,
         nextStep,
       });
       if (!updatedConversation) continue;
@@ -5575,61 +5594,68 @@ async function startServer() {
           .json({ error: "WhatsApp conversation was not found." });
       }
 
-      try {
-        const result = await sendWhatsAppTextMessage({
+      const stored = recordWhatsAppOutboundMessage({
+        phone: conversation.phone,
+        contactName: conversation.contactName,
+        body,
+        status: "sending",
+        sentByUserId: auth.user.id,
+        sentByEmail: auth.user.email,
+      });
+      const localMessageId = stored.message?.id || null;
+      const actor = {
+        userId: auth.user.id,
+        email: auth.user.email,
+        ip: getRequestIp(req),
+        userAgent: req.get("user-agent") || null,
+      };
+
+      if (localMessageId) {
+        void sendWhatsAppTextMessage({
           to: conversation.phone,
           body,
-        });
-        const stored = recordWhatsAppOutboundMessage({
-          phone: conversation.phone,
-          contactName: conversation.contactName,
-          whatsappMessageId: result.sent ? result.messageId || null : null,
-          body,
-          status: result.sent ? "sent" : "failed",
-          error: result.sent ? null : result.reason,
-          sentByUserId: auth.user.id,
-          sentByEmail: auth.user.email,
-        });
-
-        if (!result.sent) {
-          const status = result.reason === "missing_config" ? 503 : 400;
-          return res.status(status).json({
-            error: `WhatsApp message was not sent: ${result.reason}.`,
-            conversation: stored.conversation,
+        })
+          .then((result) => {
+            updateWhatsAppInboxLocalMessageStatus({
+              messageId: localMessageId,
+              whatsappMessageId: result.sent ? result.messageId || null : null,
+              status: result.sent ? "sent" : "failed",
+              error: result.sent ? null : result.reason,
+            });
+            if (!result.sent) {
+              console.warn("[whatsapp:admin-send] failed", {
+                conversationId,
+                reason: result.reason,
+              });
+              return;
+            }
+            recordEvent({
+              type: "admin_whatsapp_message_sent",
+              userId: actor.userId,
+              email: actor.email,
+              locale: null,
+              ip: actor.ip,
+              userAgent: actor.userAgent,
+            });
+          })
+          .catch((error) => {
+            updateWhatsAppInboxLocalMessageStatus({
+              messageId: localMessageId,
+              status: "failed",
+              error: error instanceof Error ? error.message : String(error),
+            });
+            console.error("[whatsapp:admin-send:error]", {
+              conversationId,
+              error:
+                error instanceof Error ? error.stack || error.message : String(error),
+            });
           });
-        }
-
-        recordEvent({
-          type: "admin_whatsapp_message_sent",
-          userId: auth.user.id,
-          email: auth.user.email,
-          locale: null,
-          ip: getRequestIp(req),
-          userAgent: req.get("user-agent") || null,
-        });
-
-        return res.json({
-          ok: true,
-          conversation: stored.conversation,
-        });
-      } catch (error) {
-        const stored = recordWhatsAppOutboundMessage({
-          phone: conversation.phone,
-          contactName: conversation.contactName,
-          body,
-          status: "failed",
-          error: error instanceof Error ? error.message : String(error),
-          sentByUserId: auth.user.id,
-          sentByEmail: auth.user.email,
-        });
-        return res.status(502).json({
-          error:
-            error instanceof Error
-              ? error.message
-              : "WhatsApp API request failed.",
-          conversation: stored.conversation,
-        });
       }
+
+      return res.json({
+        ok: true,
+        conversation: stored.conversation,
+      });
     },
   );
 

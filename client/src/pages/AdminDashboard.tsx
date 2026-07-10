@@ -238,6 +238,8 @@ export default function AdminDashboard() {
   const [selectedWhatsAppConversationId, setSelectedWhatsAppConversationId] =
     useState<string | null>(null);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const [mainTab, setMainTab] = useState("overview");
+  const [customerOpsTab, setCustomerOpsTab] = useState("users");
 
   const copy = useMemo(() => {
     if (locale === "fr") {
@@ -805,7 +807,11 @@ export default function AdminDashboard() {
       void load(true);
     };
 
-    const intervalId = window.setInterval(refresh, 15000);
+    const intervalMs =
+      mainTab === "customer-ops" && customerOpsTab === "whatsapp"
+        ? 3000
+        : 15000;
+    const intervalId = window.setInterval(refresh, intervalMs);
     const handleFocus = () => refresh();
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
@@ -821,7 +827,7 @@ export default function AdminDashboard() {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [loading, user, isAdmin, load]);
+  }, [loading, user, isAdmin, load, mainTab, customerOpsTab]);
 
   useEffect(() => {
     if (!data?.users.length) {
@@ -1923,7 +1929,11 @@ export default function AdminDashboard() {
                   </CardContent>
                 </Card>
 
-                <Tabs defaultValue="overview" className="space-y-6">
+                <Tabs
+                  value={mainTab}
+                  onValueChange={setMainTab}
+                  className="space-y-6"
+                >
                   <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
                     <TabsTrigger value="overview">{copy.overview}</TabsTrigger>
                     <TabsTrigger value="customer-ops">
@@ -2016,7 +2026,11 @@ export default function AdminDashboard() {
                       </CardContent>
                     </Card>
 
-                    <Tabs defaultValue="users" className="space-y-6">
+                    <Tabs
+                      value={customerOpsTab}
+                      onValueChange={setCustomerOpsTab}
+                      className="space-y-6"
+                    >
                       <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-9">
                         <TabsTrigger value="users">{copy.users}</TabsTrigger>
                         <TabsTrigger value="visitors">

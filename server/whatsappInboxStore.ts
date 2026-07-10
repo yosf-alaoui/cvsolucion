@@ -6,6 +6,7 @@ export type WhatsAppInboxMessageDirection = "inbound" | "outbound";
 export type WhatsAppInboxMessageType = "text" | "button" | "interactive" | "template" | "system";
 export type WhatsAppInboxMessageStatus =
   | "received"
+  | "sending"
   | "sent"
   | "delivered"
   | "read"
@@ -315,6 +316,39 @@ export function updateWhatsAppInboxMessageStatus(input: {
     conversation.updatedAt = timestamp;
     if (input.status === "failed") {
       conversation.status = "open";
+    }
+    saveDb(db);
+    return { conversation, message };
+  }
+
+  return null;
+}
+
+export function updateWhatsAppInboxLocalMessageStatus(input: {
+  messageId: string;
+  whatsappMessageId?: string | null;
+  status: WhatsAppInboxMessageStatus;
+  error?: string | null;
+  occurredAt?: string | null;
+}) {
+  const messageId = input.messageId.trim();
+  if (!messageId) return null;
+  const db = loadDb();
+  const timestamp = input.occurredAt || new Date().toISOString();
+
+  for (const conversation of db.conversations) {
+    const message = conversation.messages.find((stored) => stored.id === messageId);
+    if (!message) continue;
+    message.whatsappMessageId =
+      input.whatsappMessageId?.trim() || message.whatsappMessageId;
+    message.status = input.status;
+    message.error = input.error?.trim() || null;
+    message.updatedAt = timestamp;
+    conversation.updatedAt = timestamp;
+    if (input.status === "failed") {
+      conversation.status = "open";
+    } else if (message.direction === "outbound") {
+      conversation.status = "waiting_customer";
     }
     saveDb(db);
     return { conversation, message };
