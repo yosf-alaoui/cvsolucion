@@ -22,6 +22,7 @@ import {
   revokeAdminSession,
   revokeAdminUserSessions,
   sendAdminWhatsAppMessage,
+  startAdminWhatsAppTemplate,
   unblockAdminBookingSlot,
   updateAdminBookingSchedule,
   updateAdminUser,
@@ -238,6 +239,8 @@ export default function AdminDashboard() {
   const [selectedWhatsAppConversationId, setSelectedWhatsAppConversationId] =
     useState<string | null>(null);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const [startingWhatsAppTemplate, setStartingWhatsAppTemplate] =
+    useState(false);
   const [mainTab, setMainTab] = useState("overview");
   const [customerOpsTab, setCustomerOpsTab] = useState("users");
 
@@ -352,6 +355,15 @@ export default function AdminDashboard() {
         deleteError: "Impossible de supprimer le compte.",
         whatsappInbox: "WhatsApp",
         whatsappConversation: "Conversation WhatsApp",
+        newWhatsAppMessage: "Nouveau message WhatsApp",
+        newWhatsAppTemplateHelp:
+          "Utilisez un modele approuve pour ouvrir une conversation avec un nouveau numero. Laissez le nom du modele vide pour utiliser le modele configure sur le serveur.",
+        contactNameOptional: "Nom du contact (facultatif)",
+        country: "Pays",
+        templateLanguage: "Langue du modele",
+        templateNameOptional: "Nom du modele (facultatif)",
+        startWhatsAppTemplate: "Envoyer le modele",
+        whatsappTemplateQueued: "Modele WhatsApp en cours d'envoi.",
         enabled: "Active",
         notConfigured: "Non configure",
         whatsappNotConfigured:
@@ -481,6 +493,15 @@ export default function AdminDashboard() {
         deleteError: "تعذر حذف الحساب.",
         whatsappInbox: "واتساب",
         whatsappConversation: "محادثة واتساب",
+        newWhatsAppMessage: "رسالة واتساب جديدة",
+        newWhatsAppTemplateHelp:
+          "استعمل قالبا معتمدا لفتح محادثة مع رقم جديد. اترك اسم القالب فارغا لاستخدام القالب الموجود في إعدادات الخادم.",
+        contactNameOptional: "اسم العميل (اختياري)",
+        country: "الدولة",
+        templateLanguage: "لغة القالب",
+        templateNameOptional: "اسم القالب (اختياري)",
+        startWhatsAppTemplate: "إرسال القالب",
+        whatsappTemplateQueued: "تم وضع قالب واتساب في الإرسال.",
         enabled: "مفعل",
         notConfigured: "غير مهيأ",
         whatsappNotConfigured:
@@ -609,6 +630,15 @@ export default function AdminDashboard() {
       deleteError: "Failed to delete user.",
       whatsappInbox: "WhatsApp",
       whatsappConversation: "WhatsApp conversation",
+      newWhatsAppMessage: "New WhatsApp message",
+      newWhatsAppTemplateHelp:
+        "Use an approved template to open a conversation with a new number. Leave the template name blank to use the server default.",
+      contactNameOptional: "Contact name (optional)",
+      country: "Country",
+      templateLanguage: "Template language",
+      templateNameOptional: "Template name (optional)",
+      startWhatsAppTemplate: "Send template",
+      whatsappTemplateQueued: "WhatsApp template is being sent.",
       enabled: "Enabled",
       notConfigured: "Not configured",
       whatsappNotConfigured:
@@ -1164,6 +1194,38 @@ export default function AdminDashboard() {
       }
     },
     [copy.whatsappSendError, copy.whatsappSent, load, updateWhatsAppConversation],
+  );
+
+  const handleStartWhatsAppTemplate = useCallback(
+    async (payload: {
+      name?: string;
+      phone: string;
+      countryCode: string;
+      language: string;
+      templateName?: string;
+    }) => {
+      setStartingWhatsAppTemplate(true);
+      setError(null);
+      try {
+        const response = await startAdminWhatsAppTemplate(payload);
+        updateWhatsAppConversation(response.conversation);
+        setSelectedWhatsAppConversationId(response.conversation.id);
+        toast.success(copy.whatsappTemplateQueued);
+      } catch (err: any) {
+        const message = err?.message || copy.whatsappSendError;
+        setError(message);
+        toast.error(message);
+        await load(true);
+      } finally {
+        setStartingWhatsAppTemplate(false);
+      }
+    },
+    [
+      copy.whatsappSendError,
+      copy.whatsappTemplateQueued,
+      load,
+      updateWhatsAppConversation,
+    ],
   );
 
   const handleSelectUser = (next: AdminDashboardUser) => {
@@ -2126,8 +2188,10 @@ export default function AdminDashboard() {
                               selectedWhatsAppConversationId
                             }
                             sending={sendingWhatsApp}
+                            startingTemplate={startingWhatsAppTemplate}
                             onSelect={handleSelectWhatsAppConversation}
                             onSend={handleSendWhatsAppMessage}
+                            onStartTemplate={handleStartWhatsAppTemplate}
                           />
                         </Suspense>
                       </TabsContent>

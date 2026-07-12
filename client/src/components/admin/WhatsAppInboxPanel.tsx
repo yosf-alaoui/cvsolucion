@@ -1,10 +1,27 @@
-import { useMemo, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
 import type { AdminWhatsAppInboxConversation } from "@/lib/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { getPhoneCountryOptions } from "@/lib/phone";
+
+const LANGUAGE_OPTIONS = [
+  { value: "en", label: "English" },
+  { value: "fr", label: "Francais" },
+  { value: "es", label: "Espanol" },
+  { value: "ar", label: "Arabic" },
+];
 
 function formatDate(value: string | null, locale: string) {
   if (!value) return "-";
@@ -54,8 +71,10 @@ export default function WhatsAppInboxPanel({
   conversations,
   selectedConversationId,
   sending,
+  startingTemplate,
   onSelect,
   onSend,
+  onStartTemplate,
 }: {
   copy: Record<string, string>;
   locale: string;
@@ -63,10 +82,29 @@ export default function WhatsAppInboxPanel({
   conversations: AdminWhatsAppInboxConversation[];
   selectedConversationId: string | null;
   sending: boolean;
+  startingTemplate: boolean;
   onSelect: (conversationId: string) => void;
   onSend: (conversationId: string, body: string) => Promise<void>;
+  onStartTemplate: (payload: {
+    name?: string;
+    phone: string;
+    countryCode: string;
+    language: string;
+    templateName?: string;
+  }) => Promise<void>;
 }) {
   const [draft, setDraft] = useState("");
+  const [newContactName, setNewContactName] = useState("");
+  const [newContactPhone, setNewContactPhone] = useState("");
+  const [newContactCountryCode, setNewContactCountryCode] = useState("CA");
+  const [newContactLanguage, setNewContactLanguage] = useState(
+    locale === "fr" ? "fr" : locale === "ar" ? "ar" : "en",
+  );
+  const [newContactTemplateName, setNewContactTemplateName] = useState("");
+  const countryOptions = useMemo(
+    () => getPhoneCountryOptions(locale),
+    [locale],
+  );
   const selected = useMemo(
     () =>
       conversations.find(
@@ -84,6 +122,20 @@ export default function WhatsAppInboxPanel({
     setDraft("");
   };
 
+  const handleStartTemplate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!newContactPhone.trim()) return;
+    await onStartTemplate({
+      name: newContactName.trim() || undefined,
+      phone: newContactPhone.trim(),
+      countryCode: newContactCountryCode,
+      language: newContactLanguage,
+      templateName: newContactTemplateName.trim() || undefined,
+    });
+    setNewContactName("");
+    setNewContactPhone("");
+  };
+
   return (
     <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
       <Card>
@@ -95,8 +147,113 @@ export default function WhatsAppInboxPanel({
             </Badge>
           </div>
         </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-[620px] pr-3">
+        <CardContent className="space-y-4">
+          <form
+            onSubmit={handleStartTemplate}
+            className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+          >
+            <div className="mb-4">
+              <div className="text-sm font-semibold text-slate-950">
+                {copy.newWhatsAppMessage}
+              </div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                {copy.newWhatsAppTemplateHelp}
+              </p>
+            </div>
+            <div className="grid gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="new-whatsapp-name">
+                  {copy.contactNameOptional}
+                </Label>
+                <Input
+                  id="new-whatsapp-name"
+                  value={newContactName}
+                  onChange={(event) => setNewContactName(event.target.value)}
+                  placeholder={copy.contactNameOptional}
+                  maxLength={120}
+                  disabled={!enabled || startingTemplate}
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-[1fr_1.1fr]">
+                <div className="space-y-2">
+                  <Label>{copy.country}</Label>
+                  <Select
+                    value={newContactCountryCode}
+                    onValueChange={setNewContactCountryCode}
+                    disabled={!enabled || startingTemplate}
+                  >
+                    <SelectTrigger className="w-full bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {countryOptions.map((option) => (
+                        <SelectItem key={option.code} value={option.code}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-whatsapp-phone">{copy.phone}</Label>
+                  <Input
+                    id="new-whatsapp-phone"
+                    type="tel"
+                    value={newContactPhone}
+                    onChange={(event) => setNewContactPhone(event.target.value)}
+                    placeholder="+1 514 000 0000"
+                    disabled={!enabled || startingTemplate}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-[0.9fr_1.1fr]">
+                <div className="space-y-2">
+                  <Label>{copy.templateLanguage}</Label>
+                  <Select
+                    value={newContactLanguage}
+                    onValueChange={setNewContactLanguage}
+                    disabled={!enabled || startingTemplate}
+                  >
+                    <SelectTrigger className="w-full bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-whatsapp-template">
+                    {copy.templateNameOptional}
+                  </Label>
+                  <Input
+                    id="new-whatsapp-template"
+                    value={newContactTemplateName}
+                    onChange={(event) =>
+                      setNewContactTemplateName(event.target.value)
+                    }
+                    placeholder="career_qna_start"
+                    maxLength={120}
+                    disabled={!enabled || startingTemplate}
+                  />
+                </div>
+              </div>
+              <Button
+                type="submit"
+                disabled={
+                  !enabled || startingTemplate || !newContactPhone.trim()
+                }
+              >
+                {startingTemplate ? copy.sending : copy.startWhatsAppTemplate}
+              </Button>
+            </div>
+          </form>
+
+          <ScrollArea className="h-[450px] pr-3">
             <div className="space-y-3">
               {conversations.length ? (
                 conversations.map((conversation) => {

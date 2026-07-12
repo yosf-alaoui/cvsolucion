@@ -852,6 +852,22 @@ export function sendAdminWhatsAppMessage(conversationId: string, body: string) {
   );
 }
 
+export function startAdminWhatsAppTemplate(payload: {
+  name?: string;
+  phone: string;
+  countryCode: string;
+  language: string;
+  templateName?: string;
+}) {
+  return adminRequest<{
+    ok: true;
+    conversation: AdminWhatsAppInboxConversation;
+  }>("/api/admin/whatsapp/conversations/template", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function markAdminWhatsAppConversationRead(conversationId: string) {
   return adminRequest<{
     ok: true;

@@ -1663,6 +1663,18 @@ function getWhatsAppTemplateName(sourceType: ContactSourceType) {
 
 function normalizeCommunicationLanguage(value: string) {
   const normalized = value.trim().toLowerCase();
+  if (["fr", "fr-ca", "fr_ca", "france", "canadian french"].includes(normalized)) {
+    return "fr";
+  }
+  if (["es", "es-es", "es_es", "spanish"].includes(normalized)) {
+    return "es";
+  }
+  if (["ar", "ar-ar", "ar_ar", "arabic"].includes(normalized)) {
+    return "ar";
+  }
+  if (["en", "en-us", "en_us", "en-ca", "en_ca", "english"].includes(normalized)) {
+    return "en";
+  }
   if (normalized.includes("french") || normalized.includes("franc")) {
     return "fr";
   }
@@ -1698,6 +1710,13 @@ function getWhatsAppTemplateLanguage(
     };
     const configuredLanguage = languageEnv[language];
     if (configuredLanguage?.trim()) return configuredLanguage.trim();
+    const defaultLanguageCodes: Record<string, string> = {
+      ar: "ar",
+      en: "en_US",
+      es: "es",
+      fr: "fr_CA",
+    };
+    return defaultLanguageCodes[language] || "en_US";
   }
 
   const sourceSpecific =
@@ -1968,6 +1987,60 @@ function queueWhatsAppLeadTemplate(args: {
         error: error instanceof Error ? error.stack || error.message : String(error),
       });
     });
+}
+
+function getCommunicationLanguageLabel(
+  language: ReturnType<typeof normalizeCommunicationLanguage>,
+) {
+  const labels: Record<ReturnType<typeof normalizeCommunicationLanguage>, string> = {
+    ar: "Arabic",
+    en: "English",
+    es: "Spanish",
+    fr: "French",
+  };
+  return labels[language] || "English";
+}
+
+function getOrCreateManualWhatsAppCareerLead(args: {
+  name: string;
+  phone: ReturnType<typeof getLeadPhoneDetails>;
+  countryCode: string;
+  language: ReturnType<typeof normalizeCommunicationLanguage>;
+}) {
+  const existing = findLatestCareerLeadByWhatsAppNumber(args.phone.whatsappNumber);
+  if (existing) {
+    return { lead: existing.lead, fields: existing.fields, created: false };
+  }
+
+  const country = getTimezoneCountry(args.countryCode)?.name || args.countryCode;
+  const languageLabel = getCommunicationLanguageLabel(args.language);
+  const contactName =
+    args.name.trim() ||
+    args.phone.display ||
+    (args.phone.whatsappNumber ? `+${args.phone.whatsappNumber}` : "WhatsApp contact");
+  const lead = storeContactLead({
+    name: contactName,
+    email: "",
+    phone: args.phone.display || `+${args.phone.whatsappNumber}`,
+    company: null,
+    interest: "Career evaluation - manual WhatsApp",
+    message: [
+      "Manual admin WhatsApp contact",
+      `Name: ${contactName}`,
+      `Phone: ${args.phone.display || `+${args.phone.whatsappNumber}`}`,
+      `Country: ${country}`,
+      `Country code: ${args.countryCode}`,
+      `Preferred communication language: ${languageLabel}`,
+      "Main goal: Manual WhatsApp outreach",
+      "Source: Admin WhatsApp new conversation",
+    ].join("\n"),
+  });
+
+  return {
+    lead,
+    fields: parseLeadMessageFields(lead.message),
+    created: true,
+  };
 }
 
 type WhatsAppIncomingMessage = {
@@ -5561,6 +5634,149 @@ async function startServer() {
         chat: {
           enabled: isChatEnabled(),
         },
+      });
+    },
+  );
+
+  app.post(
+    "/api/admin/whatsapp/conversations/template",
+    rateLimit({
+      key: "admin-whatsapp-template-send",
+      windowMs: 1000 * 60,
+      limit: 20,
+    }),
+    async (req, res) => {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+
+      if (!isWhatsAppConfigured()) {
+        return res.status(503).json({
+          error:
+            "WhatsApp is not configured on the server. Check WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID.",
+        });
+      }
+
+      const rawPhone = String(req.body?.phone || "").trim();
+      const countryCode = normalizeCountryCode(req.body?.countryCode);
+      const countryRecord = countryCode ? getTimezoneCountry(countryCode) : null;
+      const name = String(req.body?.name || "").trim().slice(0, 120);
+      const language = normalizeCommunicationLanguage(
+        String(req.body?.language || "en"),
+      );
+      const templateName =
+        String(req.body?.templateName || "").trim() ||
+        getWhatsAppTemplateName("career_evaluation");
+
+      if (!countryCode || !countryRecord) {
+        return res.status(400).json({
+          error: "Select a valid country before sending the WhatsApp template.",
+        });
+      }
+      if (!rawPhone) {
+        return res.status(400).json({ error: "Phone number is required." });
+      }
+      if (!templateName) {
+        return res.status(400).json({
+          error:
+            "No WhatsApp template is configured. Set WHATSAPP_CAREER_TEMPLATE_NAME or enter an approved template name.",
+        });
+      }
+
+      const phone = getLeadPhoneDetails(rawPhone, countryCode);
+      if (!phone.whatsappNumber || phone.whatsappNumber.length < 8) {
+        return res.status(400).json({
+          error: "Enter a valid WhatsApp phone number.",
+        });
+      }
+
+      const { lead, fields } = getOrCreateManualWhatsAppCareerLead({
+        name,
+        phone,
+        countryCode,
+        language,
+      });
+      const languageLabel = getCommunicationLanguageLabel(language);
+      const languageCode = getWhatsAppTemplateLanguage(
+        "career_evaluation",
+        language,
+      );
+      upsertWhatsAppInboxLeadContext({
+        phone: phone.whatsappNumber,
+        contactName: lead.name,
+        leadId: lead.id,
+        email: lead.email,
+        language,
+      });
+      const stored = recordWhatsAppOutboundMessage({
+        phone: phone.whatsappNumber,
+        contactName: lead.name,
+        type: "template",
+        body: `Template: ${templateName} (${languageCode})`,
+        status: "sending",
+        sentByUserId: auth.user.id,
+        sentByEmail: auth.user.email,
+      });
+      const localMessageId = stored.message?.id || null;
+      const actor = {
+        userId: auth.user.id,
+        email: auth.user.email,
+        ip: getRequestIp(req),
+        userAgent: req.get("user-agent") || null,
+      };
+
+      if (localMessageId) {
+        void sendWhatsAppTemplateMessage({
+          to: phone.whatsappNumber,
+          templateName,
+          languageCode,
+          components: buildWhatsAppTemplateComponents({
+            lead,
+            fields,
+            phone,
+            country: countryRecord.name || countryCode,
+            communicationLanguage: languageLabel,
+          }),
+        })
+          .then((result) => {
+            updateWhatsAppInboxLocalMessageStatus({
+              messageId: localMessageId,
+              whatsappMessageId: result.sent ? result.messageId || null : null,
+              status: result.sent ? "sent" : "failed",
+              error: result.sent ? null : result.reason,
+            });
+            if (!result.sent) {
+              console.warn("[whatsapp:admin-template] failed", {
+                phone: phone.whatsappNumber,
+                reason: result.reason,
+              });
+              return;
+            }
+            recordEvent({
+              type: "admin_whatsapp_message_sent",
+              userId: actor.userId,
+              email: actor.email,
+              locale: null,
+              ip: actor.ip,
+              userAgent: actor.userAgent,
+            });
+          })
+          .catch((error) => {
+            updateWhatsAppInboxLocalMessageStatus({
+              messageId: localMessageId,
+              status: "failed",
+              error: error instanceof Error ? error.message : String(error),
+            });
+            console.error("[whatsapp:admin-template:error]", {
+              phone: phone.whatsappNumber,
+              error:
+                error instanceof Error ? error.stack || error.message : String(error),
+            });
+          });
+      }
+
+      return res.json({
+        ok: true,
+        conversation: stored.conversation,
       });
     },
   );
