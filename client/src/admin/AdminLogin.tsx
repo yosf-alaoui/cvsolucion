@@ -15,9 +15,9 @@ function getSafeNextPath() {
   const params = new URLSearchParams(window.location.search);
   const rawNext = params.get("next")?.trim();
   if (rawNext?.startsWith("/") && !rawNext.startsWith("//")) {
-    return rawNext.startsWith("/admin") ? rawNext : "/admin";
+    if (rawNext === "/" || rawNext.startsWith("/dashboard")) return rawNext;
   }
-  return "/admin";
+  return "/dashboard";
 }
 
 export default function AdminLogin() {
@@ -90,7 +90,7 @@ export default function AdminLogin() {
           return;
         }
         await resetPassword(resetToken, newPassword);
-        window.location.href = "/admin/login?reset=success";
+        window.location.href = "/login?reset=success";
         return;
       }
 
@@ -147,7 +147,7 @@ export default function AdminLogin() {
     <main className="min-h-screen bg-slate-50 text-slate-950">
       <div className="mx-auto grid min-h-screen max-w-6xl items-center gap-10 px-6 py-10 lg:grid-cols-[0.95fr_1.05fr]">
         <section className="space-y-6">
-          <a href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-primary">
+          <a href="https://cvsolucion.com/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-primary">
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Back to public site
           </a>

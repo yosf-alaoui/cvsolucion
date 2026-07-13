@@ -129,6 +129,7 @@ export default defineConfig(({ mode }) => {
         "127.0.0.1",
         "cvsolucion.com",
         "www.cvsolucion.com",
+        "admin.cvsolucion.com",
       ],
       fs: {
         strict: true,

@@ -45,9 +45,24 @@ export function getDesignerDashboardHref(locale: "en" | "fr" | "ar" = "en") {
   return `https://designer.cvsolucion.com${path}`;
 }
 
+export function getAdminDashboardHref() {
+  const configured = (import.meta.env.VITE_ADMIN_URL as string | undefined)
+    ?.trim()
+    .replace(/\/+$/, "");
+  if (configured) return `${configured}/`;
+
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname.toLowerCase();
+    if (hostname.startsWith("admin.")) return "/";
+    if (/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(hostname)) return "/";
+  }
+
+  return "https://admin.cvsolucion.com/";
+}
+
 export function getAccountDashboardHref(locale: "en" | "fr" | "ar", role?: "customer" | "designer" | "trainer" | "admin" | null) {
   if (role === "admin") {
-    return "/admin";
+    return getAdminDashboardHref();
   }
   if (role === "designer") {
     return getDesignerDashboardHref(locale);

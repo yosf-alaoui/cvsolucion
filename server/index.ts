@@ -236,6 +236,7 @@ const VERIFY_LINK_MS = 1000 * 60 * 60 * 24;
 const CONTACT_CONFIRM_LINK_MS = 1000 * 60 * 60 * 24 * 3;
 const RESET_LINK_MS = 1000 * 60 * 30;
 const ADMIN_LOGIN_CODE_MS = 1000 * 60 * 10;
+const ADMIN_COOKIE_NAME = "admin_session_id";
 const ADMIN_SESSION_DEFAULT_MS = 1000 * 60 * 60 * 12;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
@@ -291,6 +292,56 @@ function appOrigin(req: express.Request) {
   ).replace(/\/+$/, "");
 }
 
+function requestHostname(req: express.Request) {
+  return String(req.get("host") || "")
+    .trim()
+    .replace(/:\d+$/, "")
+    .toLowerCase();
+}
+
+function adminHostname() {
+  const configuredOrigin = String(process.env.ADMIN_ORIGIN || "").trim();
+  if (configuredOrigin) {
+    try {
+      return new URL(configuredOrigin).hostname.toLowerCase();
+    } catch {
+      // Fall through to ADMIN_HOST or the production default.
+    }
+  }
+
+  return String(process.env.ADMIN_HOST || "admin.cvsolucion.com")
+    .trim()
+    .replace(/:\d+$/, "")
+    .toLowerCase();
+}
+
+function isAdminHost(req: express.Request) {
+  const host = requestHostname(req);
+  if (!host) return false;
+  if (/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(host)) {
+    return process.env.NODE_ENV !== "production";
+  }
+  return host === adminHostname();
+}
+
+function adminOrigin(req: express.Request) {
+  const configured = String(process.env.ADMIN_ORIGIN || "").trim().replace(/\/+$/, "");
+  if (configured) return configured;
+
+  const host = requestHostname(req);
+  const forwardedProto = String(
+    req.get("x-forwarded-proto") || req.protocol || "https",
+  )
+    .split(",")[0]
+    .trim();
+
+  if (host && /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(host)) {
+    return `${forwardedProto}://${req.get("host")}`;
+  }
+
+  return `https://${adminHostname()}`;
+}
+
 function canonicalOrigin(req: express.Request) {
   const configured = process.env.APP_ORIGIN?.replace(/\/+$/, "");
   if (configured) {
@@ -319,6 +370,8 @@ function canonicalOrigin(req: express.Request) {
 }
 
 function getCookieDomain(req: express.Request) {
+  if (isAdminHost(req)) return undefined;
+
   const configured = String(process.env.SESSION_COOKIE_DOMAIN || "")
     .trim()
     .replace(/^\./, "")
@@ -339,6 +392,10 @@ function getCookieDomain(req: express.Request) {
   }
 
   return undefined;
+}
+
+function getSessionCookieName(req: express.Request) {
+  return isAdminHost(req) ? ADMIN_COOKIE_NAME : COOKIE_NAME;
 }
 
 function localePrefix(locale?: string | null) {
@@ -1041,7 +1098,7 @@ function setSessionCookie(
   maxAgeMs: number,
 ) {
   const domain = getCookieDomain(req);
-  res.cookie(COOKIE_NAME, sessionId, {
+  res.cookie(getSessionCookieName(req), sessionId, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -1053,7 +1110,7 @@ function setSessionCookie(
 
 function clearSessionCookie(req: express.Request, res: express.Response) {
   const domain = getCookieDomain(req);
-  res.clearCookie(COOKIE_NAME, {
+  res.clearCookie(getSessionCookieName(req), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -1080,7 +1137,7 @@ function setVisitorCookie(
 
 function getCurrentUser(req: express.Request) {
   const cookies = parseCookies(req.headers.cookie);
-  const sessionId = cookies[COOKIE_NAME];
+  const sessionId = cookies[getSessionCookieName(req)];
   if (!sessionId) return null;
 
   const session = getSession(sessionId);
@@ -1093,6 +1150,10 @@ function getCurrentUser(req: express.Request) {
     return null;
   }
   const role = getUserRole(user);
+  if (role === "admin" && !isAdminHost(req)) {
+    deleteSession(session.id);
+    return null;
+  }
   const sessionAgeMs = Date.now() - new Date(session.createdAt).getTime();
   if (role === "admin" && isAdminEmailOtpEnabled() && !session.adminOtpVerifiedAt) {
     deleteSession(session.id);
@@ -1342,7 +1403,15 @@ function isMissingStaticAssetRequest(pathname: string) {
   return /\.[a-z0-9]{2,8}$/i.test(pathname);
 }
 
-function isAdminShellRequest(pathname: string) {
+function isAdminApiRequest(pathname: string) {
+  return pathname === "/api/admin" || pathname.startsWith("/api/admin/");
+}
+
+function isAdminOnlyAuthRequest(pathname: string) {
+  return pathname === "/api/auth/admin-login-code";
+}
+
+function isLegacyAdminShellRequest(pathname: string) {
   return pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
@@ -3270,6 +3339,17 @@ async function startServer() {
   });
 
   app.use((req, res, next) => {
+    if (
+      (isAdminApiRequest(req.path) || isAdminOnlyAuthRequest(req.path)) &&
+      !isAdminHost(req)
+    ) {
+      res.setHeader("X-Robots-Tag", "noindex, nofollow");
+      return res.status(404).json({ error: "Not found." });
+    }
+    return next();
+  });
+
+  app.use((req, res, next) => {
     const hostHeader = String(req.get("host") || "").trim();
     if (!hostHeader) return next();
 
@@ -3310,6 +3390,11 @@ async function startServer() {
       targetProtocol === "https:" &&
       requestUrl.protocol !== "https:"
     ) {
+      requestUrl.protocol = "https:";
+      return res.redirect(301, requestUrl.toString());
+    }
+
+    if (requestHost === adminHostname() && requestUrl.protocol !== "https:") {
       requestUrl.protocol = "https:";
       return res.redirect(301, requestUrl.toString());
     }
@@ -3530,7 +3615,7 @@ async function startServer() {
 
         void sendInvoiceRequestNotification(
           invoice,
-          `${appOrigin(req)}/admin/dashboard`,
+          `${adminOrigin(req)}/dashboard`,
         ).catch((error) => {
           console.error("[invoice-request:admin-email-error]", {
             invoiceId: invoice.id,
@@ -5280,6 +5365,10 @@ async function startServer() {
       const adminOnly = req.body?.adminOnly === true;
       const user = getUserByEmail(email);
 
+      if (adminOnly && !isAdminHost(req)) {
+        return res.status(404).json({ error: "Not found." });
+      }
+
       if (!user || !verifyPassword(password, user)) {
         recordEvent({
           type: "login_failed",
@@ -5298,6 +5387,17 @@ async function startServer() {
       }
 
       const role = getUserRole(user);
+      if (role === "admin" && !isAdminHost(req)) {
+        recordEvent({
+          type: "admin_login_denied",
+          userId: user.id,
+          email: user.email,
+          locale: "admin",
+          ip: getRequestIp(req),
+          userAgent: req.get("user-agent") || null,
+        });
+        return res.status(404).json({ error: "Not found." });
+      }
       if (adminOnly && role !== "admin") {
         recordEvent({
           type: "admin_login_denied",
@@ -5418,7 +5518,7 @@ async function startServer() {
   app.post("/api/auth/logout", (req, res) => {
     const auth = getCurrentUser(req);
     const cookies = parseCookies(req.headers.cookie);
-    const sessionId = cookies[COOKIE_NAME];
+    const sessionId = cookies[getSessionCookieName(req)];
     if (sessionId) {
       deleteSession(sessionId);
     }
@@ -5472,6 +5572,9 @@ async function startServer() {
         const target = req.body?.target === "admin" ? "admin" : "site";
         const user = getUserByEmail(email);
 
+        if (target === "admin" && !isAdminHost(req)) {
+          return res.status(404).json({ error: "Not found." });
+        }
         if (!user) {
           return res.json({ ok: true });
         }
@@ -5486,9 +5589,12 @@ async function startServer() {
         );
         const resetPath =
           target === "admin"
-            ? `/admin/login?recovery=1&token=${encodeURIComponent(rawToken)}`
+            ? `/login?recovery=1&token=${encodeURIComponent(rawToken)}`
             : `${localePrefix(locale)}/login?recovery=1&token=${encodeURIComponent(rawToken)}`;
-        const resetUrl = `${appOrigin(req)}${resetPath}`;
+        const resetUrl =
+          target === "admin"
+            ? `${adminOrigin(req)}${resetPath}`
+            : `${appOrigin(req)}${resetPath}`;
 
         recordEvent({
           type: "password_reset_requested",
@@ -8103,13 +8209,23 @@ async function startServer() {
     : indexTemplate;
 
   app.get("/robots.txt", (req, res) => {
+    if (isAdminHost(req)) {
+      res.setHeader("Content-Type", "text/plain; charset=UTF-8");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      return res.status(200).send("User-agent: *\nDisallow: /\n");
+    }
+
     const body = buildRobotsTxt(canonicalOrigin(req));
     res.setHeader("Content-Type", "text/plain; charset=UTF-8");
     res.setHeader("Cache-Control", "public, max-age=3600");
     return res.status(200).send(body);
   });
 
-  app.get("/BingSiteAuth.xml", (_req, res) => {
+  app.get("/BingSiteAuth.xml", (req, res) => {
+    if (isAdminHost(req)) {
+      return res.status(404).send("Not Found");
+    }
+
     const customXml = String(process.env.BING_SITE_AUTH_XML || "").trim();
     const token = String(
       process.env.BING_SITE_AUTH_TOKEN ||
@@ -8137,10 +8253,23 @@ async function startServer() {
   });
 
   app.get("/sitemap.xml", (req, res) => {
+    if (isAdminHost(req)) {
+      return res.status(404).send("Not Found");
+    }
+
     const body = buildSitemapXml(canonicalOrigin(req));
     res.setHeader("Content-Type", "application/xml; charset=UTF-8");
     res.setHeader("Cache-Control", "public, max-age=3600");
     return res.status(200).send(body);
+  });
+
+  app.use((req, res, next) => {
+    if (req.path === "/admin.html" || isLegacyAdminShellRequest(req.path)) {
+      res.setHeader("X-Robots-Tag", "noindex, nofollow");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      return res.status(404).send("Not Found");
+    }
+    return next();
   });
 
   app.use(
@@ -8188,7 +8317,7 @@ async function startServer() {
     }
 
     try {
-      if (isAdminShellRequest(req.path)) {
+      if (isAdminHost(req)) {
         res.setHeader("Content-Type", "text/html; charset=UTF-8");
         res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
         res.setHeader("X-Robots-Tag", "noindex, nofollow");
@@ -8205,7 +8334,7 @@ async function startServer() {
       return res.status(knownPublicPath ? 200 : 404).send(html);
     } catch {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-      if (isAdminShellRequest(req.path) && fs.existsSync(adminIndexPath)) {
+      if (isAdminHost(req) && fs.existsSync(adminIndexPath)) {
         res.setHeader("X-Robots-Tag", "noindex, nofollow");
         return res.sendFile(adminIndexPath);
       }

@@ -26,17 +26,15 @@ function AdminDashboardRoute() {
   if (loading) return <AdminRouteFallback />;
 
   if (!user) {
-    const next = encodeURIComponent("/admin");
-    window.location.replace(`/admin/login?next=${next}`);
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+    const next = encodeURIComponent(currentPath === "/login" ? "/dashboard" : currentPath);
+    window.location.replace(`/login?next=${next}`);
     return <AdminRouteFallback />;
   }
 
   if (!isAdmin) {
-    return (
-      <Suspense fallback={<AdminRouteFallback />}>
-        <AdminDashboard />
-      </Suspense>
-    );
+    window.location.replace("/login");
+    return <AdminRouteFallback />;
   }
 
   return (
@@ -47,16 +45,16 @@ function AdminDashboardRoute() {
 }
 
 function AdminNotFound() {
-  window.location.replace("/admin");
+  window.location.replace("/");
   return <AdminRouteFallback />;
 }
 
 function AdminRouter() {
   return (
     <Switch>
-      <Route path="/admin/login" component={AdminLogin} />
-      <Route path="/admin/dashboard" component={AdminDashboardRoute} />
-      <Route path="/admin" component={AdminDashboardRoute} />
+      <Route path="/login" component={AdminLogin} />
+      <Route path="/dashboard" component={AdminDashboardRoute} />
+      <Route path="/" component={AdminDashboardRoute} />
       <Route component={AdminNotFound} />
     </Switch>
   );

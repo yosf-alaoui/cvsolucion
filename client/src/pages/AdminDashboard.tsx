@@ -780,7 +780,7 @@ export default function AdminDashboard() {
     };
   }, [locale]);
 
-  const loginHref = "/admin/login";
+  const loginHref = "/login";
   const consoleLabel =
     locale === "ar"
       ? "لوحة الإدارة"
@@ -1565,7 +1565,7 @@ export default function AdminDashboard() {
   const stats = data?.stats;
   const handleLogout = async () => {
     await logout();
-    window.location.href = "/admin/login";
+    window.location.href = "/login";
   };
 
   return (
@@ -1579,7 +1579,7 @@ export default function AdminDashboard() {
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <a href="/admin" className="text-lg font-bold text-primary">
+            <a href="/" className="text-lg font-bold text-primary">
               CVsolucion
             </a>
             <p className="text-sm font-medium text-slate-500">{consoleLabel}</p>
@@ -1591,7 +1591,7 @@ export default function AdminDashboard() {
               </span>
             ) : null}
             <Button type="button" variant="outline" asChild>
-              <a href="/">{publicSiteLabel}</a>
+              <a href="https://cvsolucion.com/">{publicSiteLabel}</a>
             </Button>
             {user ? (
               <Button

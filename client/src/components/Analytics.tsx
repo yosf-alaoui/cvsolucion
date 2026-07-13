@@ -179,6 +179,7 @@ export default function Analytics() {
     loading ||
     isAdmin ||
     user?.role === "admin" ||
+    window.location.hostname.toLowerCase().startsWith("admin.") ||
     window.location.pathname.startsWith("/admin");
 
   useEffect(() => {

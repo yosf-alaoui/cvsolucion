@@ -1,5 +1,6 @@
 import { lazy, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { getAdminDashboardHref } from "@/lib/site";
 
 const CustomerDashboard = lazy(() => import("@/pages/CustomerDashboard"));
 const DesignerDashboard = lazy(() => import("@/pages/DesignerDashboard"));
@@ -10,7 +11,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!loading && user && isAdmin) {
-      window.location.replace("/admin");
+      window.location.replace(getAdminDashboardHref());
     }
   }, [isAdmin, loading, user]);
 
