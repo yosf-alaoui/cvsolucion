@@ -1647,6 +1647,7 @@ function getLeadPhoneDetails(rawPhone: string | null, country: string) {
       display: "",
       whatsappUrl: "",
       whatsappNumber: "",
+      isValid: false,
     };
   }
 
@@ -1656,12 +1657,13 @@ function getLeadPhoneDetails(rawPhone: string | null, country: string) {
     normalizedRaw,
     countryCode ?? undefined,
   );
-  if (parsed?.isPossible()) {
+  if (parsed?.isValid()) {
     const whatsappNumber = parsed.number.replace(/[^\d]/g, "");
     return {
       display: parsed.formatInternational(),
       whatsappUrl: buildWhatsAppLeadUrl(whatsappNumber),
       whatsappNumber,
+      isValid: true,
     };
   }
 
@@ -1671,6 +1673,7 @@ function getLeadPhoneDetails(rawPhone: string | null, country: string) {
       display: raw,
       whatsappUrl: "",
       whatsappNumber: "",
+      isValid: false,
     };
   }
 
@@ -1690,6 +1693,7 @@ function getLeadPhoneDetails(rawPhone: string | null, country: string) {
     whatsappUrl:
       whatsappNumber.length >= 8 ? buildWhatsAppLeadUrl(whatsappNumber) : "",
     whatsappNumber,
+    isValid: false,
   };
 }
 
@@ -1715,6 +1719,36 @@ function getWhatsAppApiVersion() {
     .replace(/^\/+/, "");
 }
 
+class WhatsAppApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly details: string;
+
+  constructor(args: {
+    status: number;
+    code?: unknown;
+    message?: unknown;
+    details?: unknown;
+  }) {
+    const code = String(args.code || "unknown");
+    const message = String(args.message || "WhatsApp API request failed");
+    const details = String(args.details || "").trim();
+    super(details ? `${message}: ${details}` : message);
+    this.name = "WhatsAppApiError";
+    this.status = args.status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+function formatWhatsAppSendError(error: unknown) {
+  if (error instanceof WhatsAppApiError) {
+    const details = error.details || error.message;
+    return `Meta ${error.code}: ${details}`.slice(0, 600);
+  }
+  return (error instanceof Error ? error.message : String(error)).slice(0, 600);
+}
+
 function isWhatsAppConfigured() {
   return Boolean(
     String(process.env.WHATSAPP_ACCESS_TOKEN || "").trim() &&
@@ -1730,7 +1764,11 @@ function getWhatsAppTemplateName(sourceType: ContactSourceType) {
   return String(sourceSpecific || process.env.WHATSAPP_TEMPLATE_NAME || "").trim();
 }
 
-function normalizeCommunicationLanguage(value: string) {
+type CommunicationLanguage = "en" | "fr" | "es" | "ar";
+
+function normalizeCommunicationLanguage(
+  value: string,
+): CommunicationLanguage {
   const normalized = value.trim().toLowerCase();
   if (["fr", "fr-ca", "fr_ca", "france", "canadian french"].includes(normalized)) {
     return "fr";
@@ -1754,6 +1792,79 @@ function normalizeCommunicationLanguage(value: string) {
     return "ar";
   }
   return "en";
+}
+
+function getWhatsAppCareerStartUrl() {
+  const publicNumber = String(
+    process.env.WHATSAPP_PUBLIC_NUMBER || "14388078747",
+  ).replace(/[^\d]/g, "");
+  return `https://wa.me/${publicNumber}?text=START`;
+}
+
+async function sendCareerWhatsAppStartEmail(args: {
+  lead: ContactLead;
+  language: string;
+}) {
+  const language = normalizeCommunicationLanguage(args.language);
+  const copy = {
+    en: {
+      subject: "Start your CVsolucion WhatsApp evaluation",
+      greeting: `Hello ${args.lead.name},`,
+      body: "Your career evaluation request is confirmed. Open WhatsApp and send START to begin the short evaluation.",
+      cta: "Start on WhatsApp",
+    },
+    fr: {
+      subject: "Commencez votre evaluation CVsolucion sur WhatsApp",
+      greeting: `Bonjour ${args.lead.name},`,
+      body: "Votre demande d'evaluation est confirmee. Ouvrez WhatsApp et envoyez START pour commencer la courte evaluation.",
+      cta: "Commencer sur WhatsApp",
+    },
+    es: {
+      subject: "Inicia tu evaluacion de CVsolucion en WhatsApp",
+      greeting: `Hola ${args.lead.name},`,
+      body: "Tu solicitud de evaluacion esta confirmada. Abre WhatsApp y envia START para comenzar la breve evaluacion.",
+      cta: "Comenzar en WhatsApp",
+    },
+    ar: {
+      subject: "ابدأ تقييم CVsolucion عبر واتساب",
+      greeting: `مرحبا ${args.lead.name}،`,
+      body: "تم تأكيد طلب التقييم. افتح واتساب وأرسل START لبدء التقييم القصير.",
+      cta: "ابدأ عبر واتساب",
+    },
+  }[language];
+  const url = getWhatsAppCareerStartUrl();
+  const dir = language === "ar" ? "rtl" : "ltr";
+  const align = language === "ar" ? "right" : "left";
+
+  await sendAuthEmail({
+    to: args.lead.email,
+    subject: copy.subject,
+    text: [copy.greeting, "", copy.body, "", url].join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.7;color:#0f172a;direction:${dir};text-align:${align}">
+        <p>${escapeHtml(copy.greeting)}</p>
+        <p>${escapeHtml(copy.body)}</p>
+        <p>
+          <a href="${escapeHtml(url)}" style="display:inline-block;padding:12px 18px;background:#16a34a;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700">
+            ${escapeHtml(copy.cta)}
+          </a>
+        </p>
+      </div>
+    `,
+  });
+}
+
+function queueCareerWhatsAppStartEmail(lead: ContactLead) {
+  const fields = parseLeadMessageFields(lead.message);
+  const countryCode = normalizeCountryCode(leadField(fields, ["Country code"]));
+  if (countryCode !== "US") return;
+  const language = leadField(fields, ["Preferred communication language"]);
+  void sendCareerWhatsAppStartEmail({ lead, language }).catch((error) => {
+    console.error("[whatsapp:us-start-email-error]", {
+      leadId: lead.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 }
 
 function isCareerEvaluationLead(lead: ContactLead) {
@@ -1908,9 +2019,12 @@ async function postWhatsAppMessage(payload: Record<string, unknown>) {
   }
 
   if (!response.ok) {
-    throw new Error(
-      `WhatsApp API failed with ${response.status}: ${JSON.stringify(responsePayload).slice(0, 600)}`,
-    );
+    throw new WhatsAppApiError({
+      status: response.status,
+      code: responsePayload?.error?.code,
+      message: responsePayload?.error?.message,
+      details: responsePayload?.error?.error_data?.details,
+    });
   }
 
   return {
@@ -1993,7 +2107,7 @@ async function sendWhatsAppLeadTemplate(args: {
     "Preferred communication language",
   ]);
   const phone = getLeadPhoneDetails(args.lead.phone, countryCode || country);
-  if (!phone.whatsappNumber || phone.whatsappNumber.length < 8) {
+  if (!phone.isValid) {
     return { sent: false, reason: "invalid_phone" as const };
   }
 
@@ -2008,28 +2122,47 @@ async function sendWhatsAppLeadTemplate(args: {
     email: args.lead.email,
     language: normalizeCommunicationLanguage(communicationLanguage),
   });
-  const result = await sendWhatsAppTemplateMessage({
-    to: phone.whatsappNumber,
-    templateName,
-    languageCode,
-    components: buildWhatsAppTemplateComponents({
-      lead: args.lead,
-      fields,
-      phone,
-      country,
-      communicationLanguage,
-    }),
-  });
-  recordWhatsAppOutboundMessage({
+  const stored = recordWhatsAppOutboundMessage({
     phone: phone.whatsappNumber,
     contactName: args.lead.name,
-    whatsappMessageId: result.sent ? result.messageId || null : null,
     type: "template",
     body: `Template: ${templateName} (${languageCode})`,
-    status: result.sent ? "sent" : "failed",
-    error: result.sent ? null : result.reason,
+    status: "sending",
   });
-  return result;
+  const localMessageId = stored.message?.id || null;
+
+  try {
+    const result = await sendWhatsAppTemplateMessage({
+      to: phone.whatsappNumber,
+      templateName,
+      languageCode,
+      components: buildWhatsAppTemplateComponents({
+        lead: args.lead,
+        fields,
+        phone,
+        country,
+        communicationLanguage,
+      }),
+    });
+    if (localMessageId) {
+      updateWhatsAppInboxLocalMessageStatus({
+        messageId: localMessageId,
+        whatsappMessageId: result.sent ? result.messageId || null : null,
+        status: result.sent ? "sent" : "failed",
+        error: result.sent ? null : result.reason,
+      });
+    }
+    return result;
+  } catch (error) {
+    if (localMessageId) {
+      updateWhatsAppInboxLocalMessageStatus({
+        messageId: localMessageId,
+        status: "failed",
+        error: formatWhatsAppSendError(error),
+      });
+    }
+    throw error;
+  }
 }
 
 function queueWhatsAppLeadTemplate(args: {
@@ -2195,6 +2328,15 @@ function normalizeWhatsAppStatus(value: unknown): WhatsAppInboxMessageStatus {
   return "sent";
 }
 
+function formatWhatsAppWebhookError(error: any) {
+  const code = String(error?.code || "").trim();
+  const title = String(error?.title || error?.message || "").trim();
+  const details = String(error?.error_data?.details || "").trim();
+  return [code ? `Meta ${code}` : "", title, details]
+    .filter(Boolean)
+    .join(": ");
+}
+
 function extractWhatsAppStatusUpdates(body: unknown): WhatsAppMessageStatusUpdate[] {
   const entries =
     body && typeof body === "object" && Array.isArray((body as any).entry)
@@ -2218,9 +2360,7 @@ function extractWhatsAppStatusUpdates(body: unknown): WhatsAppMessageStatusUpdat
           status: normalizeWhatsAppStatus(item?.status),
           error:
             errors
-              .map((error: any) =>
-                String(error?.message || error?.title || error?.code || "").trim(),
-              )
+              .map(formatWhatsAppWebhookError)
               .filter(Boolean)
               .join("; ") || null,
           occurredAt: Number.isFinite(timestampSeconds)
@@ -2787,11 +2927,17 @@ async function processWhatsAppWebhookMessages(body: unknown) {
 
 function processWhatsAppWebhookStatuses(body: unknown) {
   for (const status of extractWhatsAppStatusUpdates(body)) {
-    updateWhatsAppInboxMessageStatus({
+    const updated = updateWhatsAppInboxMessageStatus({
       whatsappMessageId: status.messageId,
       status: status.status,
       error: status.error,
       occurredAt: status.occurredAt,
+    });
+    console.log("[whatsapp:status] update received", {
+      messageId: status.messageId,
+      status: status.status,
+      matched: Boolean(updated),
+      error: status.error,
     });
   }
 }
@@ -4483,12 +4629,13 @@ async function startServer() {
           sourceType === "career_evaluation" && countryCode
             ? getTimezoneCountry(countryCode)
             : null;
-        const message =
+        let message =
           sourceType === "career_evaluation" &&
           countryCode &&
           !/^Country code:/im.test(rawMessage)
             ? `${rawMessage}\nCountry code: ${countryCode}`
             : rawMessage;
+        let normalizedPhone = phone;
         const rawTracking =
           req.body?.tracking && typeof req.body.tracking === "object"
             ? req.body.tracking
@@ -4527,6 +4674,20 @@ async function startServer() {
             error: "Select a valid country from the list.",
           });
         }
+        if (sourceType === "career_evaluation") {
+          const phoneDetails = getLeadPhoneDetails(phone, countryCode || "");
+          if (!phoneDetails.isValid) {
+            return res.status(400).json({
+              error:
+                "Enter a valid WhatsApp number for the selected country.",
+            });
+          }
+          normalizedPhone = phoneDetails.display;
+          message = message.replace(
+            /^Phone \/ WhatsApp:.*$/im,
+            `Phone / WhatsApp: ${normalizedPhone}`,
+          );
+        }
 
         const source = req.get("referer") || appOrigin(req);
         const auth = getCurrentUser(req);
@@ -4537,7 +4698,7 @@ async function startServer() {
               name,
               email,
               company,
-              phone,
+              phone: normalizedPhone,
               interest,
               message,
               locale,
@@ -4584,7 +4745,7 @@ async function startServer() {
           name,
           email,
           company,
-          phone,
+          phone: normalizedPhone,
           interest,
           message,
         });
@@ -4596,6 +4757,9 @@ async function startServer() {
           tracking,
         });
         queueWhatsAppLeadTemplate({ lead, sourceType });
+        if (sourceType === "career_evaluation") {
+          queueCareerWhatsAppStartEmail(lead);
+        }
 
         return res.status(201).json({ ok: true, leadId: lead.id });
       } catch (error) {
@@ -4636,6 +4800,9 @@ async function startServer() {
           lead,
           sourceType: pendingLead.sourceType,
         });
+        if (pendingLead.sourceType === "career_evaluation") {
+          queueCareerWhatsAppStartEmail(lead);
+        }
 
         return res.redirect(
           302,
@@ -5789,7 +5956,7 @@ async function startServer() {
       }
 
       const phone = getLeadPhoneDetails(rawPhone, countryCode);
-      if (!phone.whatsappNumber || phone.whatsappNumber.length < 8) {
+      if (!phone.isValid) {
         return res.status(400).json({
           error: "Enter a valid WhatsApp phone number.",
         });

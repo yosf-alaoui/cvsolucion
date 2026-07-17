@@ -15,31 +15,31 @@ const copy = {
     title: "Career evaluation request received | CVsolucion",
     heading: "Thank you. Your request has been received.",
     body: "We will review your shop experience, your goals, and your preferred time, then contact you to confirm the best next step.",
-    reminder: "Please check your email and WhatsApp messages.",
+    reminder:
+      "If no WhatsApp message arrives, use the button below to start the evaluation.",
     home: "Return to the training page",
-    question: "Ask a question on WhatsApp",
-    message:
-      "Hello CVsolucion, I submitted a Cabinet Vision career evaluation request and have a question.",
+    question: "Start the WhatsApp evaluation",
+    message: "START",
   },
   fr: {
     title: "Demande d'evaluation recue | CVsolucion",
     heading: "Merci. Votre demande a bien ete recue.",
     body: "Nous examinerons votre experience, votre objectif et votre disponibilite, puis nous vous contacterons pour confirmer la meilleure prochaine etape.",
-    reminder: "Verifiez votre email et vos messages WhatsApp.",
+    reminder:
+      "Si aucun message WhatsApp n'arrive, utilisez le bouton ci-dessous pour commencer l'evaluation.",
     home: "Retourner a la page de formation",
-    question: "Poser une question sur WhatsApp",
-    message:
-      "Bonjour CVsolucion, j'ai envoye une demande d'evaluation de carriere Cabinet Vision et j'ai une question.",
+    question: "Commencer l'evaluation sur WhatsApp",
+    message: "START",
   },
   ar: {
     title: "تم استلام طلب التقييم | CVsolucion",
     heading: "شكرا. تم استلام طلبك.",
     body: "سنراجع خبرتك الحالية وهدفك والوقت المفضل، ثم نتواصل معك لتأكيد أفضل خطوة تالية.",
-    reminder: "يرجى متابعة بريدك الإلكتروني ورسائل واتساب.",
+    reminder:
+      "إذا لم تصلك رسالة واتساب، استخدم الزر أدناه لبدء التقييم.",
     home: "العودة إلى صفحة التدريب",
-    question: "اطرح سؤالا عبر واتساب",
-    message:
-      "مرحبا CVsolucion، أرسلت طلب تقييم مهني لتدريب Cabinet Vision ولدي سؤال.",
+    question: "ابدأ التقييم عبر واتساب",
+    message: "START",
   },
 } as const;
 
