@@ -426,7 +426,9 @@ export default function ServiceLanding() {
     [currentUrl, heroImageUrl, homeHref, midImageUrl, pageContent, preCtaImageUrl],
   );
 
-  if (page.key === "performance-optimization" && locale === "en") {
+  const useCustomPerformanceLayout = false;
+
+  if (useCustomPerformanceLayout && page.key === "performance-optimization" && locale === "en") {
     const performanceCards = pageContent.blocks.filter(
       (block): block is Extract<SeoServicePageBlock, { type: "cards" }> =>
         block.type === "cards",
