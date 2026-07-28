@@ -30,9 +30,9 @@ export const SEO_SERVICE_PAGE_IMAGES: Record<SeoServicePageKey, SeoServicePageIm
     preCta: `${BASE_PATH}/cabinet-vision-cnc-operator-trust.webp`,
   },
   "performance-optimization": {
-    hero: `${BASE_PATH}/cabinet-vision-performance-optimization-fast-workstation.webp`,
-    mid: `${BASE_PATH}/cabinet-vision-system-stability-review.webp`,
-    preCta: `${BASE_PATH}/cabinet-vision-efficient-design-workflow.webp`,
+    hero: `${BASE_PATH}/cabinet-vision-performance-diagnosis-design-office.webp`,
+    mid: `${BASE_PATH}/cabinet-vision-performance-root-cause-review.webp`,
+    preCta: `${BASE_PATH}/cabinet-vision-optimized-design-to-production-workflow.webp`,
   },
   "install-backup-restore": {
     hero: `${BASE_PATH}/cabinet-vision-install-backup-restore-secure-workflow.webp`,

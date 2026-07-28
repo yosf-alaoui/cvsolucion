@@ -415,70 +415,126 @@ export const SEO_SERVICE_PAGES: Record<SeoServicePageKey, SeoServicePage> = {
     shortTitle: "Cabinet Vision Performance Optimization",
     seoTitle: "Slow Cabinet Vision Performance Optimization | CVsolucion",
     metaDescription:
-      "Speed up slow Cabinet Vision jobs, reduce crashes, fix freezes, and improve system stability with structured performance and workflow review.",
+      "Fix slow Cabinet Vision jobs, freezes, and crashes with a structured review of files, libraries, reports, workstations, networks, and workflow.",
     h1: "Slow Cabinet Vision Performance Optimization for Faster, More Stable Work",
     heroBadge: "PERFORMANCE OPTIMIZATION",
     heroLead:
-      "Reduce slowdowns, crashes, and unstable behavior so Cabinet Vision becomes faster to use and easier for your team to rely on.",
+      "Find what is making Cabinet Vision slow, unstable, or difficult to trust before lost minutes become missed production deadlines.",
     heroBody:
-      "When a system becomes slow, every task feels heavier. Designers hesitate, files take longer to validate, and small issues compound into lost time across the day. CVsolucion helps shops identify the structural reasons behind poor performance and improve stability where it matters most.",
+      "CVsolucion reviews the complete design-to-production environment to separate file, library, workstation, network, and workflow problems. The goal is a faster daily experience and a stable setup your team can rely on under real production pressure.",
     blocks: [
       {
         type: "cards",
-        title: "Common symptoms",
+        title: "Signs Cabinet Vision needs a performance review",
         items: [
-          "Slow file response and lag during editing",
-          "Unexpected crashes or freezes",
-          "Growing hesitation to work on larger or more complex jobs",
+          "Jobs take too long to open, save, regenerate, or respond while editing",
+          "Cabinet Vision freezes, crashes, or behaves differently between users",
+          "Large or complex projects interrupt the design-to-production flow",
+        ],
+      },
+      {
+        type: "facts",
+        title: "Find where the slowdown starts",
+        items: [
+          {
+            label: "Project-specific",
+            text: "One job or a group of similar jobs is slow while other work remains responsive.",
+          },
+          {
+            label: "User-specific",
+            text: "The same workflow behaves differently between designers, catalogs, or user standards.",
+          },
+          {
+            label: "Workstation-specific",
+            text: "The problem follows one computer, local configuration, storage path, or installed component.",
+          },
+          {
+            label: "System-wide",
+            text: "Multiple users experience the same delay through shared libraries, reports, databases, or network resources.",
+          },
         ],
       },
       {
         type: "copy",
         title: "Why performance problems spread",
         paragraphs: [
-          "Poor performance does more than waste minutes. It changes behavior. Teams start avoiding certain tasks, postponing cleanup, or creating workarounds that make the system harder to maintain. That is why performance optimization should be treated as an operational issue, not just a technical annoyance.",
+          "Poor performance does more than waste minutes. It changes behavior. Designers avoid heavy operations, postpone cleanup, and create workarounds that make the environment harder to maintain.",
+          "A slow Cabinet Vision system should be treated as an operational problem, not only a hardware problem. The visible delay can begin in project structure, catalogs, material logic, reports, UCS rules, database access, storage, networking, or the workstation itself.",
+        ],
+      },
+      {
+        type: "steps",
+        title: "A structured Cabinet Vision performance review",
+        items: [
+          {
+            label: "1",
+            text: "Capture the exact action, job, user, and environment where the slowdown appears.",
+          },
+          {
+            label: "2",
+            text: "Reproduce the behavior and compare it with a known responsive workflow.",
+          },
+          {
+            label: "3",
+            text: "Isolate the bottleneck across files, libraries, reports, databases, network, and hardware.",
+          },
+          {
+            label: "4",
+            text: "Apply focused changes, retest the original case, and document the stable result.",
+          },
         ],
       },
       {
         type: "copy",
-        title: "What to check when Cabinet Vision is slow",
+        title: "What we check when Cabinet Vision is slow",
         paragraphs: [
-          "Slow Cabinet Vision performance can come from heavy jobs, unstable standards, overloaded libraries, report logic, material structure, network behavior, or a workflow that has accumulated too many manual exceptions. The first step is to identify whether the slowdown is file-specific, user-specific, workstation-specific, or system-wide.",
-          "CVsolucion reviews the pattern before recommending changes. This prevents the team from blaming hardware too early when the real bottleneck is in the setup, reports, library structure, or production workflow.",
+          "The review can include job size and structure, catalogs and standards, material organization, report logic, UCS behavior, database health, local and shared storage, network paths, workstation resources, and the sequence used to release work to production.",
+          "CVsolucion follows the pattern before recommending a change. This prevents unnecessary hardware purchases and avoids broad cleanup that creates risk without fixing the original bottleneck.",
+        ],
+      },
+      {
+        type: "cards",
+        title: "Optimization areas",
+        items: [
+          "Simplify avoidable project, catalog, material, report, or UCS complexity",
+          "Improve database, storage, network, and workstation reliability",
+          "Standardize the workflow so performance remains consistent across the team",
         ],
       },
       {
         type: "copy",
-        title: "What CVsolucion improves",
+        title: "The result: a workflow that stays responsive",
         paragraphs: [
-          "This can include workflow review, structure cleanup, identification of unstable areas, simplification of avoidable complexity, and recommendations that reduce friction in daily use. The end goal is a more usable working environment, not just a one-time speed boost.",
-        ],
-      },
-      {
-        type: "copy",
-        title: "Results that matter",
-        paragraphs: [
-          "A more stable setup supports quicker design decisions, smoother collaboration, less frustration, and more confidence when working under deadlines. It also reduces the hidden cost of repeated interruption.",
+          "A stable setup supports faster design decisions, smoother collaboration, more predictable production handoff, and greater confidence when deadlines are tight.",
+          "The objective is not a temporary speed boost. It is a documented, maintainable improvement that reduces repeated interruption and gives the team a clear baseline for future troubleshooting.",
         ],
       },
     ],
     faq: [
       {
-        question: "Can you help if the system is slow but still usable?",
-        answer: "Yes. Addressing the issue early often prevents larger stability problems later.",
+        question: "Why is Cabinet Vision running slow?",
+        answer:
+          "Slow performance can start in a specific job, catalog, library, material structure, report, UCS rule, database, network path, storage device, workstation, or a combination of these. The first step is to reproduce the slowdown and identify which layer changes the result.",
+      },
+      {
+        question: "Can large jobs or Cabinet Vision libraries cause freezes?",
+        answer:
+          "Yes. Heavy project structure, accumulated standards, duplicated material logic, complex reports, and custom rules can increase processing time. The review determines whether that complexity is necessary and where it can be reduced safely.",
       },
       {
         question: "Does performance optimization include crash investigation?",
-        answer: "Yes. Crashes, freezes, and instability are part of the same operational picture.",
-      },
-      {
-        question: "Will this page overlap with troubleshooting?",
         answer:
-          "Some overlap is natural, but this page focuses specifically on speed, stability, and day-to-day responsiveness.",
+          "Yes. Crashes, freezes, long waits, and inconsistent responsiveness are reviewed as part of the same performance and stability picture.",
       },
       {
-        question: "Is optimization only about hardware?",
-        answer: "No. Workflow structure and system organization often play a major role.",
+        question: "Should we upgrade hardware before reviewing Cabinet Vision?",
+        answer:
+          "Not automatically. Hardware can be a bottleneck, but workflow structure, shared resources, reports, libraries, and database behavior should be checked before purchasing equipment that may not solve the issue.",
+      },
+      {
+        question: "Can Cabinet Vision performance problems be diagnosed remotely?",
+        answer:
+          "Yes. Most reviews can begin remotely by reproducing the problem, comparing affected and unaffected cases, checking the environment, and documenting the exact conditions that trigger the slowdown.",
       },
     ],
     relatedPaths: [

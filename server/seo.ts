@@ -693,6 +693,14 @@ function trainingCareerStructuredData(locale: ArticleLocale, origin: string) {
 function servicePageFallback(locale: ArticleLocale, page: SeoServicePage, origin: string) {
   const content = getSeoServicePageContent(page, locale);
   const pageImages = getSeoServicePageImageSet(page.key);
+  const performanceImageAlts =
+    page.key === "performance-optimization" && locale === "en"
+      ? [
+          "Cabinet Vision performance specialist reviewing a cabinet project beside a production floor",
+          "Cabinet workflow specialists diagnosing slow Cabinet Vision jobs and stability warnings",
+          "Optimized Cabinet Vision design-to-production workflow in a modern cabinet factory",
+        ]
+      : null;
   const blocks = content.blocks.map((block) => blockFallbackHtml(block)).join("");
   const faq = content.faq
     .map(
@@ -714,7 +722,7 @@ function servicePageFallback(locale: ArticleLocale, page: SeoServicePage, origin
     .map(
       (path, index) => `
         <figure>
-          <img src="${escapeHtml(absoluteAssetUrl(origin, path))}" alt="${escapeHtml(`${content.shortTitle} image ${index + 1}`)}" loading="lazy" />
+          <img src="${escapeHtml(absoluteAssetUrl(origin, path))}" alt="${escapeHtml(performanceImageAlts?.[index] || `${content.shortTitle} image ${index + 1}`)}" loading="${index === 0 ? "eager" : "lazy"}"${index === 0 ? ' fetchpriority="high"' : ""} />
         </figure>
       `
     )
@@ -1220,6 +1228,9 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
     const content = getSeoServicePageContent(servicePage, locale);
     const pageImages = getSeoServicePageImageSet(servicePage.key);
     const heroImage = absoluteAssetUrl(origin, pageImages.hero);
+    const serviceImages = [pageImages.hero, pageImages.mid, pageImages.preCta].map((image) =>
+      absoluteAssetUrl(origin, image)
+    );
     return {
       lang,
       dir,
@@ -1237,7 +1248,7 @@ function getSeoDocument(pathname: string, origin: string): SeoDocument {
           name: content.shortTitle,
           serviceType: content.shortTitle,
           description: content.metaDescription,
-          image: [heroImage],
+          image: serviceImages,
           provider: {
             "@type": "Organization",
             name: SITE_NAME,
