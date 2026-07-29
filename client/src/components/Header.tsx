@@ -158,6 +158,7 @@ export default function Header() {
     locale === "en" ? path : path === "/" ? `/${locale}` : `/${locale}${path}`;
   const homeHref = prefix || "/";
   const trainingHref = `${prefix}/training`;
+  const careerTrainingHref = `${prefix}/training/career`;
   const designPricingHref = `${prefix}/design-pricing`;
   const articlesHref = `${prefix}/articles`;
   const guidesHref = `${prefix}/guides`;
@@ -226,6 +227,22 @@ export default function Header() {
             ? "Parcours de formation structure par niveau."
             : "Structured training paths by skill level.",
       icon: GraduationCap,
+    },
+    {
+      href: careerTrainingHref,
+      label:
+        locale === "ar"
+          ? "تدريب الانتقال المهني"
+          : locale === "fr"
+            ? "Formation de reconversion"
+            : "Career Transition Training",
+      description:
+        locale === "ar"
+          ? "الانتقال من العمل داخل الورشة إلى تصميم Cabinet Vision."
+          : locale === "fr"
+            ? "Passer de l'atelier a la conception Cabinet Vision."
+            : "Move from the shop floor to Cabinet Vision design.",
+      icon: BookOpenCheck,
     },
     {
       action: () => scrollToSection("packages"),
@@ -828,6 +845,13 @@ export default function Header() {
                 <div className="px-3 py-2 text-xs font-black uppercase tracking-[0.25em] text-slate-500">{formationsLabel}</div>
                 <a href={trainingHref} className="block rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40" onClick={() => setIsMenuOpen(false)}>
                   {t("nav.training")}
+                </a>
+                <a href={careerTrainingHref} className="block rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40" onClick={() => setIsMenuOpen(false)}>
+                  {locale === "ar"
+                    ? "تدريب الانتقال المهني"
+                    : locale === "fr"
+                      ? "Formation de reconversion"
+                      : "Career Transition Training"}
                 </a>
                 <button type="button" onClick={() => scrollToSection("packages")} className="block w-full rounded-lg px-3 py-2 text-left font-semibold transition-colors hover:bg-white/40">
                   {t("nav.packages")}
