@@ -48,7 +48,7 @@ export default function TrainingCareerThankYou() {
   const pageLocale = locale === "fr" || locale === "ar" ? locale : "en";
   const text = copy[pageLocale];
   const base = pageLocale === "en" ? "" : `/${pageLocale}`;
-  const whatsappHref = buildWhatsAppLink("+1 438 807 8747", text.message);
+  const whatsappHref = buildWhatsAppLink("+1 514 963 8719", text.message);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

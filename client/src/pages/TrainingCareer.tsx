@@ -776,7 +776,7 @@ export default function TrainingCareer() {
     };
   }, []);
   const whatsappHref = buildWhatsAppLink(
-    "+1 438 807 8747",
+    "+1 514 963 8719",
     copy.whatsappMessage,
   );
   const countryOptions = useMemo(

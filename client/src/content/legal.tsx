@@ -1,8 +1,8 @@
 export const LAST_UPDATED = "04/2026";
 
 const CONTACT_EMAIL = "contact@cvsolucion.com";
-const WHATSAPP_NUMBER_DISPLAY = "+1 438 807 8747";
-const WHATSAPP_LINK = "https://wa.me/14388078747";
+const WHATSAPP_NUMBER_DISPLAY = "+1 514 963 8719";
+const WHATSAPP_LINK = "https://wa.me/15149638719";
 
 export function PrivacyPolicyContent({ locale = "en" }: { locale?: "en" | "fr" | "ar" }) {
   if (locale === "ar") {

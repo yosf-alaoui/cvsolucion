@@ -1796,7 +1796,7 @@ function normalizeCommunicationLanguage(
 
 function getWhatsAppCareerStartUrl() {
   const publicNumber = String(
-    process.env.WHATSAPP_PUBLIC_NUMBER || "14388078747",
+    process.env.WHATSAPP_PUBLIC_NUMBER || "15149638719",
   ).replace(/[^\d]/g, "");
   return `https://wa.me/${publicNumber}?text=START`;
 }

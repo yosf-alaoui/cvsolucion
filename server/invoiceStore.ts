@@ -233,7 +233,7 @@ function defaultSellerName() {
 }
 
 function defaultSellerPhone() {
-  return normalizeText(process.env.INVOICE_SELLER_PHONE) || "+1 (438) 80-8747";
+  return normalizeText(process.env.INVOICE_SELLER_PHONE) || "+1 514 963 8719";
 }
 
 function defaultSellerAddress() {

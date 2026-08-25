@@ -10,7 +10,7 @@ const HeroFiberGlow = lazy(() => import("@/components/HeroFiberGlow"));
 export default function HeroSection() {
   const { locale, t } = useI18n();
   const [showFiberGlow, setShowFiberGlow] = useState(false);
-  const whatsappHref = buildWhatsAppLink("+1 438 807 8747", t("whatsapp.needHelp"));
+  const whatsappHref = buildWhatsAppLink("+1 514 963 8719", t("whatsapp.needHelp"));
   const bookingHref = getBookingHref(locale);
   const bookLabel =
     locale === "ar" ? "احجز استشارة" : locale === "fr" ? "Reserver une consultation" : "Book consultation";

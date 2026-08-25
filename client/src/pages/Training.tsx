@@ -272,7 +272,7 @@ export default function Training() {
   const selectedTotalLabel = selectedTotal ? moneyLabel(selectedTotal, pageLocale, currency) : copy.loginToSeePrice;
   const paymentReady = Boolean(selectedProgramId && user && pricing?.enabled && pricing.publishableKey && selectedPrice > 0);
   const loginHref = `${localPath(pageLocale, "/login")}?next=${encodeURIComponent(localPath(pageLocale, "/training"))}`;
-  const whatsappHref = buildWhatsAppLink("+1 438 807 8747", copy.contactText);
+  const whatsappHref = buildWhatsAppLink("+1 514 963 8719", copy.contactText);
 
   function getProgramPrice(programId: TrainingPriceKey) {
     const programPrice = pricing?.programs?.find((program) => program.key === programId || program.id === programId)?.priceCents;

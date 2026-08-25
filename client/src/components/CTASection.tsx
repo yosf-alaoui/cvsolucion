@@ -11,7 +11,7 @@ import { navigateToHomeSection } from "@/lib/sectionNavigation";
  */
 export default function CTASection() {
   const { locale, t } = useI18n();
-  const whatsappHref = buildWhatsAppLink("+1 438 807 8747", t("whatsapp.annualPlan"));
+  const whatsappHref = buildWhatsAppLink("+1 514 963 8719", t("whatsapp.annualPlan"));
   const bookingHref = getBookingHref(locale);
   const bookLabel = locale === "ar" ? "احجز استشارة" : locale === "fr" ? "Reserver une consultation" : "Book consultation";
   const contactLabel = locale === "ar" ? "نموذج التواصل" : locale === "fr" ? "Formulaire de contact" : "Contact form";

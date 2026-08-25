@@ -17,7 +17,7 @@ import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
 
 export default function DesignPricing() {
   const { t } = useI18n();
-  const whatsappHref = buildWhatsAppLink("+1 438 807 8747", t("whatsapp.needHelp"));
+  const whatsappHref = buildWhatsAppLink("+1 514 963 8719", t("whatsapp.needHelp"));
 
   const scope = (t("designPricingPage.scopeItems") as string[]) || [];
   const designIncludes = (t("designPricingPage.designIncludes") as string[]) || [];
