@@ -1795,9 +1795,14 @@ function normalizeCommunicationLanguage(
 }
 
 function getWhatsAppCareerStartUrl() {
-  const publicNumber = String(
-    process.env.WHATSAPP_PUBLIC_NUMBER || "15149638719",
-  ).replace(/[^\d]/g, "");
+  const configuredNumber = String(process.env.WHATSAPP_PUBLIC_NUMBER || "").replace(
+    /[^\d]/g,
+    "",
+  );
+  const publicNumber =
+    !configuredNumber || configuredNumber === "14388078747"
+      ? "15149638719"
+      : configuredNumber;
   return `https://wa.me/${publicNumber}?text=START`;
 }
 

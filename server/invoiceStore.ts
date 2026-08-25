@@ -233,7 +233,11 @@ function defaultSellerName() {
 }
 
 function defaultSellerPhone() {
-  return normalizeText(process.env.INVOICE_SELLER_PHONE) || "+1 514 963 8719";
+  const configuredPhone = normalizeText(process.env.INVOICE_SELLER_PHONE) || "";
+  const configuredDigits = configuredPhone.replace(/[^\d]/g, "");
+  return !configuredPhone || configuredDigits === "14388078747"
+    ? "+1 514 963 8719"
+    : configuredPhone;
 }
 
 function defaultSellerAddress() {
