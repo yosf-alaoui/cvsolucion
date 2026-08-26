@@ -19,6 +19,11 @@ import {
   PASSWORD_POLICY_MESSAGE,
   validatePasswordPolicy,
 } from "../shared/passwordPolicy";
+import { normalizeSafeLocalRedirect } from "../shared/safeRedirect";
+import {
+  sanitizeAnalyticsPath,
+  sanitizeAnalyticsReferrer,
+} from "../shared/analyticsPrivacy";
 import { TRAINING_BLUEPRINT } from "../shared/trainingBlueprint";
 import {
   consumeToken,
@@ -86,9 +91,12 @@ import {
 import {
   applyStripeRefundUpdate,
   assignBookingDesigner,
+  assertBookingSlotsAvailable,
   blockBookingSlotByAdmin,
   cancelBookingByAdmin,
-  createBooking,
+  cancelPendingBookingsByPaymentReference,
+  claimBookingRefundByAdmin,
+  createBookings,
   getAdminBookingSlotsForDate,
   getBookingById,
   getBookingAvailability,
@@ -96,7 +104,6 @@ import {
   listBookings,
   listBookingsByPaymentReference,
   listBookingsForUser,
-  markBookingRefundPendingByAdmin,
   rescheduleBooking,
   serializeCustomerBooking,
   unblockBookingSlotByAdmin,
@@ -134,6 +141,8 @@ import {
   type WhatsAppInboxMessageStatus,
 } from "./whatsappInboxStore";
 import {
+  consumeCareerConversionMarker,
+  createCareerConversionMarker,
   createPendingContactLead,
   getPendingContactLeadByToken,
   markPendingContactLeadConfirmed,
@@ -165,14 +174,20 @@ import {
   type InvoiceCustomerType,
 } from "./invoiceStore";
 import {
+  BookingPaymentAlreadyRefundedError,
   constructStripeEvent,
+  cancelBookingPaymentIntent,
+  captureBookingPaymentIntent,
   createBookingPaymentIntent,
   createBookingRefund,
   createTrainingPaymentIntent,
   getBookingPrice,
   getStripePricingSnapshot,
   getTrainingPricingSnapshot,
+  parseBookingPaymentMetadata,
+  retrieveBookingPaymentIntent,
   type TrainingPriceKey,
+  validateBookingCheckoutDetails,
   verifyBookingPayment,
   verifyTrainingPayment,
 } from "./stripeBooking";
@@ -234,6 +249,8 @@ const __dirname = path.dirname(__filename);
 const MAGIC_LINK_MS = 1000 * 60 * 20;
 const VERIFY_LINK_MS = 1000 * 60 * 60 * 24;
 const CONTACT_CONFIRM_LINK_MS = 1000 * 60 * 60 * 24 * 3;
+const CAREER_CONVERSION_MARKER_MS = 1000 * 60 * 30;
+const CAREER_CONVERSION_COOKIE_NAME = "career_conversion";
 const RESET_LINK_MS = 1000 * 60 * 30;
 const ADMIN_LOGIN_CODE_MS = 1000 * 60 * 10;
 const ADMIN_COOKIE_NAME = "admin_session_id";
@@ -325,7 +342,9 @@ function isAdminHost(req: express.Request) {
 }
 
 function adminOrigin(req: express.Request) {
-  const configured = String(process.env.ADMIN_ORIGIN || "").trim().replace(/\/+$/, "");
+  const configured = String(process.env.ADMIN_ORIGIN || "")
+    .trim()
+    .replace(/\/+$/, "");
   if (configured) return configured;
 
   const host = requestHostname(req);
@@ -511,6 +530,88 @@ function getPricingCountryCode(req: express.Request) {
   return getRequestCountryCode(req);
 }
 
+function areUnpaidBookingsAllowed() {
+  return (
+    String(process.env.ALLOW_UNPAID_BOOKINGS || "")
+      .trim()
+      .toLowerCase() === "true"
+  );
+}
+
+function exposedRequestError(message: string, status = 400) {
+  const error = new Error(message) as Error & {
+    expose: boolean;
+    status: number;
+  };
+  error.expose = true;
+  error.status = status;
+  return error;
+}
+
+function parseBookingCheckoutInput(
+  body: Record<string, unknown> | null | undefined,
+  countryCode: string | null,
+) {
+  if (
+    !countryCode ||
+    !isSupportedCountry(countryCode) ||
+    !getTimezoneCountry(countryCode)
+  ) {
+    throw exposedRequestError("Select a valid country from the list.");
+  }
+
+  let details: ReturnType<typeof validateBookingCheckoutDetails>;
+  try {
+    details = validateBookingCheckoutDetails({
+      name: body?.name,
+      phone: body?.phone,
+      company: body?.company,
+      notes: body?.notes,
+      packageKey: body?.packageKey,
+    });
+  } catch (error) {
+    throw exposedRequestError(
+      error instanceof Error ? error.message : "Invalid booking details.",
+    );
+  }
+
+  if (details.packageKey) {
+    throw exposedRequestError(
+      "Service packages require scope confirmation before payment. Use the package request option instead.",
+    );
+  }
+
+  const parsedPhone = parsePhoneNumberFromString(
+    details.phone.replace(/^00/, "+"),
+    countryCode as CountryCode,
+  );
+  if (!parsedPhone?.isValid()) {
+    throw exposedRequestError("A valid phone number is required.");
+  }
+
+  return {
+    ...details,
+    phone: parsedPhone.number,
+    countryCode,
+    country: getTimezoneCountry(countryCode)?.name || countryCode,
+  };
+}
+
+function createBookingsForCheckout(
+  input: Parameters<typeof createBookings>[0],
+) {
+  try {
+    return createBookings(input);
+  } catch (error) {
+    throw exposedRequestError(
+      error instanceof Error
+        ? error.message
+        : "One or more appointment times are unavailable.",
+      409,
+    );
+  }
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -561,7 +662,142 @@ function getAdminNotificationEmail() {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)[0];
-  return firstAdmin || (process.env.CONTACT_EMAIL || "contact@cvsolucion.com").trim();
+  return (
+    firstAdmin || (process.env.CONTACT_EMAIL || "contact@cvsolucion.com").trim()
+  );
+}
+
+const emailDeliveriesInFlight = new Set<string>();
+
+function queueIdempotentEmail(input: {
+  notificationId: string;
+  eventType: string;
+  target: string;
+  context: Record<string, unknown>;
+  send: () => Promise<unknown>;
+  attempt?: number;
+}) {
+  if (
+    hasProcessedStripeEvent(input.notificationId) ||
+    emailDeliveriesInFlight.has(input.notificationId)
+  ) {
+    return;
+  }
+  emailDeliveriesInFlight.add(input.notificationId);
+  void input
+    .send()
+    .then(() => {
+      markStripeEventProcessed(input.notificationId, input.eventType);
+    })
+    .catch((error) => {
+      console.error("[email:delivery:failed]", {
+        target: input.target,
+        ...input.context,
+        error:
+          error instanceof Error ? error.stack || error.message : String(error),
+      });
+      const attempt = input.attempt ?? 0;
+      if (attempt < 4) {
+        const retryTimer = setTimeout(
+          () => queueIdempotentEmail({ ...input, attempt: attempt + 1 }),
+          Math.min(30_000 * 2 ** attempt, 5 * 60_000),
+        );
+        retryTimer.unref();
+      }
+    })
+    .finally(() => {
+      emailDeliveriesInFlight.delete(input.notificationId);
+    });
+}
+
+function queueBookingConfirmationEmails(
+  bookings: ReturnType<typeof createBookings>,
+) {
+  if (!bookings.length) return;
+  const first = bookings[0];
+  const notificationId = `booking-confirmation:${
+    first.paymentReference ||
+    bookings
+      .map((booking) => booking.id)
+      .sort()
+      .join(",")
+  }`;
+
+  const slotLabel = bookings
+    .map(
+      (booking) =>
+        `${booking.date} ${String(booking.hour).padStart(2, "0")}:00`,
+    )
+    .join(", ");
+  const priorityLabel = first.priority === "express" ? "Express" : "Standard";
+  const serviceLabel =
+    first.serviceType === "support" ? "Support" : "Consultation";
+  const destination = getAdminNotificationEmail();
+
+  const context = { bookingIds: bookings.map((booking) => booking.id) };
+  queueIdempotentEmail({
+    notificationId: `${notificationId}:admin`,
+    eventType: "booking.confirmation_email.admin",
+    target: "admin",
+    context,
+    send: () =>
+      sendAuthEmail({
+        to: destination,
+        subject: `New ${priorityLabel} booking - ${first.name}`,
+        text: [
+          `Booking IDs: ${bookings.map((booking) => booking.id).join(", ")}`,
+          `Service: ${serviceLabel}`,
+          `Priority: ${priorityLabel}`,
+          `Slots (Quebec): ${slotLabel}`,
+          `Name: ${first.name}`,
+          `Email: ${first.email}`,
+          `Phone: ${first.phone}`,
+          first.company ? `Company: ${first.company}` : null,
+          first.notes ? `Notes: ${first.notes}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+        <h2 style="margin:0 0 16px">New ${escapeHtml(priorityLabel)} booking</h2>
+        <p><strong>Booking IDs:</strong> ${escapeHtml(bookings.map((booking) => booking.id).join(", "))}</p>
+        <p><strong>Service:</strong> ${escapeHtml(serviceLabel)}</p>
+        <p><strong>Priority:</strong> ${escapeHtml(priorityLabel)}</p>
+        <p><strong>Slots (Quebec):</strong> ${escapeHtml(slotLabel)}</p>
+        <p><strong>Name:</strong> ${escapeHtml(first.name)}</p>
+        <p><strong>Email:</strong> ${escapeHtml(first.email)}</p>
+        <p><strong>Phone:</strong> ${escapeHtml(first.phone)}</p>
+        ${first.company ? `<p><strong>Company:</strong> ${escapeHtml(first.company)}</p>` : ""}
+        ${first.notes ? `<p><strong>Notes:</strong> ${escapeHtml(first.notes)}</p>` : ""}
+      </div>`,
+      }),
+  });
+  queueIdempotentEmail({
+    notificationId: `${notificationId}:customer`,
+    eventType: "booking.confirmation_email.customer",
+    target: "customer",
+    context,
+    send: () =>
+      sendAuthEmail({
+        to: first.email,
+        subject: "Your CVsolucion booking request is confirmed",
+        text: [
+          `Hello ${first.name},`,
+          "",
+          `Your ${priorityLabel.toLowerCase()} ${serviceLabel.toLowerCase()} booking request has been recorded.`,
+          `Requested slot(s) (Quebec time): ${slotLabel}`,
+          "",
+          "If any adjustment is needed, our team will contact you using the details you submitted.",
+        ].join("\n"),
+        html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+        <p>Hello ${escapeHtml(first.name)},</p>
+        <p>Your <strong>${escapeHtml(priorityLabel.toLowerCase())}</strong> ${escapeHtml(serviceLabel.toLowerCase())} booking request has been recorded.</p>
+        <p><strong>Requested slot(s) (Quebec time):</strong> ${escapeHtml(slotLabel)}</p>
+        <p>If any adjustment is needed, our team will contact you using the details you submitted.</p>
+      </div>`,
+      }),
+  });
 }
 
 function formatInvoiceAmount(amount: number, currency: string) {
@@ -660,7 +896,8 @@ function syncTrainingPaymentIntent(payment: Stripe.PaymentIntent) {
     ? getCatalogTrainingProgram(programIdentifier, countryCode)
     : null;
   const programKey = program?.key || programIdentifier;
-  const programId = program?.id || normalizeStripeText(payment.metadata?.trainingProgramId);
+  const programId =
+    program?.id || normalizeStripeText(payment.metadata?.trainingProgramId);
   const levelLabel =
     program?.translations?.en?.title ||
     program?.key ||
@@ -786,8 +1023,23 @@ function buildBookingInvoiceLineItems(
   return lineItems;
 }
 
+async function retrieveBookingPaymentForFulfillment(paymentIntentId: string) {
+  try {
+    return await retrieveBookingPaymentIntent(paymentIntentId);
+  } catch (error) {
+    if (!(error instanceof BookingPaymentAlreadyRefundedError)) throw error;
+    cancelPendingBookingsByPaymentReference(paymentIntentId);
+    console.warn("[stripe:webhook] refunded booking payment ignored", {
+      paymentIntentId,
+    });
+    return null;
+  }
+}
+
 function syncBookingPaymentIntent(payment: Stripe.PaymentIntent) {
-  if (payment.status !== "succeeded") return null;
+  if (payment.status !== "succeeded" && payment.status !== "requires_capture") {
+    return null;
+  }
   if (payment.metadata?.type !== "booking") return null;
 
   const email = (
@@ -807,15 +1059,160 @@ function syncBookingPaymentIntent(payment: Stripe.PaymentIntent) {
     ? getUserById(metadataUserId)
     : getUserByEmail(email);
   const userId = matchedUser?.id || metadataUserId || "";
-  const customerProfile = userId ? getCustomerProfile(userId) : null;
-  const countryCode = normalizeCountryCode(payment.metadata?.countryCode);
+  const bookingSnapshot = parseBookingPaymentMetadata(payment.metadata);
+  const countryCode =
+    bookingSnapshot?.countryCode ||
+    normalizeCountryCode(payment.metadata?.countryCode);
   const serviceType: BookingServiceType =
-    payment.metadata?.serviceType === "support" ? "support" : "consultation";
+    bookingSnapshot?.serviceType ||
+    (payment.metadata?.serviceType === "support" ? "support" : "consultation");
   const priority: BookingPriority =
-    payment.metadata?.priority === "express" ? "express" : "standard";
+    bookingSnapshot?.priority ||
+    (payment.metadata?.priority === "express" ? "express" : "standard");
+  const locale = normalizeAuthLocale(
+    bookingSnapshot?.locale ||
+      normalizeStripeText(payment.metadata?.locale) ||
+      "en",
+  );
+  let bookings: ReturnType<typeof createBookings> = [];
+
+  // PaymentIntent metadata version 2 contains the complete, already-validated
+  // checkout. Creating here makes Stripe's webhook the durable recovery path
+  // when the browser closes after payment or the final POST is interrupted.
+  if (bookingSnapshot) {
+    if (!userId) {
+      throw new Error("Booking payment cannot be linked to a user.");
+    }
+
+    const countryRecord = getTimezoneCountry(bookingSnapshot.countryCode);
+    if (!countryRecord) {
+      throw new Error("Booking payment contains an invalid country.");
+    }
+
+    const metadataSubtotal = parseStripeCents(
+      payment.metadata?.bookingSubtotalCents,
+    );
+    const metadataTotal = parseStripeCents(payment.metadata?.bookingTotalCents);
+    const paidUnitAmount =
+      metadataSubtotal !== null && bookingSnapshot.slots.length
+        ? metadataSubtotal / bookingSnapshot.slots.length
+        : 0;
+    if (
+      metadataTotal !== payment.amount ||
+      !Number.isInteger(paidUnitAmount) ||
+      paidUnitAmount <= 0
+    ) {
+      throw new Error("Booking payment amount failed integrity checks.");
+    }
+
+    bookings = createBookings({
+      userId,
+      serviceType: bookingSnapshot.serviceType,
+      priority: bookingSnapshot.priority,
+      packageKey: bookingSnapshot.packageKey,
+      slots: bookingSnapshot.slots,
+      name: bookingSnapshot.name,
+      email,
+      phone: bookingSnapshot.phone,
+      country: countryRecord.name,
+      countryCode: bookingSnapshot.countryCode,
+      company: bookingSnapshot.company,
+      notes: bookingSnapshot.notes,
+      locale,
+      paymentStatus: payment.status === "succeeded" ? "paid" : "pending",
+      paymentProvider: "stripe",
+      paymentReference: payment.id,
+      unitAmount: paidUnitAmount,
+    });
+
+    upsertCustomerProfile({
+      userId,
+      email,
+      name: bookingSnapshot.name,
+      country: countryRecord.name,
+      countryCode: bookingSnapshot.countryCode,
+      phone: bookingSnapshot.phone,
+      company: bookingSnapshot.company || "",
+    });
+  } else {
+    // Deployment compatibility: a successful v1 intent may already have
+    // bookings even though it lacks the v2 reconstruction snapshot. Reuse
+    // those records instead of treating a fulfilled legacy payment as an
+    // orphan and refunding it.
+    bookings = listBookingsByPaymentReference(payment.id);
+    if (!bookings.length) {
+      throw new Error(
+        "Legacy booking payment has no recoverable appointment records.",
+      );
+    }
+    if (
+      bookings.some(
+        (booking) =>
+          (userId && booking.userId !== userId) ||
+          booking.status !== "confirmed" ||
+          booking.paymentStatus === "refunded" ||
+          booking.paymentStatus === "partially_refunded",
+      )
+    ) {
+      throw new Error(
+        "Legacy booking payment is not eligible for fulfillment.",
+      );
+    }
+
+    if (
+      payment.status === "succeeded" &&
+      bookings.some((booking) => booking.paymentStatus === "pending")
+    ) {
+      const first = bookings[0];
+      bookings = createBookings({
+        userId: first.userId,
+        serviceType: first.serviceType,
+        priority: first.priority,
+        packageKey: first.packageKey,
+        slots: bookings.map((booking) => ({
+          date: booking.date,
+          hour: booking.hour,
+        })),
+        name: first.name,
+        email: first.email,
+        phone: first.phone,
+        country: first.country,
+        countryCode: first.countryCode,
+        company: first.company,
+        notes: first.notes,
+        locale: first.locale,
+        paymentStatus: "paid",
+        paymentProvider: "stripe",
+        paymentReference: payment.id,
+        unitAmount: first.unitAmount,
+      });
+    }
+  }
+
+  if (payment.status === "requires_capture") {
+    return {
+      invoice: null,
+      serviceLabel: "Authorized booking payment",
+      bookings,
+    };
+  }
+
+  const customerProfile = userId ? getCustomerProfile(userId) : null;
+  const invoiceCompany = bookingSnapshot
+    ? bookingSnapshot.company
+    : customerProfile?.company || null;
+  const invoiceCountry = bookingSnapshot
+    ? getTimezoneCountry(bookingSnapshot.countryCode)?.name ||
+      bookingSnapshot.countryCode
+    : customerProfile?.country ||
+      customerProfile?.countryCode ||
+      countryCode ||
+      "-";
   const priorityLabel = priority === "express" ? "Express" : "Standard";
   const serviceLabel =
-    serviceType === "support" ? "Cabinet Vision support" : "Cabinet Vision consultation";
+    serviceType === "support"
+      ? "Cabinet Vision support"
+      : "Cabinet Vision consultation";
   const slotCount = parseStripeCents(payment.metadata?.slotCount) || 1;
   const bookingDescription = `${priorityLabel} ${serviceLabel}${
     slotCount > 1 ? ` (${slotCount} sessions)` : ""
@@ -824,23 +1221,18 @@ function syncBookingPaymentIntent(payment: Stripe.PaymentIntent) {
   const subtotalAmount =
     lineItems.reduce((total, item) => total + item.amount, 0) ||
     Math.max(0, payment.amount || 0);
-  const locale = normalizeAuthLocale(
-    normalizeStripeText(payment.metadata?.locale) || "en",
-  );
-
   const invoice = upsertInvoiceRequestFromPayment({
     userId,
     email,
-    customerType: customerProfile?.company ? "company" : "individual",
-    customerName: customerProfile?.name || null,
-    phone: customerProfile?.phone || null,
-    country:
-      customerProfile?.country ||
+    customerType: invoiceCompany ? "company" : "individual",
+    customerName: bookingSnapshot?.name || customerProfile?.name || null,
+    phone: bookingSnapshot?.phone || customerProfile?.phone || null,
+    country: invoiceCountry,
+    countryCode:
+      bookingSnapshot?.countryCode ||
       customerProfile?.countryCode ||
-      countryCode ||
-      "-",
-    countryCode: customerProfile?.countryCode || countryCode,
-    company: customerProfile?.company || null,
+      countryCode,
+    company: invoiceCompany,
     billingAddress: null,
     city: null,
     region: null,
@@ -860,7 +1252,188 @@ function syncBookingPaymentIntent(payment: Stripe.PaymentIntent) {
     lineItems,
   });
 
-  return { invoice, serviceLabel: bookingDescription };
+  queueBookingConfirmationEmails(bookings);
+
+  return { invoice, serviceLabel: bookingDescription, bookings };
+}
+
+type BookingPaymentResolution =
+  | "authorization_canceled"
+  | "refund_succeeded"
+  | "refund_pending"
+  | "already_refunded";
+
+class BookingPaymentResolvedError extends Error {
+  constructor(
+    message: string,
+    readonly resolution: BookingPaymentResolution,
+  ) {
+    super(message);
+  }
+}
+
+function bookingPaymentResolutionMessage(error: BookingPaymentResolvedError) {
+  if (error.resolution === "authorization_canceled") {
+    return "The selected time was no longer available. Your card authorization was canceled and no payment was captured.";
+  }
+  if (error.resolution === "refund_pending") {
+    return "The selected time was no longer available. A refund has been initiated and is being processed.";
+  }
+  return "The selected time was no longer available. The payment has been refunded.";
+}
+
+async function refundCapturedBookingPayment(input: {
+  payment: Stripe.PaymentIntent;
+  bookingIds: string[];
+  idempotencyKey: string;
+}) {
+  const bookingIds = Array.from(new Set(input.bookingIds)).sort();
+  const refund = await createBookingRefund({
+    paymentIntentId: input.payment.id,
+    amount: input.payment.amount,
+    bookingIds,
+    reason: "requested_by_customer",
+    idempotencyKey: input.idempotencyKey,
+  });
+  const refundStatus = normalizeStripeRefundStatus(refund.status);
+  applyStripeRefundUpdate({
+    paymentReference: input.payment.id,
+    refundId: refund.id,
+    refundAmount: refund.amount || input.payment.amount,
+    currency: refund.currency || input.payment.currency,
+    refundStatus,
+    bookingIds,
+  });
+
+  if (refundStatus === "failed" || refundStatus === "canceled") {
+    console.error("[booking:auto-refund:reconciliation-required]", {
+      paymentIntentId: input.payment.id,
+      refundId: refund.id,
+      refundStatus,
+      bookingIds,
+    });
+    queueIdempotentEmail({
+      notificationId: `refund-reconciliation:${refund.id}`,
+      eventType: "booking.refund_reconciliation",
+      target: "admin",
+      context: { paymentIntentId: input.payment.id, refundId: refund.id },
+      send: () =>
+        sendAuthEmail({
+          to: getAdminNotificationEmail(),
+          subject: "Urgent: booking refund requires reconciliation",
+          text: [
+            `PaymentIntent: ${input.payment.id}`,
+            `Refund: ${refund.id}`,
+            `Status: ${refundStatus}`,
+            `Booking IDs: ${bookingIds.join(", ") || "none"}`,
+            "The appointment could not be fulfilled and Stripe did not complete the automatic refund. Review this payment immediately.",
+          ].join("\n"),
+          html: `<p><strong>PaymentIntent:</strong> ${escapeHtml(input.payment.id)}</p><p><strong>Refund:</strong> ${escapeHtml(refund.id)}</p><p><strong>Status:</strong> ${escapeHtml(refundStatus)}</p><p><strong>Booking IDs:</strong> ${escapeHtml(bookingIds.join(", ") || "none")}</p><p>The appointment could not be fulfilled and Stripe did not complete the automatic refund. Review this payment immediately.</p>`,
+        }),
+    });
+    throw new Error(
+      `Automatic refund ${refund.id} is ${refundStatus}; manual reconciliation is required.`,
+    );
+  }
+  return refundStatus;
+}
+
+async function finalizeAuthorizedBookingPayment(payment: Stripe.PaymentIntent) {
+  let reservation: ReturnType<typeof syncBookingPaymentIntent> = null;
+  let capturedPayment: Stripe.PaymentIntent | null = null;
+  try {
+    reservation = syncBookingPaymentIntent(payment);
+    if (!reservation?.bookings.length) {
+      throw new Error(
+        "Authorized payment could not reserve its appointment slots.",
+      );
+    }
+
+    capturedPayment = await captureBookingPaymentIntent(payment.id);
+    const completed = syncBookingPaymentIntent(capturedPayment);
+    if (!completed?.invoice || !completed.bookings.length) {
+      throw new Error("Captured payment could not complete its bookings.");
+    }
+    return completed;
+  } catch (error) {
+    const existingBookings = listBookingsByPaymentReference(payment.id);
+    if (
+      existingBookings.some(
+        (booking) =>
+          booking.paymentStatus === "refunded" ||
+          booking.refundStatus === "succeeded",
+      )
+    ) {
+      throw new BookingPaymentResolvedError(
+        "Booking payment was already refunded.",
+        "already_refunded",
+      );
+    }
+    const bookingIds = (
+      reservation?.bookings.length ? reservation.bookings : existingBookings
+    )
+      .map((booking) => booking.id)
+      .sort();
+    cancelPendingBookingsByPaymentReference(payment.id);
+    const terminalPayment =
+      capturedPayment || (await cancelBookingPaymentIntent(payment.id));
+    if (terminalPayment?.status === "succeeded") {
+      const refundStatus = await refundCapturedBookingPayment({
+        payment: terminalPayment,
+        bookingIds,
+        idempotencyKey: `booking-conflict-refund-${payment.id}`,
+      });
+      throw new BookingPaymentResolvedError(
+        error instanceof Error
+          ? error.message
+          : "Booking payment could not be completed.",
+        refundStatus === "succeeded" ? "refund_succeeded" : "refund_pending",
+      );
+    }
+    throw new BookingPaymentResolvedError(
+      error instanceof Error
+        ? error.message
+        : "Booking payment could not be completed.",
+      "authorization_canceled",
+    );
+  }
+}
+
+async function syncCapturedBookingPayment(payment: Stripe.PaymentIntent) {
+  try {
+    const completed = syncBookingPaymentIntent(payment);
+    if (!completed?.invoice || !completed.bookings.length) {
+      throw new Error("Captured payment could not complete its bookings.");
+    }
+    return completed;
+  } catch (error) {
+    const existingBookings = listBookingsByPaymentReference(payment.id);
+    if (
+      existingBookings.some(
+        (booking) =>
+          booking.paymentStatus === "refunded" ||
+          booking.refundStatus === "succeeded",
+      )
+    ) {
+      throw new BookingPaymentResolvedError(
+        "Booking payment was already refunded.",
+        "already_refunded",
+      );
+    }
+    const bookingIds = existingBookings.map((booking) => booking.id).sort();
+    cancelPendingBookingsByPaymentReference(payment.id);
+    const refundStatus = await refundCapturedBookingPayment({
+      payment,
+      bookingIds,
+      idempotencyKey: `booking-conflict-refund-${payment.id}`,
+    });
+    throw new BookingPaymentResolvedError(
+      error instanceof Error
+        ? error.message
+        : "Captured booking payment was refunded.",
+      refundStatus === "succeeded" ? "refund_succeeded" : "refund_pending",
+    );
+  }
 }
 
 function fallbackDisplayNameFromEmail(email: string) {
@@ -1135,6 +1708,36 @@ function setVisitorCookie(
   });
 }
 
+function setCareerConversionCookie(
+  req: express.Request,
+  res: express.Response,
+  token: string,
+) {
+  const domain = getCookieDomain(req);
+  res.cookie(CAREER_CONVERSION_COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: CAREER_CONVERSION_MARKER_MS,
+    path: "/",
+    ...(domain ? { domain } : {}),
+  });
+}
+
+function clearCareerConversionCookie(
+  req: express.Request,
+  res: express.Response,
+) {
+  const domain = getCookieDomain(req);
+  res.clearCookie(CAREER_CONVERSION_COOKIE_NAME, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    ...(domain ? { domain } : {}),
+  });
+}
+
 function getCurrentUser(req: express.Request) {
   const cookies = parseCookies(req.headers.cookie);
   const sessionId = cookies[getSessionCookieName(req)];
@@ -1155,7 +1758,11 @@ function getCurrentUser(req: express.Request) {
     return null;
   }
   const sessionAgeMs = Date.now() - new Date(session.createdAt).getTime();
-  if (role === "admin" && isAdminEmailOtpEnabled() && !session.adminOtpVerifiedAt) {
+  if (
+    role === "admin" &&
+    isAdminEmailOtpEnabled() &&
+    !session.adminOtpVerifiedAt
+  ) {
     deleteSession(session.id);
     return null;
   }
@@ -1506,8 +2113,7 @@ function renderContactConfirmationEmail(args: {
           ? "Confirm your free career evaluation request"
           : "Confirm your CVsolucion contact request",
       title: "Confirm your email to complete your request",
-      body:
-        "We received your request. Please confirm your email address so our team can review it and contact you.",
+      body: "We received your request. Please confirm your email address so our team can review it and contact you.",
       cta: "Confirm my email",
       fallback: "If the button does not work, open this link:",
       expiry: "This confirmation link expires in 3 days.",
@@ -1518,8 +2124,7 @@ function renderContactConfirmationEmail(args: {
           ? "Confirmez votre demande d'evaluation gratuite"
           : "Confirmez votre demande CVsolucion",
       title: "Confirmez votre email pour finaliser la demande",
-      body:
-        "Nous avons recu votre demande. Confirmez votre adresse email pour que notre equipe puisse l'examiner et vous contacter.",
+      body: "Nous avons recu votre demande. Confirmez votre adresse email pour que notre equipe puisse l'examiner et vous contacter.",
       cta: "Confirmer mon email",
       fallback: "Si le bouton ne fonctionne pas, ouvrez ce lien :",
       expiry: "Ce lien de confirmation expire dans 3 jours.",
@@ -1527,8 +2132,7 @@ function renderContactConfirmationEmail(args: {
     ar: {
       subject: "تأكيد بريدك لإكمال الطلب",
       title: "أكد بريدك الإلكتروني لإكمال الطلب",
-      body:
-        "توصلنا بطلبك. يرجى تأكيد البريد الإلكتروني حتى يتمكن فريقنا من مراجعته والتواصل معك.",
+      body: "توصلنا بطلبك. يرجى تأكيد البريد الإلكتروني حتى يتمكن فريقنا من مراجعته والتواصل معك.",
       cta: "تأكيد البريد الإلكتروني",
       fallback: "إذا لم يعمل الزر، افتح هذا الرابط:",
       expiry: "رابط التأكيد صالح لمدة 3 أيام.",
@@ -1543,15 +2147,9 @@ function renderContactConfirmationEmail(args: {
       : args.locale === "ar"
         ? `مرحبا ${args.name}،`
         : `Hello ${args.name},`;
-  const text = [
-    greeting,
-    "",
-    copy.body,
-    "",
-    args.url,
-    "",
-    copy.expiry,
-  ].join("\n");
+  const text = [greeting, "", copy.body, "", args.url, "", copy.expiry].join(
+    "\n",
+  );
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.7;color:#0f172a;direction:${dir};text-align:${align}">
       <h2 style="margin:0 0 16px">${escapeHtml(copy.title)}</h2>
@@ -1752,7 +2350,7 @@ function formatWhatsAppSendError(error: unknown) {
 function isWhatsAppConfigured() {
   return Boolean(
     String(process.env.WHATSAPP_ACCESS_TOKEN || "").trim() &&
-      String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim(),
+    String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim(),
   );
 }
 
@@ -1761,16 +2359,18 @@ function getWhatsAppTemplateName(sourceType: ContactSourceType) {
     sourceType === "career_evaluation"
       ? process.env.WHATSAPP_CAREER_TEMPLATE_NAME
       : "";
-  return String(sourceSpecific || process.env.WHATSAPP_TEMPLATE_NAME || "").trim();
+  return String(
+    sourceSpecific || process.env.WHATSAPP_TEMPLATE_NAME || "",
+  ).trim();
 }
 
 type CommunicationLanguage = "en" | "fr" | "es" | "ar";
 
-function normalizeCommunicationLanguage(
-  value: string,
-): CommunicationLanguage {
+function normalizeCommunicationLanguage(value: string): CommunicationLanguage {
   const normalized = value.trim().toLowerCase();
-  if (["fr", "fr-ca", "fr_ca", "france", "canadian french"].includes(normalized)) {
+  if (
+    ["fr", "fr-ca", "fr_ca", "france", "canadian french"].includes(normalized)
+  ) {
     return "fr";
   }
   if (["es", "es-es", "es_es", "spanish"].includes(normalized)) {
@@ -1779,7 +2379,9 @@ function normalizeCommunicationLanguage(
   if (["ar", "ar-ar", "ar_ar", "arabic"].includes(normalized)) {
     return "ar";
   }
-  if (["en", "en-us", "en_us", "en-ca", "en_ca", "english"].includes(normalized)) {
+  if (
+    ["en", "en-us", "en_us", "en-ca", "en_ca", "english"].includes(normalized)
+  ) {
     return "en";
   }
   if (normalized.includes("french") || normalized.includes("franc")) {
@@ -1795,13 +2397,12 @@ function normalizeCommunicationLanguage(
 }
 
 function getWhatsAppCareerStartUrl() {
-  const configuredNumber = String(process.env.WHATSAPP_PUBLIC_NUMBER || "").replace(
-    /[^\d]/g,
-    "",
-  );
+  const configuredNumber = String(
+    process.env.WHATSAPP_PUBLIC_NUMBER || "",
+  ).replace(/[^\d]/g, "");
   const publicNumber =
-    !configuredNumber || configuredNumber === "14388078747"
-      ? "15149638719"
+    !configuredNumber || configuredNumber === "15149638719"
+      ? "14388078747"
       : configuredNumber;
   return `https://wa.me/${publicNumber}?text=START`;
 }
@@ -1876,8 +2477,8 @@ function isCareerEvaluationLead(lead: ContactLead) {
   const fields = parseLeadMessageFields(lead.message);
   return Boolean(
     leadField(fields, ["Preferred communication language"]) ||
-      leadField(fields, ["Main goal"]) ||
-      lead.interest?.toLowerCase().includes("career evaluation"),
+    leadField(fields, ["Main goal"]) ||
+    lead.interest?.toLowerCase().includes("career evaluation"),
   );
 }
 
@@ -1996,7 +2597,9 @@ function buildWhatsAppTemplateComponents(args: {
 
 async function postWhatsAppMessage(payload: Record<string, unknown>) {
   const accessToken = String(process.env.WHATSAPP_ACCESS_TOKEN || "").trim();
-  const phoneNumberId = String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
+  const phoneNumberId = String(
+    process.env.WHATSAPP_PHONE_NUMBER_ID || "",
+  ).trim();
   if (!accessToken || !phoneNumberId) {
     return { ok: false, reason: "missing_config" as const };
   }
@@ -2191,7 +2794,8 @@ function queueWhatsAppLeadTemplate(args: {
     .catch((error) => {
       console.error("[whatsapp:lead:error]", {
         leadId: args.lead.id,
-        error: error instanceof Error ? error.stack || error.message : String(error),
+        error:
+          error instanceof Error ? error.stack || error.message : String(error),
       });
     });
 }
@@ -2199,7 +2803,10 @@ function queueWhatsAppLeadTemplate(args: {
 function getCommunicationLanguageLabel(
   language: ReturnType<typeof normalizeCommunicationLanguage>,
 ) {
-  const labels: Record<ReturnType<typeof normalizeCommunicationLanguage>, string> = {
+  const labels: Record<
+    ReturnType<typeof normalizeCommunicationLanguage>,
+    string
+  > = {
     ar: "Arabic",
     en: "English",
     es: "Spanish",
@@ -2214,17 +2821,22 @@ function getOrCreateManualWhatsAppCareerLead(args: {
   countryCode: string;
   language: ReturnType<typeof normalizeCommunicationLanguage>;
 }) {
-  const existing = findLatestCareerLeadByWhatsAppNumber(args.phone.whatsappNumber);
+  const existing = findLatestCareerLeadByWhatsAppNumber(
+    args.phone.whatsappNumber,
+  );
   if (existing) {
     return { lead: existing.lead, fields: existing.fields, created: false };
   }
 
-  const country = getTimezoneCountry(args.countryCode)?.name || args.countryCode;
+  const country =
+    getTimezoneCountry(args.countryCode)?.name || args.countryCode;
   const languageLabel = getCommunicationLanguageLabel(args.language);
   const contactName =
     args.name.trim() ||
     args.phone.display ||
-    (args.phone.whatsappNumber ? `+${args.phone.whatsappNumber}` : "WhatsApp contact");
+    (args.phone.whatsappNumber
+      ? `+${args.phone.whatsappNumber}`
+      : "WhatsApp contact");
   const lead = storeContactLead({
     name: contactName,
     email: "",
@@ -2272,10 +2884,16 @@ function normalizePhoneDigits(value: string | null | undefined) {
 
 function sameWhatsAppNumber(candidate: string, target: string) {
   if (!candidate || !target) return false;
-  return candidate === target || candidate.endsWith(target) || target.endsWith(candidate);
+  return (
+    candidate === target ||
+    candidate.endsWith(target) ||
+    target.endsWith(candidate)
+  );
 }
 
-function extractWhatsAppIncomingMessages(body: unknown): WhatsAppIncomingMessage[] {
+function extractWhatsAppIncomingMessages(
+  body: unknown,
+): WhatsAppIncomingMessage[] {
   const entries =
     body && typeof body === "object" && Array.isArray((body as any).entry)
       ? (body as any).entry
@@ -2298,15 +2916,20 @@ function extractWhatsAppIncomingMessages(body: unknown): WhatsAppIncomingMessage
         );
         const text =
           String(message?.text?.body || "").trim() ||
-          String(message?.button?.payload || message?.button?.text || "").trim() ||
+          String(
+            message?.button?.payload || message?.button?.text || "",
+          ).trim() ||
           String(
             message?.interactive?.button_reply?.id ||
               message?.interactive?.button_reply?.title ||
               "",
           ).trim();
         if (!from || !text) continue;
-        const messageType =
-          message?.button ? "button" : message?.interactive ? "interactive" : "text";
+        const messageType = message?.button
+          ? "button"
+          : message?.interactive
+            ? "interactive"
+            : "text";
         const timestampSeconds = Number(message?.timestamp);
         incoming.push({
           from,
@@ -2326,7 +2949,9 @@ function extractWhatsAppIncomingMessages(body: unknown): WhatsAppIncomingMessage
 }
 
 function normalizeWhatsAppStatus(value: unknown): WhatsAppInboxMessageStatus {
-  const status = String(value || "").trim().toLowerCase();
+  const status = String(value || "")
+    .trim()
+    .toLowerCase();
   if (status === "delivered") return "delivered";
   if (status === "read") return "read";
   if (status === "failed") return "failed";
@@ -2342,7 +2967,9 @@ function formatWhatsAppWebhookError(error: any) {
     .join(": ");
 }
 
-function extractWhatsAppStatusUpdates(body: unknown): WhatsAppMessageStatusUpdate[] {
+function extractWhatsAppStatusUpdates(
+  body: unknown,
+): WhatsAppMessageStatusUpdate[] {
   const entries =
     body && typeof body === "object" && Array.isArray((body as any).entry)
       ? (body as any).entry
@@ -2364,10 +2991,8 @@ function extractWhatsAppStatusUpdates(body: unknown): WhatsAppMessageStatusUpdat
           messageId,
           status: normalizeWhatsAppStatus(item?.status),
           error:
-            errors
-              .map(formatWhatsAppWebhookError)
-              .filter(Boolean)
-              .join("; ") || null,
+            errors.map(formatWhatsAppWebhookError).filter(Boolean).join("; ") ||
+            null,
           occurredAt: Number.isFinite(timestampSeconds)
             ? new Date(timestampSeconds * 1000).toISOString()
             : null,
@@ -2411,7 +3036,8 @@ function findLatestCareerLeadByWhatsAppNumber(whatsappNumber: string) {
     const countryCode = leadField(fields, ["Country code"]);
     const phone = getLeadPhoneDetails(lead.phone, countryCode || country);
     const candidate =
-      normalizePhoneDigits(phone.whatsappNumber) || normalizePhoneDigits(lead.phone);
+      normalizePhoneDigits(phone.whatsappNumber) ||
+      normalizePhoneDigits(lead.phone);
     if (sameWhatsAppNumber(candidate, target)) {
       return { lead, fields };
     }
@@ -2584,7 +3210,9 @@ function renderCareerQnaQuestion(args: {
   ].join("\n");
 }
 
-function renderCareerQnaCompletion(language: ReturnType<typeof normalizeCommunicationLanguage>) {
+function renderCareerQnaCompletion(
+  language: ReturnType<typeof normalizeCommunicationLanguage>,
+) {
   if (language === "fr") {
     return "Merci. Nous avons recu vos reponses. Notre equipe va les examiner et vous contacter prochainement.";
   }
@@ -2861,7 +3489,9 @@ async function processWhatsAppWebhookMessages(body: unknown) {
           console.error("[whatsapp:qna:admin-email-error]", {
             leadId: lead.id,
             error:
-              error instanceof Error ? error.stack || error.message : String(error),
+              error instanceof Error
+                ? error.stack || error.message
+                : String(error),
           });
         });
       }
@@ -2954,8 +3584,9 @@ async function sendContactLeadNotification(args: {
   source: string;
   tracking: Record<string, string>;
 }) {
-  const destination = (process.env.CONTACT_EMAIL || "contact@cvsolucion.com")
-    .trim();
+  const destination = (
+    process.env.CONTACT_EMAIL || "contact@cvsolucion.com"
+  ).trim();
   const fields = parseLeadMessageFields(args.lead.message);
   const country = leadField(fields, ["Country"]) || "-";
   const countryCode = leadField(fields, ["Country code"]);
@@ -3096,7 +3727,10 @@ async function sendContactLeadNotification(args: {
   });
 }
 
-async function sendInvoiceRequestNotification(invoice: InvoiceRecord, dashboardUrl: string) {
+async function sendInvoiceRequestNotification(
+  invoice: InvoiceRecord,
+  dashboardUrl: string,
+) {
   const destination = getAdminNotificationEmail();
   const lines = [
     `Invoice request: ${invoice.id}`,
@@ -3129,7 +3763,10 @@ async function sendInvoiceRequestNotification(invoice: InvoiceRecord, dashboardU
   });
 }
 
-async function sendInvoiceIssuedNotification(invoice: InvoiceRecord, dashboardUrl: string) {
+async function sendInvoiceIssuedNotification(
+  invoice: InvoiceRecord,
+  dashboardUrl: string,
+) {
   await sendAuthEmail({
     to: invoice.email,
     subject: `Your CVsolucion invoice is ready - ${invoice.invoiceNumber}`,
@@ -3246,7 +3883,8 @@ function handleWhatsAppWebhookEvent(
   processWhatsAppWebhookStatuses(body);
   void processWhatsAppWebhookMessages(body).catch((error) => {
     console.error("[whatsapp:qna:error]", {
-      error: error instanceof Error ? error.stack || error.message : String(error),
+      error:
+        error instanceof Error ? error.stack || error.message : String(error),
     });
   });
 
@@ -3275,17 +3913,74 @@ async function startServer() {
           return res.json({ received: true, duplicate: true });
         }
 
+        if (event.type === "payment_intent.amount_capturable_updated") {
+          const eventPayment = event.data.object as Stripe.PaymentIntent;
+          if (eventPayment.metadata?.type === "booking") {
+            const payment = await retrieveBookingPaymentForFulfillment(
+              eventPayment.id,
+            );
+            if (!payment) {
+              markStripeEventProcessed(event.id, event.type);
+              return res.json({ received: true, ignored: "refunded" });
+            }
+            const completed = await finalizeAuthorizedBookingPayment(
+              payment,
+            ).catch((error) => {
+              if (!(error instanceof BookingPaymentResolvedError)) {
+                throw error;
+              }
+              console.error("[stripe:webhook] booking authorization released", {
+                paymentIntentId: payment.id,
+                error:
+                  error instanceof Error
+                    ? error.stack || error.message
+                    : String(error),
+              });
+              return null;
+            });
+            if (completed) {
+              console.log("[stripe:webhook] booking.authorized_captured", {
+                paymentIntentId: payment.id,
+                invoiceId: completed.invoice?.id || null,
+                bookingCount: completed.bookings.length,
+              });
+            }
+          }
+        }
+
         if (event.type === "payment_intent.succeeded") {
-          const payment = event.data.object as Stripe.PaymentIntent;
+          const eventPayment = event.data.object as Stripe.PaymentIntent;
+          const payment =
+            eventPayment.metadata?.type === "booking"
+              ? await retrieveBookingPaymentForFulfillment(eventPayment.id)
+              : eventPayment;
+          if (!payment) {
+            markStripeEventProcessed(event.id, event.type);
+            return res.json({ received: true, ignored: "refunded" });
+          }
           const syncResult =
             syncTrainingPaymentIntent(payment) ||
-            syncBookingPaymentIntent(payment);
+            (payment.metadata?.type === "booking"
+              ? await syncCapturedBookingPayment(payment).catch((error) => {
+                  if (!(error instanceof BookingPaymentResolvedError)) {
+                    throw error;
+                  }
+                  console.error("[stripe:webhook] booking capture refunded", {
+                    paymentIntentId: payment.id,
+                    error:
+                      error instanceof Error
+                        ? error.stack || error.message
+                        : String(error),
+                  });
+                  return null;
+                })
+              : null);
           console.log(
             "[stripe:webhook] payment_intent.succeeded",
             payment.id || null,
             syncResult
               ? {
-                  invoiceId: syncResult.invoice.id,
+                  invoiceId: syncResult.invoice?.id || null,
                   trainingEnrollmentId:
                     "enrollment" in syncResult
                       ? syncResult.enrollment?.id || null
@@ -3330,12 +4025,39 @@ async function startServer() {
                 affectedBookings: syncResult.affectedBookings.length,
               });
 
+              if (refundStatus === "failed" || refundStatus === "canceled") {
+                queueIdempotentEmail({
+                  notificationId: `refund-reconciliation:${refund.id}`,
+                  eventType: "booking.refund_reconciliation",
+                  target: "admin",
+                  context: { paymentReference, refundId: refund.id },
+                  send: () =>
+                    sendAuthEmail({
+                      to: getAdminNotificationEmail(),
+                      subject: "Urgent: Stripe refund requires reconciliation",
+                      text: [
+                        `PaymentIntent: ${paymentReference}`,
+                        `Refund: ${refund.id}`,
+                        `Status: ${refundStatus}`,
+                        `Affected bookings: ${syncResult.affectedBookings.map((booking) => booking.id).join(", ") || "none"}`,
+                        "Review this refund in Stripe and contact the customer if manual action is required.",
+                      ].join("\n"),
+                      html: `<p><strong>PaymentIntent:</strong> ${escapeHtml(paymentReference)}</p><p><strong>Refund:</strong> ${escapeHtml(refund.id)}</p><p><strong>Status:</strong> ${escapeHtml(refundStatus)}</p><p><strong>Affected bookings:</strong> ${escapeHtml(syncResult.affectedBookings.map((booking) => booking.id).join(", ") || "none")}</p><p>Review this refund in Stripe and contact the customer if manual action is required.</p>`,
+                    }),
+                });
+              }
+
               if (
                 syncResult.customer?.email &&
                 (refundStatus === "succeeded" ||
                   refundStatus === "failed" ||
                   refundStatus === "canceled")
               ) {
+                const refundEmailId = `refund-email:${refund.id}:${refundStatus}`;
+                if (hasProcessedStripeEvent(refundEmailId)) {
+                  markStripeEventProcessed(event.id, event.type);
+                  return res.json({ received: true, emailDuplicate: true });
+                }
                 const locale = syncResult.customer.locale;
                 const amountLabel = formatMoney(
                   syncResult.refundAmount,
@@ -3358,12 +4080,13 @@ async function startServer() {
                   scope: syncResult.scope,
                 });
 
-                try {
-                  await sendAuthEmail({
-                    to: syncResult.customer.email,
-                    subject: template.subject,
-                    text: template.text,
-                    html: `
+                // Do not acknowledge the Stripe event until delivery succeeds;
+                // a transient SMTP failure then receives Stripe's normal retry.
+                await sendAuthEmail({
+                  to: syncResult.customer.email,
+                  subject: template.subject,
+                  text: template.text,
+                  html: `
                     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
                       ${template.text
                         .split("\n")
@@ -3372,17 +4095,8 @@ async function startServer() {
                         .join("")}
                     </div>
                   `,
-                  });
-                } catch (mailError) {
-                  console.error("[stripe:webhook:refund-email:error]", {
-                    eventId: event.id,
-                    refundId: refund.id,
-                    error:
-                      mailError instanceof Error
-                        ? mailError.stack || mailError.message
-                        : String(mailError),
-                  });
-                }
+                });
+                markStripeEventProcessed(refundEmailId, "booking.refund_email");
               }
             }
           }
@@ -3428,9 +4142,9 @@ async function startServer() {
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https:",
       "style-src 'self' 'unsafe-inline'",
-      `script-src 'unsafe-inline' ${scriptAssetsSource} https://js.stripe.com https://analytics.ahrefs.com`,
+      `script-src 'unsafe-inline' ${scriptAssetsSource} https://js.stripe.com https://analytics.ahrefs.com https://www.googletagmanager.com https://www.google-analytics.com https://connect.facebook.net`,
       "connect-src 'self' https: wss:",
-      "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+      "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://www.googletagmanager.com",
       "worker-src 'self' blob:",
       "manifest-src 'self'",
     ].join("; ");
@@ -3583,6 +4297,7 @@ async function startServer() {
       "/api/chat/support-intake",
       "/api/contact",
       "/api/contact/confirm",
+      "/api/contact/career-conversion",
       "/api/auth/login",
       "/api/auth/admin-login-code",
       "/api/auth/forgot-password",
@@ -3722,7 +4437,8 @@ async function startServer() {
           booking = getBookingById(bookingId);
           if (
             !booking ||
-            (booking.userId !== auth.user.id && booking.email !== auth.user.email)
+            (booking.userId !== auth.user.id &&
+              booking.email !== auth.user.email)
           ) {
             return res.status(404).json({ error: "Booking not found." });
           }
@@ -3741,8 +4457,7 @@ async function startServer() {
             typeof req.body?.company === "string" ? req.body.company : null,
           billingAddress,
           city: typeof req.body?.city === "string" ? req.body.city : null,
-          region:
-            typeof req.body?.region === "string" ? req.body.region : null,
+          region: typeof req.body?.region === "string" ? req.body.region : null,
           postalCode:
             typeof req.body?.postalCode === "string"
               ? req.body.postalCode
@@ -3770,7 +4485,10 @@ async function startServer() {
         ).catch((error) => {
           console.error("[invoice-request:admin-email-error]", {
             invoiceId: invoice.id,
-            error: error instanceof Error ? error.stack || error.message : String(error),
+            error:
+              error instanceof Error
+                ? error.stack || error.message
+                : String(error),
           });
         });
 
@@ -4135,17 +4853,23 @@ async function startServer() {
       const visitorId = existingVisitorId || createVisitorId();
       const auth = getCurrentUser(req);
       const payload = req.body || {};
+      const sanitizedPath = sanitizeAnalyticsPath(
+        typeof payload.path === "string" ? payload.path : "/",
+        appOrigin(req),
+      );
+      const sanitizedSearch = new URL(sanitizedPath, appOrigin(req)).search;
 
       const visitor = trackVisitor({
         visitorId,
-        path: String(payload.path || "/"),
-        search: typeof payload.search === "string" ? payload.search : "",
+        path: sanitizedPath,
+        search: sanitizedSearch,
         sessionId:
           typeof payload.sessionId === "string" ? payload.sessionId : null,
         locale: normalizeAuthLocale(String(payload.locale || "en")),
         title: typeof payload.title === "string" ? payload.title : null,
-        referrer:
+        referrer: sanitizeAnalyticsReferrer(
           typeof payload.referrer === "string" ? payload.referrer : null,
+        ),
         ip: getRequestIp(req),
         userAgent: req.get("user-agent") || null,
         browserLanguage:
@@ -4209,6 +4933,21 @@ async function startServer() {
           "cta_click",
           "chat_open",
           "chat_message",
+          "form_start",
+          "form_submit",
+          "email_verification_required",
+          "generate_lead",
+          "contact",
+          "add_to_cart",
+          "checkout_sign_in",
+          "checkout_continue",
+          "begin_checkout",
+          "payment_form_opened",
+          "add_payment_info",
+          "purchase",
+          "payment_failed",
+          "checkout_error",
+          "checkout_completion_failed",
         ].includes(eventType)
       ) {
         return res.status(400).json({ error: "Unsupported visitor event." });
@@ -4217,9 +4956,14 @@ async function startServer() {
       const visitor = trackVisitorInteraction({
         visitorId,
         type: eventType as any,
-        path: String(payload.path || "/"),
+        path: sanitizeAnalyticsPath(
+          typeof payload.path === "string" ? payload.path : "/",
+          appOrigin(req),
+        ),
         label: typeof payload.label === "string" ? payload.label : null,
-        href: typeof payload.href === "string" ? payload.href : null,
+        href: sanitizeAnalyticsReferrer(
+          typeof payload.href === "string" ? payload.href : null,
+        ),
         sessionId:
           typeof payload.sessionId === "string" ? payload.sessionId : null,
         durationMs:
@@ -4236,7 +4980,9 @@ async function startServer() {
     if (!shouldIgnoreVisitorTracking(req.get("user-agent") || null)) {
       return next();
     }
-    return res.status(403).json({ error: "Automated clients cannot use chat." });
+    return res
+      .status(403)
+      .json({ error: "Automated clients cannot use chat." });
   });
 
   app.post(
@@ -4656,7 +5402,13 @@ async function startServer() {
         ] as const;
         const tracking = trackingKeys.reduce<Record<string, string>>(
           (result, key) => {
-            const value = String(rawTracking[key] || "").trim().slice(0, 1000);
+            const rawValue = String(rawTracking[key] || "")
+              .trim()
+              .slice(0, 1000);
+            const value =
+              key === "landing_page"
+                ? sanitizeAnalyticsReferrer(rawValue) || ""
+                : rawValue;
             if (value) result[key] = value;
             return result;
           },
@@ -4674,7 +5426,10 @@ async function startServer() {
             error: "Please provide a little more context in your message.",
           });
         }
-        if (sourceType === "career_evaluation" && (!countryCode || !countryRecord)) {
+        if (
+          sourceType === "career_evaluation" &&
+          (!countryCode || !countryRecord)
+        ) {
           return res.status(400).json({
             error: "Select a valid country from the list.",
           });
@@ -4683,8 +5438,7 @@ async function startServer() {
           const phoneDetails = getLeadPhoneDetails(phone, countryCode || "");
           if (!phoneDetails.isValid) {
             return res.status(400).json({
-              error:
-                "Enter a valid WhatsApp number for the selected country.",
+              error: "Enter a valid WhatsApp number for the selected country.",
             });
           }
           normalizedPhone = phoneDetails.display;
@@ -4764,6 +5518,11 @@ async function startServer() {
         queueWhatsAppLeadTemplate({ lead, sourceType });
         if (sourceType === "career_evaluation") {
           queueCareerWhatsAppStartEmail(lead);
+          const conversionToken = createCareerConversionMarker(
+            lead.id,
+            CAREER_CONVERSION_MARKER_MS,
+          );
+          setCareerConversionCookie(req, res, conversionToken);
         }
 
         return res.status(201).json({ ok: true, leadId: lead.id });
@@ -4798,7 +5557,10 @@ async function startServer() {
         }).catch((error) => {
           console.error("[contact-confirm:admin-email-error]", {
             leadId: lead.id,
-            error: error instanceof Error ? error.stack || error.message : String(error),
+            error:
+              error instanceof Error
+                ? error.stack || error.message
+                : String(error),
           });
         });
         queueWhatsAppLeadTemplate({
@@ -4809,13 +5571,36 @@ async function startServer() {
           queueCareerWhatsAppStartEmail(lead);
         }
 
+        const conversionToken = createCareerConversionMarker(
+          lead.id,
+          CAREER_CONVERSION_MARKER_MS,
+        );
+        setCareerConversionCookie(req, res, conversionToken);
+
         return res.redirect(
           302,
-          `${appOrigin(req)}${localePrefix(pendingLead.locale)}/training/career/thank-you?confirmed=1&lead=${encodeURIComponent(lead.id)}`,
+          `${appOrigin(req)}${localePrefix(pendingLead.locale)}/training/career/thank-you`,
         );
       } catch (error) {
         return next(error);
       }
+    },
+  );
+
+  app.post(
+    "/api/contact/career-conversion",
+    rateLimit({
+      key: "career-conversion",
+      windowMs: 1000 * 60 * 10,
+      limit: 20,
+    }),
+    (req, res) => {
+      const cookies = parseCookies(req.headers.cookie);
+      const token = cookies[CAREER_CONVERSION_COOKIE_NAME] || "";
+      clearCareerConversionCookie(req, res);
+      const leadId = token ? consumeCareerConversionMarker(token) : null;
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ confirmed: Boolean(leadId), leadId });
     },
   );
 
@@ -4833,12 +5618,6 @@ async function startServer() {
     "/api/bookings/availability",
     rateLimit({ key: "booking-availability", windowMs: 1000 * 60, limit: 120 }),
     (req, res) => {
-      const auth = getCurrentUser(req);
-      if (!auth) {
-        return res
-          .status(401)
-          .json({ error: "Please sign in before viewing appointment times." });
-      }
       const priority =
         String(req.query.priority || "standard").trim() === "express"
           ? "express"
@@ -4867,12 +5646,6 @@ async function startServer() {
     "/api/training/pricing",
     rateLimit({ key: "training-pricing", windowMs: 1000 * 60, limit: 120 }),
     (req, res) => {
-      const auth = getCurrentUser(req);
-      if (!auth) {
-        return res
-          .status(401)
-          .json({ error: "Please sign in to view training prices." });
-      }
       return res.json(getTrainingPricingSnapshot(getPricingCountryCode(req)));
     },
   );
@@ -4968,7 +5741,9 @@ async function startServer() {
         const program = getCatalogTrainingProgram(level);
         const syncResult = syncTrainingPaymentIntent(payment);
         if (!syncResult?.enrollment) {
-          throw new Error("Training payment could not be linked to an enrollment.");
+          throw new Error(
+            "Training payment could not be linked to an enrollment.",
+          );
         }
         const enrollment = syncResult.enrollment;
         const levelLabel =
@@ -5084,10 +5859,19 @@ async function startServer() {
         const slots = parseRequestedBookingSlots(req.body?.slots);
         const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
         const countryCode = getPricingCountryCode(req);
+        const checkout = parseBookingCheckoutInput(req.body, countryCode);
+        const checkoutAttemptId = String(
+          req.body?.checkoutAttemptId || "",
+        ).trim();
 
         if (!slots.length) {
           return res.status(400).json({
             error: "Please choose at least one valid appointment time.",
+          });
+        }
+        if (!/^[A-Za-z0-9_-]{16,100}$/.test(checkoutAttemptId)) {
+          return res.status(400).json({
+            error: "A valid checkout attempt is required.",
           });
         }
         if (!isBookingScheduleOpen(priority as BookingPriority)) {
@@ -5098,6 +5882,19 @@ async function startServer() {
                 : "Standard booking is currently closed.",
           });
         }
+        try {
+          assertBookingSlotsAvailable({
+            priority: priority as BookingPriority,
+            slots,
+          });
+        } catch (error) {
+          throw exposedRequestError(
+            error instanceof Error
+              ? error.message
+              : "One or more appointment times are unavailable.",
+            409,
+          );
+        }
 
         const intent = await createBookingPaymentIntent({
           userId: auth.user.id,
@@ -5107,6 +5904,12 @@ async function startServer() {
           countryCode,
           slots,
           locale,
+          checkoutAttemptId,
+          name: checkout.name,
+          phone: checkout.phone,
+          company: checkout.company,
+          notes: checkout.notes,
+          packageKey: checkout.packageKey,
         });
 
         return res.json({
@@ -5141,42 +5944,13 @@ async function startServer() {
             ? "express"
             : "standard";
         const slots = parseRequestedBookingSlots(req.body?.slots);
-        const name = String(req.body?.name || "").trim();
         const email = auth.user.email;
-        const phone = String(req.body?.phone || "").trim();
         const countryCode = getPricingCountryCode(req);
-        const countryRecord = countryCode
-          ? getTimezoneCountry(countryCode)
-          : null;
-        const country =
-          countryRecord?.name || String(req.body?.country || "").trim();
-        const company = String(req.body?.company || "").trim();
-        const notes = String(req.body?.notes || "").trim();
-        const packageKey = String(req.body?.packageKey || "").trim() || null;
+        const checkout = parseBookingCheckoutInput(req.body, countryCode);
+        const { name, phone, country, company, notes, packageKey } = checkout;
         const paymentIntentId = String(req.body?.paymentIntentId || "").trim();
         const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
 
-        if (name.length < 2) {
-          return res.status(400).json({ error: "Name is required." });
-        }
-        if (phone.length < 6) {
-          return res
-            .status(400)
-            .json({ error: "A valid phone number is required." });
-        }
-        if (!countryCode || !countryRecord) {
-          return res
-            .status(400)
-            .json({ error: "Select a valid country from the list." });
-        }
-        if (company.length < 2) {
-          return res.status(400).json({ error: "Company name is required." });
-        }
-        if (notes.length < 10) {
-          return res
-            .status(400)
-            .json({ error: "Please describe the issue or request." });
-        }
         if (!slots.length) {
           return res.status(400).json({
             error: "Please choose at least one valid appointment time.",
@@ -5192,6 +5966,12 @@ async function startServer() {
         }
 
         const stripeConfig = getStripePricingSnapshot(countryCode);
+        if (!stripeConfig.enabled && !areUnpaidBookingsAllowed()) {
+          return res.status(503).json({
+            error:
+              "Secure payment is temporarily unavailable. No booking has been created.",
+          });
+        }
         let verifiedPayment: Awaited<
           ReturnType<typeof verifyBookingPayment>
         > | null = null;
@@ -5202,38 +5982,29 @@ async function startServer() {
             });
           }
 
-          verifiedPayment = await verifyBookingPayment({
-            paymentIntentId,
-            userId: auth.user.id,
-            serviceType,
-            priority: priority as BookingPriority,
-            countryCode,
-            slots,
-          });
-        }
-
-        if (verifiedPayment?.id) {
-          const existingBookings = listBookingsByPaymentReference(
-            verifiedPayment.id,
-          ).filter((booking) => booking.userId === auth.user.id);
-          if (existingBookings.length > 0) {
-            upsertCustomerProfile({
+          try {
+            verifiedPayment = await verifyBookingPayment({
+              paymentIntentId,
               userId: auth.user.id,
-              email: auth.user.email,
-              name,
-              country,
+              serviceType,
+              priority: priority as BookingPriority,
               countryCode,
-              phone,
-              company,
+              slots,
+              checkout: {
+                locale,
+                name,
+                phone,
+                company,
+                notes,
+                packageKey,
+              },
             });
-
-            syncBookingPaymentIntent(verifiedPayment);
-
-            return res.status(201).json({
-              ok: true,
-              bookings: existingBookings,
-              booking: existingBookings[0],
-            });
+          } catch (error) {
+            throw exposedRequestError(
+              error instanceof Error
+                ? error.message
+                : "Payment could not be verified for this booking.",
+            );
           }
         }
 
@@ -5251,14 +6022,46 @@ async function startServer() {
                 countryCode,
               );
 
-        const bookings = slots.map((slot) =>
-          createBooking({
+        let bookings: ReturnType<typeof createBookings>;
+        if (verifiedPayment?.status === "requires_capture") {
+          const completed = await finalizeAuthorizedBookingPayment(
+            verifiedPayment,
+          ).catch((error) => {
+            if (error instanceof BookingPaymentResolvedError) {
+              throw exposedRequestError(
+                bookingPaymentResolutionMessage(error),
+                409,
+              );
+            }
+            throw error;
+          });
+          bookings = completed.bookings;
+        } else if (verifiedPayment) {
+          const completed = await syncCapturedBookingPayment(
+            verifiedPayment,
+          ).catch((error) => {
+            if (error instanceof BookingPaymentResolvedError) {
+              throw exposedRequestError(
+                bookingPaymentResolutionMessage(error),
+                409,
+              );
+            }
+            throw error;
+          });
+          if (!completed?.bookings.length || !completed.invoice) {
+            throw exposedRequestError(
+              "Paid booking could not be completed. The payment will be reviewed automatically.",
+              409,
+            );
+          }
+          bookings = completed.bookings;
+        } else {
+          bookings = createBookingsForCheckout({
             userId: auth.user.id,
             serviceType,
             priority: priority as BookingPriority,
             packageKey,
-            date: slot.date,
-            hour: slot.hour,
+            slots,
             name,
             email,
             phone,
@@ -5267,112 +6070,28 @@ async function startServer() {
             company,
             notes,
             locale,
-            paymentStatus: verifiedPayment ? "paid" : "unpaid",
-            paymentProvider: verifiedPayment ? "stripe" : null,
-            paymentReference: verifiedPayment?.id || null,
+            paymentStatus: "unpaid",
+            paymentProvider: null,
+            paymentReference: null,
             unitAmount: paidUnitAmount,
-          }),
-        );
-
-        upsertCustomerProfile({
-          userId: auth.user.id,
-          email: auth.user.email,
-          name,
-          country,
-          countryCode,
-          phone,
-          company,
-        });
-
-        if (verifiedPayment) {
-          syncBookingPaymentIntent(verifiedPayment);
+          });
+          upsertCustomerProfile({
+            userId: auth.user.id,
+            email: auth.user.email,
+            name,
+            country,
+            countryCode,
+            phone,
+            company,
+          });
+          queueBookingConfirmationEmails(bookings);
         }
 
-        const slotLabel = bookings
-          .map(
-            (booking) =>
-              `${booking.date} ${String(booking.hour).padStart(2, "0")}:00`,
-          )
-          .join(", ");
-        const destination = (
-          process.env.CONTACT_EMAIL || "contact@cvsolucion.com"
-        ).trim();
-        const priorityLabel = priority === "express" ? "Express" : "Standard";
-        const serviceLabel =
-          serviceType === "support" ? "Support" : "Consultation";
-
-        const bookingResponse = { ok: true, bookings, booking: bookings[0] };
-        res.status(201).json(bookingResponse);
-
-        void Promise.allSettled([
-          sendAuthEmail({
-            to: destination,
-            subject: `New ${priorityLabel} booking - ${name}`,
-            text: [
-              `Booking IDs: ${bookings.map((booking) => booking.id).join(", ")}`,
-              `Service: ${serviceLabel}`,
-              `Priority: ${priorityLabel}`,
-              `Slots (Quebec): ${slotLabel}`,
-              `Name: ${name}`,
-              `Email: ${email}`,
-              `Phone: ${phone}`,
-              company ? `Company: ${company}` : null,
-              notes ? `Notes: ${notes}` : null,
-            ]
-              .filter(Boolean)
-              .join("\n"),
-            html: `
-            <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
-              <h2 style="margin:0 0 16px">New ${escapeHtml(priorityLabel)} booking</h2>
-              <p><strong>Booking IDs:</strong> ${escapeHtml(bookings.map((booking) => booking.id).join(", "))}</p>
-              <p><strong>Service:</strong> ${escapeHtml(serviceLabel)}</p>
-              <p><strong>Priority:</strong> ${escapeHtml(priorityLabel)}</p>
-              <p><strong>Slots (Quebec):</strong> ${escapeHtml(slotLabel)}</p>
-              <p><strong>Name:</strong> ${escapeHtml(name)}</p>
-              <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-              <p><strong>Phone:</strong> ${escapeHtml(phone)}</p>
-              ${company ? `<p><strong>Company:</strong> ${escapeHtml(company)}</p>` : ""}
-              ${notes ? `<p><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : ""}
-            </div>
-          `,
-          }),
-          sendAuthEmail({
-            to: email,
-            subject: "Your CVsolucion booking request is confirmed",
-            text: [
-              `Hello ${name},`,
-              "",
-              `Your ${priorityLabel.toLowerCase()} ${serviceLabel.toLowerCase()} booking request has been recorded.`,
-              `Requested slot(s) (Quebec time): ${slotLabel}`,
-              "",
-              "If any adjustment is needed, our team will contact you using the details you submitted.",
-            ].join("\n"),
-            html: `
-            <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
-              <p>Hello ${escapeHtml(name)},</p>
-              <p>Your <strong>${escapeHtml(priorityLabel.toLowerCase())}</strong> ${escapeHtml(serviceLabel.toLowerCase())} booking request has been recorded.</p>
-              <p><strong>Requested slot(s) (Quebec time):</strong> ${escapeHtml(slotLabel)}</p>
-              <p>If any adjustment is needed, our team will contact you using the details you submitted.</p>
-            </div>
-          `,
-          }),
-        ]).then((results) => {
-          results.forEach((result, index) => {
-            if (result.status === "rejected") {
-              const target = index === 0 ? "admin" : "customer";
-              console.error("[booking:email:failed]", {
-                target,
-                bookingIds: bookings.map((booking) => booking.id),
-                error:
-                  result.reason instanceof Error
-                    ? result.reason.stack || result.reason.message
-                    : String(result.reason),
-              });
-            }
-          });
+        return res.status(201).json({
+          ok: true,
+          bookings,
+          booking: bookings[0],
         });
-
-        return;
       } catch (error) {
         return next(error);
       }
@@ -5452,6 +6171,10 @@ async function startServer() {
         const country =
           countryRecord?.name || String(req.body?.country || "").trim();
         const termsVersion = "04/2026";
+        const nextPath = normalizeSafeLocalRedirect(
+          req.body?.next,
+          `${localePrefix(locale)}/`,
+        );
 
         if (!EMAIL_REGEX.test(email) || !password) {
           return res
@@ -5479,7 +6202,7 @@ async function startServer() {
           "verify_email",
           VERIFY_LINK_MS,
         );
-        const verifyUrl = `${appOrigin(req)}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}`;
+        const verifyUrl = `${appOrigin(req)}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}&locale=${encodeURIComponent(locale)}&next=${encodeURIComponent(nextPath)}`;
 
         recordEvent({
           type: "signup",
@@ -5636,7 +6359,9 @@ async function startServer() {
       scope: requestBodyFieldScope("email"),
     }),
     (req, res) => {
-      const email = String(req.body?.email || "").trim().toLowerCase();
+      const email = String(req.body?.email || "")
+        .trim()
+        .toLowerCase();
       const code = String(req.body?.code || "").trim();
       if (!EMAIL_REGEX.test(email) || !/^\d{6}$/.test(code)) {
         return res.status(400).json({ error: "A valid code is required." });
@@ -5848,10 +6573,16 @@ async function startServer() {
     const token = String(req.query.token || "");
     const locale = normalizeAuthLocale(String(req.query.locale || "en"));
     const tokenRecord = consumeToken(token, "verify_email");
-    const redirectUrl = `${appOrigin(req)}${localePrefix(locale)}/`;
+    const fallbackPath = `${localePrefix(locale)}/`;
+    const redirectPath = normalizeSafeLocalRedirect(
+      req.query.next,
+      fallbackPath,
+    );
+    const fallbackUrl = `${appOrigin(req)}${fallbackPath}`;
+    const redirectUrl = `${appOrigin(req)}${redirectPath}`;
 
     if (!tokenRecord) {
-      return res.redirect(302, redirectUrl);
+      return res.redirect(302, fallbackUrl);
     }
 
     const user = markUserEmailVerified(tokenRecord.userId);
@@ -5936,8 +6667,12 @@ async function startServer() {
 
       const rawPhone = String(req.body?.phone || "").trim();
       const countryCode = normalizeCountryCode(req.body?.countryCode);
-      const countryRecord = countryCode ? getTimezoneCountry(countryCode) : null;
-      const name = String(req.body?.name || "").trim().slice(0, 120);
+      const countryRecord = countryCode
+        ? getTimezoneCountry(countryCode)
+        : null;
+      const name = String(req.body?.name || "")
+        .trim()
+        .slice(0, 120);
       const language = normalizeCommunicationLanguage(
         String(req.body?.language || "en"),
       );
@@ -6047,7 +6782,9 @@ async function startServer() {
             console.error("[whatsapp:admin-template:error]", {
               phone: phone.whatsappNumber,
               error:
-                error instanceof Error ? error.stack || error.message : String(error),
+                error instanceof Error
+                  ? error.stack || error.message
+                  : String(error),
             });
           });
       }
@@ -6141,7 +6878,9 @@ async function startServer() {
             console.error("[whatsapp:admin-send:error]", {
               conversationId,
               error:
-                error instanceof Error ? error.stack || error.message : String(error),
+                error instanceof Error
+                  ? error.stack || error.message
+                  : String(error),
             });
           });
       }
@@ -6178,7 +6917,11 @@ async function startServer() {
 
   app.patch(
     "/api/admin/invoices/:invoiceId",
-    rateLimit({ key: "admin-invoice-update", windowMs: 1000 * 60 * 5, limit: 80 }),
+    rateLimit({
+      key: "admin-invoice-update",
+      windowMs: 1000 * 60 * 5,
+      limit: 80,
+    }),
     (req, res, next) => {
       try {
         const auth = requireAdmin(req, res);
@@ -6221,7 +6964,9 @@ async function startServer() {
               : undefined,
           taxLabel: req.body?.taxLabel,
           taxRate:
-            typeof req.body?.taxRate === "number" ? req.body.taxRate : undefined,
+            typeof req.body?.taxRate === "number"
+              ? req.body.taxRate
+              : undefined,
           lineItems: Array.isArray(req.body?.lineItems)
             ? req.body.lineItems
             : undefined,
@@ -6245,7 +6990,11 @@ async function startServer() {
 
   app.post(
     "/api/admin/invoices/:invoiceId/merge",
-    rateLimit({ key: "admin-invoice-merge", windowMs: 1000 * 60 * 5, limit: 40 }),
+    rateLimit({
+      key: "admin-invoice-merge",
+      windowMs: 1000 * 60 * 5,
+      limit: 40,
+    }),
     (req, res, next) => {
       try {
         const auth = requireAdmin(req, res);
@@ -6253,7 +7002,9 @@ async function startServer() {
 
         const invoiceId = String(req.params.invoiceId || "").trim();
         const sourceInvoiceIds = Array.isArray(req.body?.sourceInvoiceIds)
-          ? req.body.sourceInvoiceIds.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+          ? req.body.sourceInvoiceIds
+              .map((item: unknown) => String(item || "").trim())
+              .filter(Boolean)
           : [];
         const result = mergeInvoicesByAdmin({
           targetInvoiceId: invoiceId,
@@ -6282,7 +7033,11 @@ async function startServer() {
 
   app.post(
     "/api/admin/invoices/:invoiceId/issue",
-    rateLimit({ key: "admin-invoice-issue", windowMs: 1000 * 60 * 5, limit: 50 }),
+    rateLimit({
+      key: "admin-invoice-issue",
+      windowMs: 1000 * 60 * 5,
+      limit: 50,
+    }),
     (req, res, next) => {
       try {
         const auth = requireAdmin(req, res);
@@ -6325,7 +7080,9 @@ async function startServer() {
               : undefined,
           taxLabel: req.body?.taxLabel,
           taxRate:
-            typeof req.body?.taxRate === "number" ? req.body.taxRate : undefined,
+            typeof req.body?.taxRate === "number"
+              ? req.body.taxRate
+              : undefined,
           lineItems: Array.isArray(req.body?.lineItems)
             ? req.body.lineItems
             : undefined,
@@ -6346,7 +7103,10 @@ async function startServer() {
         ).catch((error) => {
           console.error("[invoice-issued:customer-email-error]", {
             invoiceId: invoice.id,
-            error: error instanceof Error ? error.stack || error.message : String(error),
+            error:
+              error instanceof Error
+                ? error.stack || error.message
+                : String(error),
           });
         });
 
@@ -6359,13 +7119,19 @@ async function startServer() {
 
   app.get(
     "/api/admin/invoices/:invoiceId/download",
-    rateLimit({ key: "admin-invoice-download", windowMs: 1000 * 60, limit: 120 }),
+    rateLimit({
+      key: "admin-invoice-download",
+      windowMs: 1000 * 60,
+      limit: 120,
+    }),
     async (req, res, next) => {
       try {
         const auth = requireAdmin(req, res);
         if (!auth) return;
 
-        const invoice = getInvoiceById(String(req.params.invoiceId || "").trim());
+        const invoice = getInvoiceById(
+          String(req.params.invoiceId || "").trim(),
+        );
         if (!invoice) {
           return res.status(404).json({ error: "Invoice not found." });
         }
@@ -8069,23 +8835,38 @@ async function startServer() {
             .json({ error: "This booking has no Stripe payment to refund." });
         }
 
-        if (booking.paymentStatus === "refunded") {
-          return res
-            .status(400)
-            .json({ error: "This booking has already been refunded." });
+        let refundClaim: ReturnType<typeof claimBookingRefundByAdmin>;
+        try {
+          refundClaim = claimBookingRefundByAdmin({
+            bookingId: booking.id,
+            attemptId: crypto.randomBytes(16).toString("hex"),
+            refundAmount: booking.unitAmount,
+          });
+        } catch (error) {
+          throw exposedRequestError(
+            error instanceof Error ? error.message : "Refund is unavailable.",
+            409,
+          );
         }
 
         const refund = await createBookingRefund({
           paymentIntentId: booking.paymentReference,
           amount: booking.unitAmount,
           bookingIds: [booking.id],
+          idempotencyKey: `admin-booking-refund-${booking.id}-${refundClaim.attemptId}`,
         });
-
-        const updated = markBookingRefundPendingByAdmin({
-          bookingId: booking.id,
+        const refundStatus = normalizeStripeRefundStatus(refund.status);
+        applyStripeRefundUpdate({
+          paymentReference: booking.paymentReference,
           refundId: refund.id,
           refundAmount: refund.amount || booking.unitAmount,
+          currency: refund.currency,
+          refundStatus,
+          bookingIds: [booking.id],
         });
+        const updated = getBookingById(booking.id);
+        if (!updated)
+          throw new Error("Booking refund could not be synchronized.");
 
         recordEvent({
           type: "admin_booking_refund_requested",
@@ -8101,7 +8882,7 @@ async function startServer() {
           booking: serializeCustomerBooking(updated),
           refund: {
             id: refund.id,
-            status: refund.status,
+            status: refundStatus,
             amount: refund.amount,
             currency: refund.currency,
           },

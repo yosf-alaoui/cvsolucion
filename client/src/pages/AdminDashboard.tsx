@@ -142,7 +142,10 @@ function getVisitorLabel(visitor: AdminDashboardVisitor) {
   return visitor.email || visitor.ip || visitor.id.slice(0, 12);
 }
 
-function getVisitorGroupLabel(group: VisitorGroup, copy: Record<string, string>) {
+function getVisitorGroupLabel(
+  group: VisitorGroup,
+  copy: Record<string, string>,
+) {
   if (group === "new") return copy.newVisitors;
   if (group === "returning") return copy.returningVisitors;
   return copy.allVisitors;
@@ -1027,7 +1030,11 @@ export default function AdminDashboard() {
   const filteredInvoices = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return [...(data?.invoices ?? [])]
-      .sort((a, b) => (b.updatedAt || b.requestedAt).localeCompare(a.updatedAt || a.requestedAt))
+      .sort((a, b) =>
+        (b.updatedAt || b.requestedAt).localeCompare(
+          a.updatedAt || a.requestedAt,
+        ),
+      )
       .filter((invoice) => {
         if (!normalizedQuery) return true;
         return [
@@ -1041,7 +1048,9 @@ export default function AdminDashboard() {
           invoice.bookingId,
         ]
           .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+          .some((value) =>
+            String(value).toLowerCase().includes(normalizedQuery),
+          );
       });
   }, [data?.invoices, query]);
 
@@ -1080,7 +1089,7 @@ export default function AdminDashboard() {
         item.lastPath,
       ]
         .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
     });
   }, [data?.conversations, query]);
 
@@ -1133,8 +1142,7 @@ export default function AdminDashboard() {
   }, [selectedVisitorId, visibleVisitors]);
 
   const selectedVisitor = useMemo(
-    () =>
-      visibleVisitors.find((item) => item.id === selectedVisitorId) ?? null,
+    () => visibleVisitors.find((item) => item.id === selectedVisitorId) ?? null,
     [visibleVisitors, selectedVisitorId],
   );
   const eventTypes = useMemo(
@@ -1155,7 +1163,9 @@ export default function AdminDashboard() {
                   ...current.whatsappInbox.conversations.filter(
                     (item) => item.id !== conversation.id,
                   ),
-                ].sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt)),
+                ].sort((a, b) =>
+                  b.lastMessageAt.localeCompare(a.lastMessageAt),
+                ),
               },
             }
           : current,
@@ -1193,7 +1203,12 @@ export default function AdminDashboard() {
         setSendingWhatsApp(false);
       }
     },
-    [copy.whatsappSendError, copy.whatsappSent, load, updateWhatsAppConversation],
+    [
+      copy.whatsappSendError,
+      copy.whatsappSent,
+      load,
+      updateWhatsAppConversation,
+    ],
   );
 
   const handleStartWhatsAppTemplate = useCallback(
@@ -1401,19 +1416,22 @@ export default function AdminDashboard() {
     [],
   );
 
-  const handleAdminInvoiceSaved = useCallback((invoice: AdminDashboardInvoice) => {
-    setData((current) =>
-      current
-        ? {
-            ...current,
-            invoices: [
-              invoice,
-              ...current.invoices.filter((item) => item.id !== invoice.id),
-            ],
-          }
-        : current,
-    );
-  }, []);
+  const handleAdminInvoiceSaved = useCallback(
+    (invoice: AdminDashboardInvoice) => {
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              invoices: [
+                invoice,
+                ...current.invoices.filter((item) => item.id !== invoice.id),
+              ],
+            }
+          : current,
+      );
+    },
+    [],
+  );
 
   const handleAdminInvoicesMerged = useCallback(
     (invoice: AdminDashboardInvoice, removedInvoiceIds: string[]) => {
@@ -1874,6 +1892,38 @@ export default function AdminDashboard() {
                       <StatPill
                         label="cta_click"
                         value={data?.ga4?.events7d.ctaClicks ?? 0}
+                      />
+                      <StatPill
+                        label="form_start"
+                        value={data?.ga4?.events7d.formStarts ?? 0}
+                      />
+                      <StatPill
+                        label="form_submit"
+                        value={data?.ga4?.events7d.formSubmits ?? 0}
+                      />
+                      <StatPill
+                        label="email_verification_required"
+                        value={data?.ga4?.events7d.verificationRequired ?? 0}
+                      />
+                      <StatPill
+                        label="generate_lead"
+                        value={data?.ga4?.events7d.leads ?? 0}
+                      />
+                      <StatPill
+                        label="contact"
+                        value={data?.ga4?.events7d.contacts ?? 0}
+                      />
+                      <StatPill
+                        label="add_to_cart"
+                        value={data?.ga4?.events7d.addToCarts ?? 0}
+                      />
+                      <StatPill
+                        label="begin_checkout"
+                        value={data?.ga4?.events7d.beginCheckouts ?? 0}
+                      />
+                      <StatPill
+                        label="purchase"
+                        value={data?.ga4?.events7d.purchases ?? 0}
                       />
                     </div>
 

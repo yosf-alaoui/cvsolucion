@@ -94,11 +94,13 @@ Notes:
 - `SMTP_USER` is the real authenticated mailbox used as the sender.
 - `SMTP_FROM` should be a display name or a verified sender tied to that mailbox.
 - `CONTACT_EMAIL` is the public inbox that should receive replies.
+- Self-serve bookings fail closed when Stripe is not configured. Set
+  `ALLOW_UNPAID_BOOKINGS=true` only for an intentional manual-payment workflow;
+  keep it `false` in production.
 
 Optional analytics variables:
 
 ```env
-VITE_ENABLE_GTM=false
 VITE_GTM_ID=
 VITE_GA4_ID=
 VITE_UMAMI_URL=
@@ -106,6 +108,16 @@ VITE_UMAMI_WEBSITE_ID=
 VITE_ANALYTICS_ENDPOINT=
 VITE_ANALYTICS_WEBSITE_ID=
 ```
+
+Setting `VITE_GTM_ID` automatically enables and loads that GTM container. The
+legacy `VITE_ENABLE_GTM` switch is ignored when a container ID is present. If
+GTM is not configured, funnel events are sent directly through `VITE_GA4_ID`.
+When GA4 is configured inside GTM, disable both the tag's automatic initial
+page-view and Enhanced Measurement/history-change page views. Trigger page
+views only from the `virtual_pageview` data-layer event; the application emits
+that event after each route title is updated. Existing GTM rules that listen
+for the legacy `Lead` event remain compatible, while the payload exposes
+`event_name=generate_lead` for GA4.
 
 ## Project Structure
 
@@ -130,6 +142,9 @@ shared/
 - The Node server builds to `dist/index.js`
 - In production, Express serves the built app and static assets
 - Persistent JSON data is stored under `APP_DATA_DIR` and should point to a shared path outside each release folder in production
+- Keep one application writer instance for bookings with the current document
+  store; horizontal replicas require a row-level transactional booking store
+  before they are enabled.
 - Reverse proxy and CSP are expected to be handled by Nginx
 - Keep `.env` only on the server and never commit secrets
 

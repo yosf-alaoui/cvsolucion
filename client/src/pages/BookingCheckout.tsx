@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import BookingFlowSteps from "@/components/booking/BookingFlowSteps";
 import BookingOrderSummary from "@/components/booking/BookingOrderSummary";
 import StripePaymentForm from "@/components/booking/StripePaymentForm";
@@ -24,6 +24,7 @@ import { getCustomerDashboard } from "@/lib/customer";
 import { getBookingCountryLabel, getBookingCountryOptions, getBookingRegionLabel } from "@/lib/bookingTime";
 import { buildInternationalPhone, getDefaultPhoneCountryCode, getPhoneCountryOptions, splitInternationalPhone } from "@/lib/phone";
 import { createBookingPaymentIntent, getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
+import { trackFunnelEvent } from "@/lib/analytics";
 import { useI18n } from "@/i18n/i18n";
 
 function getCopy(locale: string) {
@@ -52,7 +53,7 @@ function getCopy(locale: string) {
       email: "البريد الإلكتروني",
       phone: "الهاتف / واتساب",
       country: "الدولة",
-      company: "الشركة",
+      company: "الشركة (اختياري)",
       problem: "اشرح المشكلة أو الطلب",
       consultation: "استشارة",
       support: "دعم",
@@ -74,6 +75,7 @@ function getCopy(locale: string) {
       payNow: "ادفع وأكد",
       processing: "جارٍ تأكيد الدفع...",
       preparing: "جارٍ تجهيز نموذج الدفع الآمن...",
+      continuePayment: "متابعة إلى الدفع الآمن",
       paymentUnavailable: "الدفع غير متاح حالياً لهذا النوع.",
       seoTitle: "الدفع وإتمام الحجز | CVsolucion",
     };
@@ -104,7 +106,7 @@ function getCopy(locale: string) {
       email: "Email",
       phone: "Telephone / WhatsApp",
       country: "Pays",
-      company: "Societe",
+      company: "Societe (facultatif)",
       problem: "Decrivez le probleme ou la demande",
       consultation: "Consultation",
       support: "Support",
@@ -126,6 +128,7 @@ function getCopy(locale: string) {
       payNow: "Payer et confirmer",
       processing: "Confirmation du paiement...",
       preparing: "Preparation du paiement securise...",
+      continuePayment: "Continuer vers le paiement securise",
       paymentUnavailable: "Le paiement n'est pas disponible pour ce type actuellement.",
       seoTitle: "Paiement et validation | CVsolucion",
     };
@@ -157,7 +160,7 @@ function getCopy(locale: string) {
     email: "Email",
     phone: "Phone / WhatsApp",
     country: "Country",
-    company: "Company",
+    company: "Company (optional)",
     problem: "Describe the issue or request",
     consultation: "Consultation",
     support: "Support",
@@ -179,6 +182,7 @@ function getCopy(locale: string) {
     payNow: "Pay and confirm",
     processing: "Confirming payment...",
     preparing: "Preparing secure payment...",
+    continuePayment: "Continue to secure payment",
     paymentUnavailable: "Payment is not available for this type right now.",
     seoTitle: "Checkout and payment | CVsolucion",
   };
@@ -208,6 +212,13 @@ function firstCountryCode(...values: Array<string | null | undefined>) {
   return values.find((value) => typeof value === "string" && value.trim()) || "CA";
 }
 
+function createCheckoutAttemptId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `checkout_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+}
+
 export default function BookingCheckout() {
   const { locale } = useI18n();
   const { user, loading: authLoading } = useAuth();
@@ -217,8 +228,11 @@ export default function BookingCheckout() {
   const [saving, setSaving] = useState(false);
   const [stripeConfig, setStripeConfig] = useState<StripeConfigResponse | null>(null);
   const [availability, setAvailability] = useState<BookingAvailabilityResponse | null>(null);
+  const [availabilityError, setAvailabilityError] = useState(false);
   const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const paymentRequestId = useRef(0);
+  const checkoutAttemptId = useRef<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -254,20 +268,39 @@ export default function BookingCheckout() {
   }, [currentDraftOwner]);
 
   useEffect(() => {
+    let cancelled = false;
+    setStripeConfig(null);
     getStripeBookingConfig(pricingCountryCode)
-      .then((response) => setStripeConfig(response))
-      .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", cardPaymentFeeCents: 1500, prices: {} }));
+      .then((response) => {
+        if (!cancelled) setStripeConfig(response);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", cardPaymentFeeCents: 1500, prices: {} });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [pricingCountryCode]);
 
   useEffect(() => {
     if (!user || !draft?.slots.length) {
       setAvailability(null);
+      setAvailabilityError(false);
       return;
     }
 
+    setAvailabilityError(false);
     getBookingAvailability(draft.priority)
-      .then((response) => setAvailability(response))
-      .catch(() => setAvailability(null));
+      .then((response) => {
+        setAvailability(response);
+        setAvailabilityError(false);
+      })
+      .catch(() => {
+        setAvailability(null);
+        setAvailabilityError(true);
+      });
   }, [draft?.priority, draft?.slots.length, user]);
 
   useEffect(() => {
@@ -329,6 +362,30 @@ export default function BookingCheckout() {
   const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";
   const priorityLabel = draft ? (draft.priority === "express" ? copy.express : copy.standard) : "";
   const packageLabel = draft ? getPackageLabel(draft.packageKey, locale) : null;
+  const bookingAnalyticsItems = draft
+    ? [
+        {
+          item_id: `booking_${draft.serviceType}_${draft.priority}`,
+          item_name: `${serviceLabel} - ${priorityLabel}`,
+          item_category: "booking",
+          item_variant: draft.priority,
+          price: unitAmount / 100,
+          quantity: draft.slots.length,
+        },
+        ...(cardPaymentFeeCents > 0
+          ? [
+              {
+                item_id: "card_payment_fee",
+                item_name: copy.cardFee,
+                item_category: "fee",
+                item_variant: "card",
+                price: cardPaymentFeeCents / 100,
+                quantity: 1,
+              },
+            ]
+          : []),
+      ]
+    : [];
   const unavailableLabel =
     "unavailable" in copy ? copy.unavailable : locale === "ar" ? "غير متاح الآن" : locale === "fr" ? "Plus disponible" : "No longer available";
   const replaceLabel =
@@ -339,52 +396,137 @@ export default function BookingCheckout() {
       availability.days.flatMap((day) => day.slots).filter((slot) => slot.status === "available").map((slot) => slot.id)
     );
   }, [availability]);
-  const unavailableSlotIds = useMemo(
-    () => draft?.slots.filter((slot) => !availableSlotIds.has(slot.id)).map((slot) => slot.id) ?? [],
-    [availableSlotIds, draft?.slots]
+  const availabilityReady = Boolean(
+    availability && draft && availability.priority === draft.priority,
   );
-  const billingReady = Boolean(form.name.trim() && form.email.trim() && form.phone.trim() && pricingCountryCode && form.problem.trim());
+  const availabilityChecked = availabilityReady || availabilityError;
+  const unavailableSlotIds = useMemo(
+    () =>
+      availabilityReady
+        ? draft?.slots
+            .filter((slot) => !availableSlotIds.has(slot.id))
+            .map((slot) => slot.id) ?? []
+        : [],
+    [availabilityReady, availableSlotIds, draft?.slots]
+  );
+  const availabilityErrorText =
+    locale === "ar"
+      ? "تعذر تحديث حالة المواعيد الآن. سيتحقق الخادم منها مرة أخرى قبل إنشاء الدفع."
+      : locale === "fr"
+        ? "Impossible d'actualiser les disponibilités. Le serveur les vérifiera à nouveau avant de créer le paiement."
+        : "We could not refresh availability. The server will verify it again before creating the payment.";
+  const normalizedPhone = buildInternationalPhone(
+    form.phoneCountryCode || pricingCountryCode,
+    form.phone,
+  );
+  const billingReady = Boolean(
+    form.name.trim().length >= 2 &&
+      form.name.trim().length <= 120 &&
+      form.email.trim() &&
+      normalizedPhone.replace(/\D/g, "").length >= 6 &&
+      normalizedPhone.length <= 40 &&
+      pricingCountryCode &&
+      form.company.trim().length <= 160 &&
+      form.problem.trim().length >= 10 &&
+      form.problem.trim().length <= 500,
+  );
   const replaceHref = draft
     ? `${bookingHref}?priority=${encodeURIComponent(draft.priority)}&service=${encodeURIComponent(draft.serviceType)}${draft.packageKey ? `&package=${encodeURIComponent(draft.packageKey)}` : ""}`
     : bookingHref;
 
   useEffect(() => {
-    if (!user || !draft || !draft.slots.length || !stripeEnabled || unavailableSlotIds.length > 0) {
-      setPaymentClientSecret(null);
+    paymentRequestId.current += 1;
+    checkoutAttemptId.current = null;
+    setPaymentClientSecret(null);
+    setPaymentLoading(false);
+  }, [
+    availabilityChecked,
+    billingReady,
+    draft,
+    form.company,
+    form.name,
+    form.problem,
+    locale,
+    normalizedPhone,
+    pricingCountryCode,
+    stripeEnabled,
+    unavailableSlotIds.length,
+    user,
+  ]);
+
+  async function handlePreparePayment() {
+    if (
+      !user ||
+      !draft ||
+      !draft.slots.length ||
+      !stripeEnabled ||
+      !billingReady ||
+      !availabilityChecked ||
+      unavailableSlotIds.length > 0 ||
+      paymentLoading ||
+      paymentClientSecret
+    ) {
       return;
     }
 
-    let cancelled = false;
-    setPaymentClientSecret(null);
+    const requestId = ++paymentRequestId.current;
+    const attemptId = checkoutAttemptId.current || createCheckoutAttemptId();
+    checkoutAttemptId.current = attemptId;
+    setStatus(null);
     setPaymentLoading(true);
-
-    createBookingPaymentIntent({
-      serviceType: draft.serviceType,
+    trackFunnelEvent("begin_checkout", {
+      currency: currency.toUpperCase(),
+      value: totalAmount / 100,
+      service_type: draft.serviceType,
       priority: draft.priority,
-      countryCode: pricingCountryCode,
-      slots: draft.slots.map((slot) => ({ date: slot.date, hour: slot.hour })),
-      locale,
-    })
-      .then((response) => {
-        if (!cancelled) {
-          setPaymentClientSecret(response.clientSecret);
-        }
-      })
-      .catch((error: Error) => {
-        if (!cancelled) {
-          setStatus({ tone: "error", text: error.message });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setPaymentLoading(false);
-        }
+      slot_count: draft.slots.length,
+      items: bookingAnalyticsItems,
+    });
+    try {
+      const response = await createBookingPaymentIntent({
+        serviceType: draft.serviceType,
+        priority: draft.priority,
+        countryCode: pricingCountryCode,
+        slots: draft.slots.map((slot) => ({ date: slot.date, hour: slot.hour })),
+        locale,
+        checkoutAttemptId: attemptId,
+        name: form.name.trim(),
+        phone: normalizedPhone,
+        company: form.company.trim() || null,
+        notes: form.problem.trim(),
+        packageKey: draft.packageKey || null,
       });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [draft, locale, pricingCountryCode, stripeEnabled, unavailableSlotIds.length, user]);
+      if (requestId === paymentRequestId.current) {
+        setPaymentClientSecret(response.clientSecret);
+        trackFunnelEvent("payment_form_opened", {
+          currency: currency.toUpperCase(),
+          value: totalAmount / 100,
+          service_type: draft.serviceType,
+          priority: draft.priority,
+          slot_count: draft.slots.length,
+          items: bookingAnalyticsItems,
+        });
+      }
+    } catch (error) {
+      if (requestId === paymentRequestId.current) {
+        trackFunnelEvent("checkout_error", {
+          checkout_stage: "payment_intent_creation",
+          error_type: error instanceof Error ? error.name : "unknown",
+          service_type: draft.serviceType,
+          priority: draft.priority,
+          slot_count: draft.slots.length,
+        });
+        setStatus({
+          tone: "error",
+          text: error instanceof Error ? error.message : copy.paymentUnavailable,
+        });
+      }
+    } finally {
+      if (requestId === paymentRequestId.current) {
+        setPaymentLoading(false);
+      }
+    }
+  }
 
   async function finalizeBooking(paymentIntentId: string) {
     if (!draft || !draft.slots.length) return;
@@ -407,6 +549,16 @@ export default function BookingCheckout() {
         notes: form.problem,
         paymentIntentId,
         locale,
+      });
+
+      trackFunnelEvent("purchase", {
+        transaction_id: paymentIntentId,
+        currency: currency.toUpperCase(),
+        value: totalAmount / 100,
+        service_type: draft.serviceType,
+        priority: draft.priority,
+        slot_count: draft.slots.length,
+        items: bookingAnalyticsItems,
       });
 
       clearBookingCheckoutDraft();
@@ -511,7 +663,7 @@ export default function BookingCheckout() {
                     <form className="mt-6 grid gap-4 md:grid-cols-2" onSubmit={(event) => event.preventDefault()}>
                       <div className="space-y-2">
                         <Label htmlFor="booking-name">{copy.name}</Label>
-                        <Input id="booking-name" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
+                        <Input id="booking-name" value={form.name} minLength={2} maxLength={120} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="booking-email">{copy.email}</Label>
@@ -535,7 +687,7 @@ export default function BookingCheckout() {
                               ))}
                             </SelectContent>
                           </Select>
-                          <Input id="booking-phone" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} required />
+                          <Input id="booking-phone" value={form.phone} maxLength={40} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} required />
                         </div>
                       </div>
                       <div className="space-y-2">
@@ -565,7 +717,7 @@ export default function BookingCheckout() {
                       </div>
                       <div className="space-y-2 md:col-span-2">
                         <Label htmlFor="booking-company">{copy.company}</Label>
-                        <Input id="booking-company" value={form.company} onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))} />
+                        <Input id="booking-company" value={form.company} maxLength={160} onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))} />
                       </div>
                       <div className="space-y-2 md:col-span-2">
                         <Label htmlFor="booking-problem">{copy.problem}</Label>
@@ -573,15 +725,34 @@ export default function BookingCheckout() {
                           id="booking-problem"
                           className="min-h-36"
                           value={form.problem}
+                          minLength={10}
+                          maxLength={500}
                           onChange={(event) => setForm((current) => ({ ...current, problem: event.target.value }))}
                           required
                         />
+                        <p className={`text-xs ${form.problem.trim().length > 0 && form.problem.trim().length < 10 ? "text-rose-600" : "text-slate-500"}`}>
+                          {locale === "ar"
+                            ? "اكتب 10 أحرف على الأقل."
+                            : locale === "fr"
+                              ? "Saisissez au moins 10 caracteres."
+                              : "Enter at least 10 characters."}
+                        </p>
                       </div>
                     </form>
                   )}
                 </GlassCard>
 
-                {!user ? null : unavailableSlotIds.length > 0 ? (
+                {user && availabilityError ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-900">
+                    {availabilityErrorText}
+                  </div>
+                ) : null}
+
+                {!user ? null : !availabilityChecked ? (
+                  <GlassCard className="card-static rounded-[32px] p-7">
+                    <div className="text-sm text-slate-500">{copy.preparing}</div>
+                  </GlassCard>
+                ) : unavailableSlotIds.length > 0 ? (
                   <GlassCard className="card-static rounded-[32px] p-7">
                     <div className="text-sm text-slate-500">
                       {locale === "ar"
@@ -592,7 +763,11 @@ export default function BookingCheckout() {
                     </div>
                   </GlassCard>
                 ) : stripeEnabled ? (
-                  paymentLoading ? (
+                  !billingReady ? (
+                    <GlassCard className="card-static rounded-[32px] p-7">
+                      <div className="text-sm text-slate-500">{copy.missingCustomer}</div>
+                    </GlassCard>
+                  ) : paymentLoading ? (
                     <GlassCard className="card-static rounded-[32px] p-7">
                       <div className="text-sm text-slate-500">{copy.preparing}</div>
                     </GlassCard>
@@ -620,9 +795,27 @@ export default function BookingCheckout() {
                         payNow: saving ? copy.processing : copy.payNow,
                         processing: copy.processing,
                       }}
+                      analyticsParams={{
+                        currency: currency.toUpperCase(),
+                        value: totalAmount / 100,
+                        service_type: draft.serviceType,
+                        priority: draft.priority,
+                        slot_count: draft.slots.length,
+                        items: bookingAnalyticsItems,
+                      }}
+                      allowManualCapture
                       onSuccess={finalizeBooking}
                     />
-                  ) : null
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={handlePreparePayment}
+                      data-track="cta"
+                      className="h-12 w-full rounded-full bg-primary text-white hover:bg-primary/90"
+                    >
+                      {copy.continuePayment}
+                    </Button>
+                  )
                 ) : (
                   <GlassCard className="card-static rounded-[32px] p-7">
                     <div className="text-sm text-slate-500">{copy.paymentUnavailable}</div>

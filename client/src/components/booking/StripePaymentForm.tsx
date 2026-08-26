@@ -3,6 +3,7 @@ import { CardCvcElement, CardExpiryElement, CardNumberElement, Elements, useElem
 import { loadStripe } from "@stripe/stripe-js";
 import { CreditCard, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { trackFunnelEvent, type AnalyticsEventParams } from "@/lib/analytics";
 
 type BillingDetails = {
   name: string;
@@ -29,6 +30,8 @@ type StripePaymentFormProps = {
     payNow: string;
     processing: string;
   };
+  analyticsParams?: AnalyticsEventParams;
+  allowManualCapture?: boolean;
   onSuccess: (paymentIntentId: string) => Promise<void>;
 };
 
@@ -49,6 +52,8 @@ function StripePaymentFormInner({
   billingReady,
   billingDetails,
   copy,
+  analyticsParams,
+  allowManualCapture = false,
   onSuccess,
 }: Omit<StripePaymentFormProps, "publishableKey">) {
   const stripe = useStripe();
@@ -83,6 +88,12 @@ function StripePaymentFormInner({
 
     setBusy(true);
     setError(null);
+    trackFunnelEvent("add_payment_info", {
+      payment_type: "card",
+      ...analyticsParams,
+    });
+    let paymentConfirmed = false;
+    let failureDetails: Record<string, unknown> = {};
     try {
       const result = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
@@ -98,22 +109,52 @@ function StripePaymentFormInner({
       if (result.error) {
         const recovered = await stripe.retrievePaymentIntent(clientSecret);
         const recoveredIntent = recovered.paymentIntent;
-        if (recoveredIntent?.id && recoveredIntent.status === "succeeded") {
+        if (
+          recoveredIntent?.id &&
+          (recoveredIntent.status === "succeeded" ||
+            (allowManualCapture && recoveredIntent.status === "requires_capture"))
+        ) {
+          paymentConfirmed = true;
           await onSuccess(recoveredIntent.id);
           return;
         }
+
+        failureDetails = {
+          error_type: result.error.type || "stripe_error",
+          error_code: result.error.code || null,
+          decline_code: result.error.decline_code || null,
+          payment_intent_status: recoveredIntent?.status || null,
+        };
 
         throw new Error(result.error.message || "Payment failed.");
       }
 
       const paymentIntentId = result.paymentIntent?.id;
       if (!paymentIntentId) {
+        failureDetails = { failure_reason: "missing_payment_reference" };
         throw new Error("Stripe did not return a payment reference.");
       }
+      if (
+        result.paymentIntent?.status !== "succeeded" &&
+        !(allowManualCapture && result.paymentIntent?.status === "requires_capture")
+      ) {
+        failureDetails = {
+          payment_intent_status: result.paymentIntent?.status || "unknown",
+        };
+        throw new Error("Payment has not completed. Please try again.");
+      }
 
+      paymentConfirmed = true;
       await onSuccess(paymentIntentId);
     } catch (caught: any) {
-      setError(caught?.message || "Payment failed.");
+      const errorMessage = caught?.message || "Payment failed.";
+      trackFunnelEvent(paymentConfirmed ? "checkout_completion_failed" : "payment_failed", {
+        payment_type: "card",
+        failure_stage: paymentConfirmed ? "order_completion" : "payment_confirmation",
+        ...failureDetails,
+        ...analyticsParams,
+      });
+      setError(errorMessage);
     } finally {
       setBusy(false);
     }
@@ -220,6 +261,8 @@ export default function StripePaymentForm(props: StripePaymentFormProps) {
         billingReady={props.billingReady}
         billingDetails={props.billingDetails}
         copy={props.copy}
+        analyticsParams={props.analyticsParams}
+        allowManualCapture={props.allowManualCapture}
         onSuccess={props.onSuccess}
       />
     </Elements>

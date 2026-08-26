@@ -51,10 +51,11 @@ async function stopServer() {
   ]);
 }
 
-async function request(pathname) {
+async function request(pathname, init = {}) {
   return fetch(`${baseUrl}${pathname}`, {
     redirect: "manual",
     signal: AbortSignal.timeout(5000),
+    ...init,
   });
 }
 
@@ -101,6 +102,34 @@ try {
   const training = await request("/api/training/programs");
   assert.equal(training.status, 200);
   assert.ok(Array.isArray((await training.json()).programs));
+
+  const trainingPricing = await request("/api/training/pricing?countryCode=CA");
+  assert.equal(trainingPricing.status, 200);
+  assert.ok(Array.isArray((await trainingPricing.json()).programs));
+
+  const availability = await request(
+    "/api/bookings/availability?priority=standard",
+  );
+  assert.equal(availability.status, 200);
+  assert.ok(Array.isArray((await availability.json()).days));
+
+  const careerConversion = await request(
+    "/api/contact/career-conversion",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: baseUrl,
+        "Sec-Fetch-Site": "same-origin",
+      },
+      body: "{}",
+    },
+  );
+  assert.equal(careerConversion.status, 200);
+  assert.deepEqual(await careerConversion.json(), {
+    confirmed: false,
+    leadId: null,
+  });
 
   const missingAsset = await request("/missing-smoke-asset-2026.png");
   assert.equal(missingAsset.status, 404);

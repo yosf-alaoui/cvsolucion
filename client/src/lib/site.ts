@@ -1,5 +1,5 @@
 export const CONTACT_EMAIL = "contact@cvsolucion.com";
-export const WHATSAPP_PHONE = "+1 514 963 8719";
+export const WHATSAPP_PHONE = "+1 438 807 8747";
 
 function localePrefix(locale: "en" | "fr" | "ar") {
   if (locale === "fr") return "/fr";

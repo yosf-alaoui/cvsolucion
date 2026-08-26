@@ -40,6 +40,12 @@ export function createBookingPaymentIntent(payload: {
   countryCode?: string | null;
   slots: Array<{ date: string; hour: number }>;
   locale: string;
+  checkoutAttemptId: string;
+  name: string;
+  phone: string;
+  company?: string | null;
+  notes: string;
+  packageKey?: string | null;
 }) {
   return request<{ ok: true; clientSecret: string; paymentIntentId: string }>("/api/stripe/booking-payment-intent", {
     method: "POST",

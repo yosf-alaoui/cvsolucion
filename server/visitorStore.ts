@@ -37,7 +37,22 @@ export type VisitorInteractionType =
   | "email_click"
   | "cta_click"
   | "chat_open"
-  | "chat_message";
+  | "chat_message"
+  | "form_start"
+  | "form_submit"
+  | "email_verification_required"
+  | "generate_lead"
+  | "contact"
+  | "add_to_cart"
+  | "checkout_sign_in"
+  | "checkout_continue"
+  | "begin_checkout"
+  | "payment_form_opened"
+  | "add_payment_info"
+  | "purchase"
+  | "payment_failed"
+  | "checkout_error"
+  | "checkout_completion_failed";
 
 export type VisitorInteraction = {
   type: VisitorInteractionType;
@@ -142,7 +157,22 @@ function normalizeInteractionType(value: unknown): VisitorInteractionType {
     value === "email_click" ||
     value === "cta_click" ||
     value === "chat_open" ||
-    value === "chat_message"
+    value === "chat_message" ||
+    value === "form_start" ||
+    value === "form_submit" ||
+    value === "email_verification_required" ||
+    value === "generate_lead" ||
+    value === "contact" ||
+    value === "add_to_cart" ||
+    value === "checkout_sign_in" ||
+    value === "checkout_continue" ||
+    value === "begin_checkout" ||
+    value === "payment_form_opened" ||
+    value === "add_payment_info" ||
+    value === "purchase" ||
+    value === "payment_failed" ||
+    value === "checkout_error" ||
+    value === "checkout_completion_failed"
     ? value
     : "session_start";
 }
@@ -436,6 +466,12 @@ function isInternalHost(host: string | null) {
   return Boolean(
     host && (host === "cvsolucion.com" || host.endsWith(".cvsolucion.com")),
   );
+}
+
+export function getAcquisitionReferrer(value: string | null | undefined) {
+  const normalized = textOrNull(value);
+  const host = getHost(normalized);
+  return host && isInternalHost(host) ? null : normalized;
 }
 
 function isSearchHost(host: string) {
@@ -780,6 +816,7 @@ export function trackVisitor(input: {
   const liFatId = input.liFatId || params.get("li_fat_id");
   const wbraid = input.wbraid || params.get("wbraid");
   const gbraid = input.gbraid || params.get("gbraid");
+  const acquisitionReferrer = getAcquisitionReferrer(input.referrer);
   let visitor = db.visitors.find((item) => item.id === input.visitorId);
 
   if (!visitor) {
@@ -791,7 +828,7 @@ export function trackVisitor(input: {
       landingPath: input.path,
       lastPath: input.path,
       locale: input.locale || "en",
-      referrer: input.referrer || null,
+      referrer: acquisitionReferrer,
       ip: input.ip || null,
       userAgent: input.userAgent || null,
       browserLanguage: input.browserLanguage || null,
@@ -838,7 +875,7 @@ export function trackVisitor(input: {
   visitor.visitCount += 1;
   visitor.lastPath = input.path;
   visitor.locale = input.locale || visitor.locale;
-  visitor.referrer = input.referrer || visitor.referrer;
+  visitor.referrer = visitor.referrer || acquisitionReferrer;
   visitor.ip = input.ip || visitor.ip;
   visitor.userAgent = input.userAgent || visitor.userAgent;
   visitor.browserLanguage = input.browserLanguage || visitor.browserLanguage;
@@ -915,18 +952,37 @@ export function trackVisitorInteraction(input: {
     occurredAt: timestamp,
   };
 
-  visitor.interactions.push(interaction);
+  const existingSessionInteractionIndex =
+    input.sessionId &&
+    (input.type === "session_start" || input.type === "session_end")
+      ? visitor.interactions.findIndex(
+          (item) =>
+            item.type === input.type && item.sessionId === input.sessionId,
+        )
+      : -1;
+  const previousSessionInteraction =
+    existingSessionInteractionIndex >= 0
+      ? visitor.interactions[existingSessionInteractionIndex]
+      : null;
+  if (existingSessionInteractionIndex >= 0) {
+    visitor.interactions[existingSessionInteractionIndex] = interaction;
+  } else {
+    visitor.interactions.push(interaction);
+  }
   visitor.interactions = visitor.interactions.slice(-80);
 
-  if (input.type === "session_start") {
+  if (input.type === "session_start" && !previousSessionInteraction) {
     visitor.totalSessions += 1;
   }
   if (input.type === "session_end") {
     visitor.lastSessionDurationMs = interaction.durationMs;
     visitor.lastSessionPageCount = interaction.pageCount;
-    if (interaction.durationMs) {
-      visitor.totalDurationMs += interaction.durationMs;
-    }
+    const previousDuration = previousSessionInteraction?.durationMs || 0;
+    const nextDuration = interaction.durationMs || 0;
+    visitor.totalDurationMs = Math.max(
+      0,
+      visitor.totalDurationMs - previousDuration + nextDuration,
+    );
   }
   if (input.type === "whatsapp_click") {
     visitor.whatsappClicks += 1;

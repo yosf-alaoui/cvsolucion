@@ -97,6 +97,31 @@ export type BookingRecord = {
 
 export type BookingInvoiceStatus = "pending" | "scheduled" | "ready";
 
+export type BookingSlotInput = {
+  date: string;
+  hour: number;
+};
+
+export type CreateBookingsInput = {
+  userId: string;
+  serviceType: BookingServiceType;
+  priority: BookingPriority;
+  packageKey?: string | null;
+  slots: BookingSlotInput[];
+  name: string;
+  email: string;
+  phone: string;
+  country?: string | null;
+  countryCode?: string | null;
+  company?: string | null;
+  notes?: string | null;
+  locale: "en" | "fr" | "ar";
+  paymentStatus?: BookingPaymentStatus;
+  paymentProvider?: BookingRecord["paymentProvider"];
+  paymentReference?: string | null;
+  unitAmount?: number;
+};
+
 type BookingDb = {
   bookings: BookingRecord[];
   blockedSlots: BlockedBookingSlotRecord[];
@@ -107,6 +132,7 @@ const DB_PATH = path.join(DATA_DIR, "bookings-db.json");
 const QUEBEC_TIMEZONE = "America/Toronto";
 const STANDARD_HOURS = [8, 9, 10, 11, 13, 14, 15, 16, 17];
 const EXPRESS_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+const PAYMENT_HOLD_MS = 30 * 60 * 1000;
 
 function ensureDbFile() {
   ensureJsonFile(DB_PATH, { bookings: [], blockedSlots: [] });
@@ -432,7 +458,11 @@ function formatDateKey(date: Date) {
 
 function parseDateKey(dateKey: string) {
   const { year, month, day } = dateKeyParts(dateKey);
-  return new Date(Date.UTC(year, month - 1, day));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (formatDateKey(date) !== dateKey) {
+    throw new Error("Invalid date.");
+  }
+  return date;
 }
 
 function addDays(dateKey: string, days: number) {
@@ -659,8 +689,7 @@ export function getBookingAvailability(priority: BookingPriority) {
         (booking) =>
           booking.date === date &&
           booking.hour === hour &&
-          booking.priority === priority &&
-          booking.status === "confirmed",
+          isBookingBlockingSlot(booking),
       );
       const blockedSlot = db.blockedSlots.find(
         (slot) =>
@@ -711,32 +740,26 @@ export function getBookingAvailability(priority: BookingPriority) {
   };
 }
 
-export function createBooking(input: {
-  userId: string;
-  serviceType: BookingServiceType;
-  priority: BookingPriority;
-  packageKey?: string | null;
-  date: string;
-  hour: number;
-  name: string;
-  email: string;
-  phone: string;
-  country?: string | null;
-  countryCode?: string | null;
-  company?: string | null;
-  notes?: string | null;
-  locale: "en" | "fr" | "ar";
-  paymentStatus?: BookingPaymentStatus;
-  paymentProvider?: BookingRecord["paymentProvider"];
-  paymentReference?: string | null;
-  unitAmount?: number;
-}) {
-  const db = loadDb();
+function bookingSlotKey(slot: BookingSlotInput) {
+  return `${slot.date}:${slot.hour}`;
+}
+
+function isExpiredPaymentHold(booking: BookingRecord, now = Date.now()) {
+  if (booking.paymentStatus !== "pending") return false;
+  const createdAt = new Date(booking.createdAt).getTime();
+  return Number.isFinite(createdAt) && now - createdAt > PAYMENT_HOLD_MS;
+}
+
+function isBookingBlockingSlot(booking: BookingRecord) {
+  return booking.status === "confirmed" && !isExpiredPaymentHold(booking);
+}
+
+function assertBookingSlotAvailableInDb(
+  db: BookingDb,
+  input: BookingSlotInput & { priority: BookingPriority },
+) {
   const quebecNow = getQuebecNow();
-  const hours =
-    input.priority === "express"
-      ? getHoursForPriority(input.priority)
-      : getHoursForPriority(input.priority);
+  const hours = getHoursForPriority(input.priority);
   const dateDiff =
     (parseDateKey(input.date).getTime() -
       parseDateKey(quebecNow.dateKey).getTime()) /
@@ -778,8 +801,7 @@ export function createBooking(input: {
     (booking) =>
       booking.date === input.date &&
       booking.hour === input.hour &&
-      booking.priority === input.priority &&
-      booking.status === "confirmed",
+      isBookingBlockingSlot(booking),
   );
 
   if (alreadyBooked) {
@@ -794,8 +816,44 @@ export function createBooking(input: {
       "This slot is closed by admin. Please choose another time.",
     );
   }
+}
 
-  const booking: BookingRecord = {
+/**
+ * Validates the whole selection against one storage snapshot. This is used
+ * immediately before a PaymentIntent is created so a customer cannot pay for
+ * a slot that was already unavailable when checkout started.
+ */
+export function assertBookingSlotsAvailable(input: {
+  priority: BookingPriority;
+  slots: BookingSlotInput[];
+}) {
+  if (!input.slots.length) {
+    throw new Error("At least one booking slot is required.");
+  }
+
+  const keys = new Set<string>();
+  for (const slot of input.slots) {
+    const key = bookingSlotKey(slot);
+    if (keys.has(key)) {
+      throw new Error("Duplicate appointment slots are not allowed.");
+    }
+    keys.add(key);
+  }
+
+  const db = loadDb();
+  for (const slot of input.slots) {
+    assertBookingSlotAvailableInDb(db, {
+      ...slot,
+      priority: input.priority,
+    });
+  }
+}
+
+function buildBookingRecord(
+  input: Omit<CreateBookingsInput, "slots"> & BookingSlotInput,
+  timestamp: string,
+): BookingRecord {
+  return {
     id: randomId(),
     userId: input.userId,
     serviceType: input.serviceType,
@@ -816,12 +874,12 @@ export function createBooking(input: {
     designerUserId: null,
     designerAssignedAt: null,
     designerAssignedByUserId: null,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
     rescheduledFromBookingId: null,
     paymentStatus: input.paymentStatus ?? "unpaid",
     paymentProvider: input.paymentProvider ?? null,
-    paymentReference: input.paymentReference ?? null,
+    paymentReference: input.paymentReference?.trim() || null,
     unitAmount:
       Number.isInteger(input.unitAmount) && Number(input.unitAmount) > 0
         ? Number(input.unitAmount)
@@ -834,10 +892,141 @@ export function createBooking(input: {
     refundAmount: 0,
     refundedAt: null,
   };
+}
 
-  db.bookings.push(booking);
-  saveDb(db);
-  return booking;
+/**
+ * Creates every requested session after one batch preflight, then persists the
+ * complete set with a single atomic document write/SQLite transaction. A
+ * Stripe payment reference is also an idempotency key, including recovery from
+ * a legacy partially-created set.
+ */
+export function createBookings(input: CreateBookingsInput) {
+  if (!input.slots.length) {
+    throw new Error("At least one booking slot is required.");
+  }
+
+  const requestedKeys = new Set<string>();
+  for (const slot of input.slots) {
+    const key = bookingSlotKey(slot);
+    if (requestedKeys.has(key)) {
+      throw new Error("Duplicate appointment slots are not allowed.");
+    }
+    requestedKeys.add(key);
+  }
+
+  const db = loadDb();
+  const expiredTimestamp = nowIso();
+  let dbChanged = false;
+  for (const booking of db.bookings) {
+    if (booking.status === "confirmed" && isExpiredPaymentHold(booking)) {
+      booking.status = "cancelled";
+      booking.updatedAt = expiredTimestamp;
+      dbChanged = true;
+    }
+  }
+  if (dbChanged) saveDb(db);
+
+  const paymentReference = input.paymentReference?.trim() || null;
+  const existingForPayment = paymentReference
+    ? db.bookings.filter(
+        (booking) => booking.paymentReference === paymentReference,
+      )
+    : [];
+
+  if (
+    existingForPayment.some(
+      (booking) =>
+        booking.userId !== input.userId ||
+        booking.priority !== input.priority ||
+        booking.serviceType !== input.serviceType ||
+        booking.status !== "confirmed" ||
+        booking.paymentStatus === "refunded" ||
+        booking.paymentStatus === "partially_refunded" ||
+        !requestedKeys.has(bookingSlotKey(booking)),
+    )
+  ) {
+    throw new Error("Payment reference is already linked to another booking.");
+  }
+
+  const existingBySlot = new Map(
+    existingForPayment.map((booking) => [bookingSlotKey(booking), booking]),
+  );
+  const missingSlots = input.slots.filter(
+    (slot) => !existingBySlot.has(bookingSlotKey(slot)),
+  );
+
+  if (input.paymentStatus === "paid") {
+    for (const booking of existingForPayment) {
+      if (booking.paymentStatus === "pending") {
+        booking.paymentStatus = "paid";
+        booking.updatedAt = nowIso();
+        dbChanged = true;
+      }
+    }
+  }
+
+  // Preflight every missing slot before mutating the in-memory document. This
+  // prevents a later invalid/taken slot from leaving an earlier slot persisted.
+  for (const slot of missingSlots) {
+    assertBookingSlotAvailableInDb(db, {
+      ...slot,
+      priority: input.priority,
+    });
+  }
+
+  if (missingSlots.length) {
+    const timestamp = nowIso();
+    const created = missingSlots.map((slot) =>
+      buildBookingRecord({ ...input, ...slot }, timestamp),
+    );
+    db.bookings.push(...created);
+    for (const booking of created) {
+      existingBySlot.set(bookingSlotKey(booking), booking);
+    }
+    dbChanged = true;
+  }
+
+  if (dbChanged) saveDb(db);
+
+  return input.slots.map((slot) => {
+    const booking = existingBySlot.get(bookingSlotKey(slot));
+    if (!booking) {
+      throw new Error("Booking could not be persisted.");
+    }
+    return booking;
+  });
+}
+
+export function cancelPendingBookingsByPaymentReference(
+  paymentReference: string,
+) {
+  const normalized = paymentReference.trim();
+  if (!normalized) return [];
+  const db = loadDb();
+  const timestamp = nowIso();
+  const cancelled: BookingRecord[] = [];
+  for (const booking of db.bookings) {
+    if (
+      booking.paymentReference === normalized &&
+      booking.status === "confirmed" &&
+      booking.paymentStatus === "pending"
+    ) {
+      booking.status = "cancelled";
+      booking.updatedAt = timestamp;
+      cancelled.push(booking);
+    }
+  }
+  if (cancelled.length) saveDb(db);
+  return cancelled;
+}
+
+export function createBooking(
+  input: Omit<CreateBookingsInput, "slots"> & BookingSlotInput,
+) {
+  return createBookings({
+    ...input,
+    slots: [{ date: input.date, hour: input.hour }],
+  })[0];
 }
 
 type StripeRefundSyncStatus = "pending" | "succeeded" | "failed" | "canceled";
@@ -1055,9 +1244,9 @@ export function cancelBookingByAdmin(input: { bookingId: string }) {
   return booking;
 }
 
-export function markBookingRefundPendingByAdmin(input: {
+export function claimBookingRefundByAdmin(input: {
   bookingId: string;
-  refundId: string;
+  attemptId: string;
   refundAmount: number;
 }) {
   const db = loadDb();
@@ -1067,12 +1256,36 @@ export function markBookingRefundPendingByAdmin(input: {
     throw new Error("Booking not found.");
   }
 
+  if (
+    booking.paymentStatus === "refunded" ||
+    booking.refundStatus === "succeeded"
+  ) {
+    throw new Error("This booking has already been refunded.");
+  }
+
+  const pendingPrefix = "admin-request:";
+  if (booking.refundStatus === "pending") {
+    if (booking.refundReference?.startsWith(pendingPrefix)) {
+      return {
+        booking,
+        attemptId: booking.refundReference.slice(pendingPrefix.length),
+        reused: true,
+      };
+    }
+    throw new Error("A refund for this booking is already being processed.");
+  }
+
+  const attemptId = input.attemptId.trim();
+  if (!/^[A-Za-z0-9_-]{16,100}$/.test(attemptId)) {
+    throw new Error("A valid refund attempt is required.");
+  }
+
   booking.refundStatus = "pending";
-  booking.refundReference = input.refundId;
+  booking.refundReference = `${pendingPrefix}${attemptId}`;
   booking.refundAmount = input.refundAmount;
   booking.updatedAt = nowIso();
   saveDb(db);
-  return booking;
+  return { booking, attemptId, reused: false };
 }
 
 export function getBookingInvoiceStatus(

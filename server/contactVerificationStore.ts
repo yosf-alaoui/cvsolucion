@@ -23,19 +23,31 @@ export type PendingContactLead = {
 
 type PendingContactDb = {
   pendingLeads: PendingContactLead[];
+  careerConversions: CareerConversionMarker[];
+};
+
+type CareerConversionMarker = {
+  tokenHash: string;
+  leadId: string;
+  createdAt: string;
+  expiresAt: string;
+  consumedAt: string | null;
 };
 
 const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "pending-contact-leads.json");
 
 function ensureDbFile() {
-  ensureJsonFile(DB_PATH, { pendingLeads: [] });
+  ensureJsonFile(DB_PATH, { pendingLeads: [], careerConversions: [] });
 }
 
 function loadDb(): PendingContactDb {
   ensureDbFile();
   const parsed = readJsonFile<Partial<PendingContactDb>>(DB_PATH);
-  return { pendingLeads: parsed.pendingLeads ?? [] };
+  return {
+    pendingLeads: parsed.pendingLeads ?? [],
+    careerConversions: parsed.careerConversions ?? [],
+  };
 }
 
 function saveDb(db: PendingContactDb) {
@@ -72,6 +84,44 @@ function prune(db: PendingContactDb) {
     if (lead.confirmedAt && createdAt <= cutoff) return false;
     return expiresAt > now || Boolean(lead.confirmedAt);
   });
+  db.careerConversions = db.careerConversions.filter(
+    (marker) =>
+      new Date(marker.expiresAt).getTime() > now && !marker.consumedAt,
+  );
+}
+
+export function createCareerConversionMarker(leadId: string, maxAgeMs: number) {
+  const db = loadDb();
+  prune(db);
+  const rawToken = randomToken(24);
+  db.careerConversions.push({
+    tokenHash: sha256(rawToken),
+    leadId: leadId.trim(),
+    createdAt: nowIso(),
+    expiresAt: addMs(maxAgeMs),
+    consumedAt: null,
+  });
+  saveDb(db);
+  return rawToken;
+}
+
+export function consumeCareerConversionMarker(rawToken: string) {
+  const db = loadDb();
+  prune(db);
+  const tokenHash = sha256(rawToken);
+  const marker = db.careerConversions.find(
+    (item) =>
+      item.tokenHash === tokenHash &&
+      !item.consumedAt &&
+      new Date(item.expiresAt).getTime() > Date.now(),
+  );
+  if (!marker) {
+    saveDb(db);
+    return null;
+  }
+  marker.consumedAt = nowIso();
+  saveDb(db);
+  return marker.leadId;
 }
 
 export function createPendingContactLead(

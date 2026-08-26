@@ -56,13 +56,17 @@ export function readGa4ServiceAccountFromEnv() {
   return JSON.parse(fs.readFileSync(absolutePath, "utf8")) as Ga4ServiceAccount;
 }
 
-export function createGa4ReportingModule(options: CreateGa4ReportingModuleOptions) {
+export function createGa4ReportingModule(
+  options: CreateGa4ReportingModuleOptions,
+) {
   let cache: { expiresAt: number; value: Ga4DashboardSnapshot } | null = null;
   const cacheMs = options.cacheMs ?? 1000 * 60 * 5;
 
   async function getAccessToken() {
     const now = Math.floor(Date.now() / 1000);
-    const header = base64UrlEncode(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+    const header = base64UrlEncode(
+      JSON.stringify({ alg: "RS256", typ: "JWT" }),
+    );
     const payload = base64UrlEncode(
       JSON.stringify({
         iss: options.serviceAccount.client_email,
@@ -70,7 +74,7 @@ export function createGa4ReportingModule(options: CreateGa4ReportingModuleOption
         aud: options.serviceAccount.token_uri || TOKEN_URL,
         exp: now + 3600,
         iat: now,
-      })
+      }),
     );
 
     const signer = crypto.createSign("RSA-SHA256");
@@ -79,20 +83,31 @@ export function createGa4ReportingModule(options: CreateGa4ReportingModuleOption
 
     const assertion = `${header}.${payload}.${base64UrlEncode(signer.sign(options.serviceAccount.private_key))}`;
 
-    const response = await fetch(options.serviceAccount.token_uri || TOKEN_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
+    const response = await fetch(
+      options.serviceAccount.token_uri || TOKEN_URL,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+          assertion,
+        }),
       },
-      body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        assertion,
-      }),
-    });
+    );
 
-    const data = (await response.json().catch(() => ({}))) as { access_token?: string; error?: string; error_description?: string };
+    const data = (await response.json().catch(() => ({}))) as {
+      access_token?: string;
+      error?: string;
+      error_description?: string;
+    };
     if (!response.ok || !data.access_token) {
-      throw new Error(data.error_description || data.error || "Failed to obtain GA4 access token.");
+      throw new Error(
+        data.error_description ||
+          data.error ||
+          "Failed to obtain GA4 access token.",
+      );
     }
 
     return data.access_token;
@@ -108,7 +123,7 @@ export function createGa4ReportingModule(options: CreateGa4ReportingModuleOption
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
-      }
+      },
     );
 
     const data = (await response.json().catch(() => ({}))) as any;
@@ -119,7 +134,9 @@ export function createGa4ReportingModule(options: CreateGa4ReportingModuleOption
     return data;
   }
 
-  function createEmptySnapshot(error: string | null = null): Ga4DashboardSnapshot {
+  function createEmptySnapshot(
+    error: string | null = null,
+  ): Ga4DashboardSnapshot {
     return {
       enabled: false,
       propertyId: options.propertyId || null,
@@ -137,6 +154,14 @@ export function createGa4ReportingModule(options: CreateGa4ReportingModuleOption
         whatsappClicks: 0,
         emailClicks: 0,
         ctaClicks: 0,
+        formStarts: 0,
+        formSubmits: 0,
+        verificationRequired: 0,
+        leads: 0,
+        contacts: 0,
+        addToCarts: 0,
+        beginCheckouts: 0,
+        purchases: 0,
       },
       topPages: [],
       trafficSources: [],
@@ -160,7 +185,12 @@ export function createGa4ReportingModule(options: CreateGa4ReportingModuleOption
           }),
           runReport(accessToken, {
             dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
-            metrics: [{ name: "activeUsers" }, { name: "sessions" }, { name: "screenPageViews" }, { name: "averageSessionDuration" }],
+            metrics: [
+              { name: "activeUsers" },
+              { name: "sessions" },
+              { name: "screenPageViews" },
+              { name: "averageSessionDuration" },
+            ],
           }),
           runReport(accessToken, {
             dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
@@ -192,6 +222,15 @@ export function createGa4ReportingModule(options: CreateGa4ReportingModuleOption
             whatsappClicks: eventMap.get("whatsapp_click") || 0,
             emailClicks: eventMap.get("email_click") || 0,
             ctaClicks: eventMap.get("cta_click") || 0,
+            formStarts: eventMap.get("form_start") || 0,
+            formSubmits: eventMap.get("form_submit") || 0,
+            verificationRequired:
+              eventMap.get("email_verification_required") || 0,
+            leads: eventMap.get("generate_lead") || 0,
+            contacts: eventMap.get("contact") || 0,
+            addToCarts: eventMap.get("add_to_cart") || 0,
+            beginCheckouts: eventMap.get("begin_checkout") || 0,
+            purchases: eventMap.get("purchase") || 0,
           },
           topPages: [],
           trafficSources: [],
@@ -206,7 +245,9 @@ export function createGa4ReportingModule(options: CreateGa4ReportingModuleOption
 
         return snapshot;
       } catch (error) {
-        const snapshot = createEmptySnapshot(error instanceof Error ? error.message : "Failed to load GA4 data.");
+        const snapshot = createEmptySnapshot(
+          error instanceof Error ? error.message : "Failed to load GA4 data.",
+        );
         cache = {
           value: snapshot,
           expiresAt: Date.now() + 1000 * 60,
@@ -216,4 +257,3 @@ export function createGa4ReportingModule(options: CreateGa4ReportingModuleOption
     },
   };
 }
-

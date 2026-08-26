@@ -81,11 +81,12 @@ export function signUp(
   termsAccepted: boolean,
   countryCode: string,
   country: string,
+  next?: string,
   termsVersion = "04/2026"
 ) {
   return request<{ ok: true }>("/api/auth/signup", {
     method: "POST",
-    body: JSON.stringify({ email, password, locale, termsAccepted, countryCode, country, termsVersion }),
+    body: JSON.stringify({ email, password, locale, termsAccepted, countryCode, country, next, termsVersion }),
   });
 }
 

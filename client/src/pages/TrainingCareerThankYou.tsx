@@ -6,7 +6,7 @@ import Seo from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
 import {
-  consumeCareerLeadForThankYou,
+  consumeServerCareerConversion,
   trackCampaignEvent,
 } from "@/lib/campaignTracking";
 
@@ -48,18 +48,18 @@ export default function TrainingCareerThankYou() {
   const pageLocale = locale === "fr" || locale === "ar" ? locale : "en";
   const text = copy[pageLocale];
   const base = pageLocale === "en" ? "" : `/${pageLocale}`;
-  const whatsappHref = buildWhatsAppLink("+1 514 963 8719", text.message);
+  const whatsappHref = buildWhatsAppLink("+1 438 807 8747", text.message);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const confirmedLeadId =
-      params.get("confirmed") === "1" ? params.get("lead") || "confirmed" : null;
-    const leadId = consumeCareerLeadForThankYou() || confirmedLeadId;
-    if (!leadId) return;
-    trackCampaignEvent("Lead", {
-      lead_id: leadId,
-      content_name: "Cabinet Vision Career Evaluation",
-      locale: pageLocale,
+    const trackLead = (leadId: string) => {
+      trackCampaignEvent("Lead", {
+        lead_id: leadId,
+        content_name: "Cabinet Vision Career Evaluation",
+        locale: pageLocale,
+      });
+    };
+    void consumeServerCareerConversion().then((leadId) => {
+      if (leadId) trackLead(leadId);
     });
   }, [pageLocale]);
 

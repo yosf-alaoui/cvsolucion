@@ -55,51 +55,62 @@ const routeDetails = {
   en: {
     "/training": {
       title: "Training",
-      description: "Remote Cabinet Vision training for designers, engineers, and production teams.",
+      description:
+        "Remote Cabinet Vision training for designers, engineers, and production teams.",
     },
     "/design-pricing": {
       title: "Design & Pricing",
-      description: "Structure quoting logic, reports, and production-ready pricing workflows.",
+      description:
+        "Structure quoting logic, reports, and production-ready pricing workflows.",
     },
     "/articles": {
       title: "Articles",
-      description: "Read implementation lessons, troubleshooting insights, and production case studies.",
+      description:
+        "Read implementation lessons, troubleshooting insights, and production case studies.",
     },
     "/about": {
       title: "About",
-      description: "Learn how CVsolucion works with cabinet shops on real production problems.",
+      description:
+        "Learn how CVsolucion works with cabinet shops on real production problems.",
     },
     "/book": {
       title: "Book consultation",
-      description: "Open the booking flow and reserve a support or consulting session.",
+      description:
+        "Open the booking flow and reserve a support or consulting session.",
     },
   },
   fr: {
     "/training": {
       title: "Formation",
-      description: "Formation Cabinet Vision a distance pour designers, ingenieurs et production.",
+      description:
+        "Formation Cabinet Vision a distance pour designers, ingenieurs et production.",
     },
     "/design-pricing": {
       title: "Design & Pricing",
-      description: "Structurer la logique de devis, les rapports et les sorties production.",
+      description:
+        "Structurer la logique de devis, les rapports et les sorties production.",
     },
     "/articles": {
       title: "Articles",
-      description: "Consulter les retours terrain, lessons d'implementation et guides pratiques.",
+      description:
+        "Consulter les retours terrain, lessons d'implementation et guides pratiques.",
     },
     "/about": {
       title: "A propos",
-      description: "Comprendre comment CVsolucion intervient sur les workflows atelier reels.",
+      description:
+        "Comprendre comment CVsolucion intervient sur les workflows atelier reels.",
     },
     "/book": {
       title: "Reserver",
-      description: "Ouvrir le booking et reserver une session de support ou de consultation.",
+      description:
+        "Ouvrir le booking et reserver une session de support ou de consultation.",
     },
   },
   ar: {
     "/training": {
       title: "التدريب",
-      description: "تدريب Cabinet Vision عن بعد للمصممين والمهندسين وفرق الإنتاج.",
+      description:
+        "تدريب Cabinet Vision عن بعد للمصممين والمهندسين وفرق الإنتاج.",
     },
     "/design-pricing": {
       title: "التصميم والتسعير",
@@ -107,7 +118,8 @@ const routeDetails = {
     },
     "/articles": {
       title: "المقالات",
-      description: "اقرأ دروس التنفيذ وأفكار التشخيص ودراسات الحالة من أرض الواقع.",
+      description:
+        "اقرأ دروس التنفيذ وأفكار التشخيص ودراسات الحالة من أرض الواقع.",
     },
     "/about": {
       title: "من نحن",
@@ -188,10 +200,14 @@ function relatedLinkMeta(locale: "en" | "fr" | "ar", path: string) {
     };
   }
 
-  return routeDetails[locale][path as keyof (typeof routeDetails)[typeof locale]] || {
-    title: path,
-    description: path,
-  };
+  return (
+    routeDetails[locale][
+      path as keyof (typeof routeDetails)[typeof locale]
+    ] || {
+      title: path,
+      description: path,
+    }
+  );
 }
 
 function renderBlock(block: SeoServicePageBlock, icon: typeof ShieldCheck) {
@@ -207,7 +223,11 @@ function renderBlock(block: SeoServicePageBlock, icon: typeof ShieldCheck) {
             >
               {block.title}
             </h2>
-            {block.intro ? <p className="mt-4 text-base leading-7 text-slate-600">{block.intro}</p> : null}
+            {block.intro ? (
+              <p className="mt-4 text-base leading-7 text-slate-600">
+                {block.intro}
+              </p>
+            ) : null}
           </div>
           <div className="card-stage mt-8 grid gap-6 md:grid-cols-3">
             {block.items.map((item) => (
@@ -215,7 +235,9 @@ function renderBlock(block: SeoServicePageBlock, icon: typeof ShieldCheck) {
                 <div className="rounded-2xl bg-primary/10 p-3 w-fit">
                   <Icon className="h-6 w-6 text-primary" />
                 </div>
-                <p className="mt-5 text-base leading-7 text-slate-700">{item}</p>
+                <p className="mt-5 text-base leading-7 text-slate-700">
+                  {item}
+                </p>
               </GlassCard>
             ))}
           </div>
@@ -238,11 +260,16 @@ function renderBlock(block: SeoServicePageBlock, icon: typeof ShieldCheck) {
           </div>
           <div className="card-stage mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
             {block.items.map((item) => (
-              <GlassCard key={`${item.label}-${item.text}`} className="rounded-[28px] p-7">
+              <GlassCard
+                key={`${item.label}-${item.text}`}
+                className="rounded-[28px] p-7"
+              >
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
                   {item.label}
                 </div>
-                <p className="mt-5 text-base leading-7 text-slate-700">{item.text}</p>
+                <p className="mt-5 text-base leading-7 text-slate-700">
+                  {item.text}
+                </p>
               </GlassCard>
             ))}
           </div>
@@ -269,7 +296,9 @@ function renderBlock(block: SeoServicePageBlock, icon: typeof ShieldCheck) {
                 <div className="text-xs font-semibold uppercase tracking-[0.24em] text-primary/75">
                   {item.label}
                 </div>
-                <p className="mt-4 text-base leading-7 text-slate-700">{item.text}</p>
+                <p className="mt-4 text-base leading-7 text-slate-700">
+                  {item.text}
+                </p>
               </GlassCard>
             ))}
           </div>
@@ -365,7 +394,7 @@ export default function ServiceLanding() {
       ? `Bonjour, j'ai besoin d'aide pour ${pageContent.shortTitle}.`
       : locale === "ar"
         ? `مرحبا، أحتاج مساعدة بخصوص ${pageContent.shortTitle}.`
-        : `Hi, I need help with ${pageContent.shortTitle}.`
+        : `Hi, I need help with ${pageContent.shortTitle}.`,
   );
 
   const currentUrl = currentPageUrl(locale, page.canonicalPath);
@@ -423,12 +452,23 @@ export default function ServiceLanding() {
         ],
       },
     ],
-    [currentUrl, heroImageUrl, homeHref, midImageUrl, pageContent, preCtaImageUrl],
+    [
+      currentUrl,
+      heroImageUrl,
+      homeHref,
+      midImageUrl,
+      pageContent,
+      preCtaImageUrl,
+    ],
   );
 
   const useCustomPerformanceLayout = false;
 
-  if (useCustomPerformanceLayout && page.key === "performance-optimization" && locale === "en") {
+  if (
+    useCustomPerformanceLayout &&
+    page.key === "performance-optimization" &&
+    locale === "en"
+  ) {
     const performanceCards = pageContent.blocks.filter(
       (block): block is Extract<SeoServicePageBlock, { type: "cards" }> =>
         block.type === "cards",
@@ -498,7 +538,11 @@ export default function ServiceLanding() {
                     asChild
                     className="min-h-12 rounded-md bg-green-500 px-5 text-white hover:bg-green-600"
                   >
-                    <a href={whatsappHref} target="_blank" rel="noopener noreferrer">
+                    <a
+                      href={whatsappHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
                       <MessageCircle className="h-5 w-5" />
                       {copy.whatsapp}
                     </a>
@@ -509,8 +553,15 @@ export default function ServiceLanding() {
                   >
                     <a
                       href={bookingHref}
-                      target={bookingHref.startsWith("http") ? "_blank" : undefined}
-                      rel={bookingHref.startsWith("http") ? "noopener noreferrer" : undefined}
+                      data-track="cta"
+                      target={
+                        bookingHref.startsWith("http") ? "_blank" : undefined
+                      }
+                      rel={
+                        bookingHref.startsWith("http")
+                          ? "noopener noreferrer"
+                          : undefined
+                      }
                     >
                       <BookOpenCheck className="h-5 w-5" />
                       {copy.book}
@@ -532,7 +583,9 @@ export default function ServiceLanding() {
                     <span className="mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-400 text-xs font-extrabold text-[#081827]">
                       {index + 1}
                     </span>
-                    <p className="text-sm font-medium leading-6 text-slate-100">{item}</p>
+                    <p className="text-sm font-medium leading-6 text-slate-100">
+                      {item}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -582,8 +635,12 @@ export default function ServiceLanding() {
                       className="border-b border-slate-200 py-7 sm:px-6 sm:[&:nth-child(odd)]:border-r lg:border-b-0 lg:border-r lg:first:pl-0 lg:last:border-r-0 lg:last:pr-0"
                     >
                       <ScopeIcon className="h-6 w-6 text-primary" />
-                      <h3 className="mt-4 text-lg font-bold text-slate-950">{item.label}</h3>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
+                      <h3 className="mt-4 text-lg font-bold text-slate-950">
+                        {item.label}
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {item.text}
+                      </p>
                     </div>
                   );
                 })}
@@ -594,7 +651,9 @@ export default function ServiceLanding() {
           <section className="border-y border-slate-200 bg-[#eef3f7] py-16 sm:py-20">
             <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
               <div className="max-w-3xl">
-                <div className="text-sm font-bold text-primary">MEASURE, ISOLATE, VALIDATE</div>
+                <div className="text-sm font-bold text-primary">
+                  MEASURE, ISOLATE, VALIDATE
+                </div>
                 <h2
                   className="mt-4 text-3xl font-bold leading-tight text-slate-950 sm:text-4xl"
                   style={{ fontFamily: "Playfair Display" }}
@@ -602,15 +661,18 @@ export default function ServiceLanding() {
                   {performanceSteps?.title}
                 </h2>
                 <p className="mt-5 text-base leading-7 text-slate-600">
-                  Performance work starts with a repeatable case. Every recommendation should be
-                  tied to a visible bottleneck and verified against the same job and action.
+                  Performance work starts with a repeatable case. Every
+                  recommendation should be tied to a visible bottleneck and
+                  verified against the same job and action.
                 </p>
               </div>
 
               <ol className="mt-10 grid gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 md:grid-cols-2 xl:grid-cols-4">
                 {performanceSteps?.items.map((item) => (
                   <li key={item.label} className="min-h-56 bg-white p-7">
-                    <span className="text-4xl font-extrabold text-primary/25">{item.label}</span>
+                    <span className="text-4xl font-extrabold text-primary/25">
+                      {item.label}
+                    </span>
                     <p className="mt-6 text-base font-semibold leading-7 text-slate-800">
                       {item.text}
                     </p>
@@ -624,7 +686,9 @@ export default function ServiceLanding() {
             <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
               <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr]">
                 <div>
-                  <div className="text-sm font-bold text-primary">WHAT GETS REVIEWED</div>
+                  <div className="text-sm font-bold text-primary">
+                    WHAT GETS REVIEWED
+                  </div>
                   <h2
                     className="mt-4 text-3xl font-bold leading-tight text-slate-950 sm:text-4xl"
                     style={{ fontFamily: "Playfair Display" }}
@@ -698,8 +762,15 @@ export default function ServiceLanding() {
                 >
                   <a
                     href={bookingHref}
-                    target={bookingHref.startsWith("http") ? "_blank" : undefined}
-                    rel={bookingHref.startsWith("http") ? "noopener noreferrer" : undefined}
+                    data-track="cta"
+                    target={
+                      bookingHref.startsWith("http") ? "_blank" : undefined
+                    }
+                    rel={
+                      bookingHref.startsWith("http")
+                        ? "noopener noreferrer"
+                        : undefined
+                    }
                   >
                     <BookOpenCheck className="h-5 w-5" />
                     {copy.book}
@@ -724,7 +795,9 @@ export default function ServiceLanding() {
                   <div key={item.question}>
                     <button
                       type="button"
-                      onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                      onClick={() =>
+                        setOpenFaq(openFaq === index ? null : index)
+                      }
                       className="flex w-full items-center justify-between gap-5 py-6 text-left"
                       aria-expanded={openFaq === index}
                     >
@@ -768,7 +841,9 @@ export default function ServiceLanding() {
                       <h3 className="text-lg font-bold text-slate-950 group-hover:text-primary">
                         {meta.title}
                       </h3>
-                      <p className="mt-3 text-sm leading-6 text-slate-600">{meta.description}</p>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {meta.description}
+                      </p>
                       <span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-primary">
                         View page
                         <ArrowRight className="h-4 w-4" />
@@ -789,15 +864,20 @@ export default function ServiceLanding() {
                 Is Cabinet Vision slowing down your production day?
               </h2>
               <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-600">
-                Send the job pattern, the action that feels slow, and whether the issue affects one
-                user or the full team. We will direct you to the right diagnostic path.
+                Send the job pattern, the action that feels slow, and whether
+                the issue affects one user or the full team. We will direct you
+                to the right diagnostic path.
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
                 <Button
                   asChild
                   className="min-h-12 rounded-md bg-green-500 px-5 text-white hover:bg-green-600"
                 >
-                  <a href={whatsappHref} target="_blank" rel="noopener noreferrer">
+                  <a
+                    href={whatsappHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     <MessageCircle className="h-5 w-5" />
                     {copy.whatsapp}
                   </a>
@@ -808,8 +888,15 @@ export default function ServiceLanding() {
                 >
                   <a
                     href={bookingHref}
-                    target={bookingHref.startsWith("http") ? "_blank" : undefined}
-                    rel={bookingHref.startsWith("http") ? "noopener noreferrer" : undefined}
+                    data-track="cta"
+                    target={
+                      bookingHref.startsWith("http") ? "_blank" : undefined
+                    }
+                    rel={
+                      bookingHref.startsWith("http")
+                        ? "noopener noreferrer"
+                        : undefined
+                    }
                   >
                     <BookOpenCheck className="h-5 w-5" />
                     {copy.book}
@@ -835,7 +922,7 @@ export default function ServiceLanding() {
       />
       <Header />
 
-      <main className="flex-1 pt-28">
+      <main className="flex-1 pb-20 pt-28 md:pb-0">
         <section className="pb-12">
           <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 xl:px-16">
             <div className="glass-card-strong relative overflow-hidden rounded-[36px] px-4 sm:px-8">
@@ -863,17 +950,34 @@ export default function ServiceLanding() {
                 </p>
 
                 <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                  <Button asChild className="rounded-full bg-green-500 text-white hover:bg-green-600">
-                    <a href={whatsappHref} target="_blank" rel="noopener noreferrer">
+                  <Button
+                    asChild
+                    className="rounded-full bg-green-500 text-white hover:bg-green-600"
+                  >
+                    <a
+                      href={whatsappHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
                       <MessageCircle className="h-5 w-5" />
                       {copy.whatsapp}
                     </a>
                   </Button>
-                  <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90">
+                  <Button
+                    asChild
+                    className="rounded-full bg-primary text-white hover:bg-primary/90"
+                  >
                     <a
                       href={bookingHref}
-                      target={bookingHref.startsWith("http") ? "_blank" : undefined}
-                      rel={bookingHref.startsWith("http") ? "noopener noreferrer" : undefined}
+                      data-track="cta"
+                      target={
+                        bookingHref.startsWith("http") ? "_blank" : undefined
+                      }
+                      rel={
+                        bookingHref.startsWith("http")
+                          ? "noopener noreferrer"
+                          : undefined
+                      }
                     >
                       <BookOpenCheck className="h-5 w-5" />
                       {copy.book}
@@ -931,13 +1035,18 @@ export default function ServiceLanding() {
             </div>
             <div className="card-stage mx-auto mt-8 max-w-4xl space-y-4">
               {pageContent.faq.map((item, index) => (
-                <GlassCard key={item.question} className="overflow-hidden rounded-[24px]">
+                <GlassCard
+                  key={item.question}
+                  className="overflow-hidden rounded-[24px]"
+                >
                   <button
                     type="button"
                     onClick={() => setOpenFaq(openFaq === index ? null : index)}
                     className="flex w-full items-center justify-between px-6 py-5 text-left transition-colors hover:bg-white/25"
                   >
-                    <span className="text-lg font-semibold text-slate-900">{item.question}</span>
+                    <span className="text-lg font-semibold text-slate-900">
+                      {item.question}
+                    </span>
                     <ChevronDown
                       className={`h-5 w-5 text-primary transition-transform ${openFaq === index ? "rotate-180" : ""}`}
                     />
@@ -968,8 +1077,12 @@ export default function ServiceLanding() {
                 const meta = relatedLinkMeta(locale, path);
                 return (
                   <GlassCard key={path} className="rounded-[28px] p-7">
-                    <h3 className="text-xl font-bold text-primary">{meta.title}</h3>
-                    <p className="mt-3 text-sm leading-7 text-slate-600">{meta.description}</p>
+                    <h3 className="text-xl font-bold text-primary">
+                      {meta.title}
+                    </h3>
+                    <p className="mt-3 text-sm leading-7 text-slate-600">
+                      {meta.description}
+                    </p>
                     <a
                       href={localizePath(locale, path)}
                       className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
@@ -1008,17 +1121,34 @@ export default function ServiceLanding() {
                 {copy.finalBody}
               </p>
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <Button asChild className="rounded-full bg-green-500 text-white hover:bg-green-600">
-                  <a href={whatsappHref} target="_blank" rel="noopener noreferrer">
+                <Button
+                  asChild
+                  className="rounded-full bg-green-500 text-white hover:bg-green-600"
+                >
+                  <a
+                    href={whatsappHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     <MessageCircle className="h-5 w-5" />
                     {copy.whatsapp}
                   </a>
                 </Button>
-                <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90">
+                <Button
+                  asChild
+                  className="rounded-full bg-primary text-white hover:bg-primary/90"
+                >
                   <a
                     href={bookingHref}
-                    target={bookingHref.startsWith("http") ? "_blank" : undefined}
-                    rel={bookingHref.startsWith("http") ? "noopener noreferrer" : undefined}
+                    data-track="cta"
+                    target={
+                      bookingHref.startsWith("http") ? "_blank" : undefined
+                    }
+                    rel={
+                      bookingHref.startsWith("http")
+                        ? "noopener noreferrer"
+                        : undefined
+                    }
                   >
                     <BookOpenCheck className="h-5 w-5" />
                     {copy.book}
@@ -1026,6 +1156,7 @@ export default function ServiceLanding() {
                 </Button>
                 <Button
                   type="button"
+                  data-track="cta"
                   variant="outline"
                   className="rounded-full bg-white/75"
                   onClick={() => navigateToHomeSection(locale, "contact")}
@@ -1037,6 +1168,38 @@ export default function ServiceLanding() {
           </div>
         </section>
       </main>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] backdrop-blur md:hidden">
+        <div className="mx-auto grid max-w-lg grid-cols-2 gap-2">
+          <Button
+            asChild
+            className="h-11 min-w-0 rounded-md bg-green-500 px-2 text-xs text-white hover:bg-green-600 sm:text-sm"
+          >
+            <a href={whatsappHref} target="_blank" rel="noopener noreferrer">
+              <MessageCircle className="h-4 w-4 shrink-0" />
+              <span className="truncate">{copy.whatsapp}</span>
+            </a>
+          </Button>
+          <Button
+            asChild
+            className="h-11 min-w-0 rounded-md bg-primary px-2 text-xs text-white hover:bg-primary/90 sm:text-sm"
+          >
+            <a
+              href={bookingHref}
+              data-track="cta"
+              target={bookingHref.startsWith("http") ? "_blank" : undefined}
+              rel={
+                bookingHref.startsWith("http")
+                  ? "noopener noreferrer"
+                  : undefined
+              }
+            >
+              <BookOpenCheck className="h-4 w-4 shrink-0" />
+              <span className="truncate">{copy.book}</span>
+            </a>
+          </Button>
+        </div>
+      </div>
 
       <Footer />
     </div>

@@ -2,81 +2,25 @@ import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useI18n } from "@/i18n/i18n";
 import { useAuth } from "@/contexts/AuthContext";
-
-const SESSION_STORAGE_KEY = "cvs_visitor_session";
-const LOAD_EXTERNAL_ANALYTICS_EVENT =
-  "cvsolucion:load-external-analytics";
-
-type AnalyticsWindow = Window & {
-  dataLayer?: unknown[];
-  gtag?: (...args: any[]) => void;
-};
-
-function getSessionState() {
-  if (typeof window === "undefined") return null;
-  const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as {
-      id: string;
-      startedAt: number;
-      pageCount: number;
-      startedEventSent?: boolean;
-    };
-  } catch {
-    return null;
-  }
-}
-
-function setSessionState(value: {
-  id: string;
-  startedAt: number;
-  pageCount: number;
-  startedEventSent?: boolean;
-}) {
-  if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(value));
-}
-
-function ensureSessionState() {
-  const existing = getSessionState();
-  if (existing) return existing;
-  const next = {
-    id: Math.random().toString(36).slice(2) + Date.now().toString(36),
-    startedAt: Date.now(),
-    pageCount: 0,
-    startedEventSent: false,
-  };
-  setSessionState(next);
-  return next;
-}
-
-function sendVisitorEvent(
-  payload: Record<string, unknown>,
-  preferBeacon = false,
-) {
-  const body = JSON.stringify(payload);
-  if (
-    preferBeacon &&
-    typeof navigator !== "undefined" &&
-    typeof navigator.sendBeacon === "function"
-  ) {
-    const blob = new Blob([body], { type: "application/json" });
-    if (navigator.sendBeacon("/api/visitor/event", blob)) {
-      return;
-    }
-  }
-
-  fetch("/api/visitor/event", {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body,
-    keepalive: preferBeacon,
-  }).catch(() => {});
-}
+import {
+  LOAD_EXTERNAL_ANALYTICS_EVENT,
+  isDoNotTrackEnabled,
+  loadExternalAnalytics,
+  trackAnalyticsEvent,
+  trackAnalyticsPageView,
+} from "@/lib/analytics";
+import {
+  finishVisitorSession,
+  recordVisitorPage,
+  trackVisitorInteraction,
+  trackVisitorPage,
+} from "@/lib/visitorTracking";
+import {
+  hasSensitiveAnalyticsParameters,
+  hasSensitiveAnalyticsUrl,
+  sanitizeAnalyticsLocation,
+  sanitizeAnalyticsReferrer,
+} from "@shared/analyticsPrivacy";
 
 function getNavigationType() {
   if (
@@ -91,78 +35,11 @@ function getNavigationType() {
   return navigation?.type || null;
 }
 
-function getAnalyticsWindow() {
-  if (typeof window === "undefined") return null;
-  return window as AnalyticsWindow;
-}
-
-function isDoNotTrackEnabled() {
-  return (
-    typeof navigator !== "undefined" &&
-    (navigator.doNotTrack === "1" || (window as any).doNotTrack === "1")
-  );
-}
-
-function getGtmId() {
-  const configuredId =
-    (import.meta.env.VITE_GTM_ID as string | undefined)?.trim() || "";
-  const enabledSetting = (
-    (import.meta.env.VITE_ENABLE_GTM as string | undefined)?.trim() || ""
-  ).toLowerCase();
-  return configuredId && enabledSetting !== "false" ? configuredId : "";
-}
-
-function ensureGtag(ga4Id: string) {
-  const analyticsWindow = getAnalyticsWindow();
-  if (!analyticsWindow) return null;
-
-  analyticsWindow.dataLayer = analyticsWindow.dataLayer || [];
-
-  if (!analyticsWindow.gtag) {
-    analyticsWindow.gtag = (...args: any[]) => {
-      analyticsWindow.dataLayer!.push(args);
-    };
-  }
-
-  if (!document.querySelector(`script[data-ga4-id="${ga4Id}"]`)) {
-    const gaScript = document.createElement("script");
-    gaScript.async = true;
-    gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(ga4Id)}`;
-    gaScript.setAttribute("data-ga4-id", ga4Id);
-    document.head.appendChild(gaScript);
-  }
-
-  return analyticsWindow.gtag;
-}
-
-function trackExternalEvent(
-  name: string,
-  params: Record<string, unknown> = {},
-) {
-  if (isDoNotTrackEnabled()) return;
-
-  window.dispatchEvent(new Event(LOAD_EXTERNAL_ANALYTICS_EVENT));
-
-  const gtmId = getGtmId();
-  if (gtmId) {
-    const analyticsWindow = getAnalyticsWindow();
-    if (!analyticsWindow) return;
-    analyticsWindow.dataLayer = analyticsWindow.dataLayer || [];
-    analyticsWindow.dataLayer.push({ event: name, ...params });
-    return;
-  }
-
-  const ga4Id = (import.meta.env.VITE_GA4_ID as string | undefined)?.trim();
-  if (!ga4Id) return;
-  const gtag = ensureGtag(ga4Id);
-  if (!gtag) return;
-  gtag("event", name, params);
-}
-
 /**
  * Optional analytics loader + first-party visitor tracking.
  *
  * External analytics:
+ * - Google Tag Manager via VITE_GTM_ID (the ID enables it automatically)
  * - Google Analytics 4 via VITE_GA4_ID
  * - Umami via VITE_UMAMI_URL + VITE_UMAMI_WEBSITE_ID
  *
@@ -175,8 +52,12 @@ export default function Analytics() {
   const { locale } = useI18n();
   const { user, isAdmin, loading } = useAuth();
   const lastExternalPageKey = useRef<string | null>(null);
+  const sensitiveLocation =
+    hasSensitiveAnalyticsParameters(window.location) ||
+    hasSensitiveAnalyticsUrl(document.referrer);
   const excludedFromTracking =
     loading ||
+    sensitiveLocation ||
     isAdmin ||
     user?.role === "admin" ||
     window.location.hostname.toLowerCase().startsWith("admin.") ||
@@ -185,85 +66,18 @@ export default function Analytics() {
   useEffect(() => {
     if (excludedFromTracking || isDoNotTrackEnabled()) return;
 
-    const gtmId = getGtmId();
-    const ga4Id = (import.meta.env.VITE_GA4_ID as string | undefined)?.trim();
-    const umamiUrl = (
-      (import.meta.env.VITE_UMAMI_URL as string | undefined) ||
-      (import.meta.env.VITE_ANALYTICS_ENDPOINT as string | undefined)
-    )?.trim();
-    const umamiWebsiteId = (
-      (import.meta.env.VITE_UMAMI_WEBSITE_ID as string | undefined) ||
-      (import.meta.env.VITE_ANALYTICS_WEBSITE_ID as string | undefined)
-    )?.trim();
-
-    const loadExternalAnalytics = () => {
-      if (ga4Id && !gtmId) {
-        const directGtag = ensureGtag(ga4Id);
-        if (directGtag) {
-          directGtag("js", new Date());
-          directGtag("config", ga4Id, {
-            allow_google_signals: false,
-            allow_ad_personalization_signals: false,
-            send_page_view: false,
-          });
-        }
-      }
-
-      const gtmAlreadyLoaded =
-        !!document.querySelector(`script[data-gtm-id="${gtmId}"]`) ||
-        !!document.querySelector(
-          `script[src*="googletagmanager.com/gtm.js?id=${gtmId}"]`,
-        );
-
-      if (gtmId && !gtmAlreadyLoaded) {
-        (window as any).dataLayer = (window as any).dataLayer || [];
-        (window as any).dataLayer.push({
-          "gtm.start": new Date().getTime(),
-          event: "gtm.js",
-        });
-
-        const gtmScript = document.createElement("script");
-        gtmScript.async = true;
-        gtmScript.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(gtmId)}`;
-        gtmScript.setAttribute("data-gtm-id", gtmId);
-        document.head.appendChild(gtmScript);
-      }
-
-      if (
-        umamiUrl &&
-        umamiWebsiteId &&
-        !document.querySelector(`script[data-website-id="${umamiWebsiteId}"]`)
-      ) {
-        const base = umamiUrl.replace(/\/+$/, "");
-        const src = base.endsWith(".js") ? base : `${base}/script.js`;
-        const s = document.createElement("script");
-        s.async = true;
-        s.defer = true;
-        s.src = src;
-        s.setAttribute("data-website-id", umamiWebsiteId);
-        document.head.appendChild(s);
-      }
-
-      if (!document.querySelector("script[data-ahrefs-analytics]")) {
-        const ahrefs = document.createElement("script");
-        ahrefs.async = true;
-        ahrefs.src = "https://analytics.ahrefs.com/analytics.js";
-        ahrefs.setAttribute("data-key", "iABZcinu8y6HV7To3tLfIA");
-        ahrefs.setAttribute("data-ahrefs-analytics", "true");
-        document.head.appendChild(ahrefs);
-      }
-    };
-
     let loaded = false;
     let timer = 0;
     const triggerLoad = () => {
       if (loaded) return;
       loaded = true;
       window.clearTimeout(timer);
+      window.removeEventListener("load", scheduleLoad);
       window.removeEventListener(LOAD_EXTERNAL_ANALYTICS_EVENT, triggerLoad);
       loadExternalAnalytics();
     };
     const scheduleLoad = () => {
+      if (loaded) return;
       const mobile = window.matchMedia("(max-width: 767px)").matches;
       timer = window.setTimeout(triggerLoad, mobile ? 15000 : 8000);
     };
@@ -277,7 +91,6 @@ export default function Analytics() {
     } else {
       window.addEventListener("load", scheduleLoad, { once: true });
     }
-
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("load", scheduleLoad);
@@ -286,14 +99,12 @@ export default function Analytics() {
   }, [excludedFromTracking]);
 
   useEffect(() => {
-    if (excludedFromTracking) return;
+    if (excludedFromTracking || isDoNotTrackEnabled()) return;
 
-    const dnt = isDoNotTrackEnabled();
-    const gtmId = getGtmId();
-    const ga4Id = (import.meta.env.VITE_GA4_ID as string | undefined)?.trim();
-
-    const search = window.location.search || "";
-    const params = new URLSearchParams(search.replace(/^\?/, ""));
+    const rawSearch = window.location.search || "";
+    const safeLocation = sanitizeAnalyticsLocation(window.location);
+    const safeReferrer = sanitizeAnalyticsReferrer(document.referrer);
+    const params = new URLSearchParams(rawSearch.replace(/^\?/, ""));
     const campaign = {
       utm_source: params.get("utm_source"),
       utm_medium: params.get("utm_medium"),
@@ -309,169 +120,126 @@ export default function Analytics() {
       gbraid: params.get("gbraid"),
     };
 
-    if (!dnt) {
-      const pageKey =
-        window.location.pathname +
-        window.location.search +
-        window.location.hash;
-      const isInitialPage = lastExternalPageKey.current === null;
+    const session = recordVisitorPage(safeLocation.pathname);
+    // Seo updates document.title in a React effect. Deferring one task keeps
+    // analytics aligned with the new route instead of the previous page.
+    const trackingTimer = window.setTimeout(() => {
+      const pageKey = safeLocation.path;
       const isNewPage = lastExternalPageKey.current !== pageKey;
       lastExternalPageKey.current = pageKey;
 
-      if (isNewPage && gtmId && !isInitialPage) {
-        (window as any).dataLayer = (window as any).dataLayer || [];
-        (window as any).dataLayer.push({
-          event: "virtual_pageview",
+      if (isNewPage) {
+        trackAnalyticsPageView({
           page_title: document.title,
-          page_path: window.location.pathname,
-          page_location: window.location.href,
-          page_search: search,
-          locale,
-          user_status: user ? "registered" : "anonymous",
-          ...campaign,
-        });
-      } else if (isNewPage && ga4Id && !gtmId) {
-        const analyticsWindow = getAnalyticsWindow();
-        analyticsWindow?.gtag?.("event", "page_view", {
-          page_title: document.title,
-          page_path: window.location.pathname,
-          page_location: window.location.href,
-          page_search: search,
+          page_path: safeLocation.pathname,
+          page_location: safeLocation.href,
+          page_search: safeLocation.search,
+          page_referrer: safeReferrer,
           locale,
           user_status: user ? "registered" : "anonymous",
           ...campaign,
         });
       }
-    }
 
-    const controller = new AbortController();
-    const session = ensureSessionState();
-    session.pageCount += 1;
-    setSessionState(session);
-
-    if (!session.startedEventSent) {
-      sendVisitorEvent({
-        type: "session_start",
-        path: window.location.pathname,
-        sessionId: session.id,
-      });
-      session.startedEventSent = true;
-      setSessionState(session);
-    }
-
-    fetch("/api/visitor/track", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        path:
-          window.location.pathname +
-          window.location.search +
-          window.location.hash,
-        search,
-        locale,
-        title: document.title,
-        referrer: document.referrer || null,
-        browserLanguage: navigator.language || null,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
-        screen:
-          typeof window !== "undefined"
-            ? `${window.screen?.width || 0}x${window.screen?.height || 0}`
-            : null,
-        navigationType: getNavigationType(),
-        userId: user?.id ?? null,
-        sessionId: session.id,
-        ...campaign,
-      }),
-      signal: controller.signal,
-    }).catch(() => {});
+      void trackVisitorPage(
+        {
+          path: safeLocation.pathname,
+          search: safeLocation.search,
+          locale,
+          title: document.title,
+          referrer: safeReferrer,
+          browserLanguage: navigator.language || null,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+          screen: `${window.screen?.width || 0}x${window.screen?.height || 0}`,
+          navigationType: getNavigationType(),
+          userId: user?.id ?? null,
+          sessionId: session.id,
+          ...campaign,
+        },
+        session,
+      );
+    }, 0);
 
     const clickHandler = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      const link = target?.closest("a") as HTMLAnchorElement | null;
-      if (!link) return;
-      const href = link.href || "";
-      const label = (link.textContent || "").trim().slice(0, 140) || null;
+      const target = event.target as Element | null;
+      const trackedElement = target?.closest<HTMLElement>(
+        'a, button[data-track="cta"], button[data-cta="true"], [data-track="cta"], [data-cta="true"]',
+      );
+      if (!trackedElement) return;
 
-      if (/wa\.me|whatsapp/i.test(href)) {
-        trackExternalEvent("whatsapp_click", {
-          link_url: href,
+      const link = trackedElement.closest("a") as HTMLAnchorElement | null;
+      const href = link?.href || null;
+      const safeHref = href ? sanitizeAnalyticsReferrer(href) : null;
+      let linkDomain: string | null = null;
+      if (safeHref) {
+        try {
+          linkDomain = new URL(safeHref).hostname || null;
+        } catch {
+          linkDomain = null;
+        }
+      }
+      const label =
+        (trackedElement.textContent || "").trim().slice(0, 140) || null;
+      const externalLink = safeHref ? { link_url: safeHref } : {};
+      const visitorLink = safeHref ? { href: safeHref } : {};
+
+      if (href && /wa\.me|whatsapp/i.test(href)) {
+        trackAnalyticsEvent("whatsapp_click", {
+          contact_method: "whatsapp",
+          link_domain: linkDomain,
           link_text: label,
-          page_path: window.location.pathname,
+          page_path: safeLocation.pathname,
           locale,
         });
-        sendVisitorEvent(
-          {
-            type: "whatsapp_click",
-            path: window.location.pathname,
-            href,
-            label,
-            sessionId: session.id,
-          },
-          true,
-        );
-      } else if (href.startsWith("mailto:")) {
-        trackExternalEvent("email_click", {
-          link_url: href,
+        trackVisitorInteraction({
+          type: "whatsapp_click",
+          path: safeLocation.pathname,
+          label,
+          sessionId: session.id,
+        });
+      } else if (href?.startsWith("mailto:")) {
+        trackAnalyticsEvent("email_click", {
+          contact_method: "email",
           link_text: label,
-          page_path: window.location.pathname,
+          page_path: safeLocation.pathname,
           locale,
         });
-        sendVisitorEvent(
-          {
-            type: "email_click",
-            path: window.location.pathname,
-            href,
-            label,
-            sessionId: session.id,
-          },
-          true,
-        );
+        trackVisitorInteraction({
+          type: "email_click",
+          path: safeLocation.pathname,
+          ...visitorLink,
+          label,
+          sessionId: session.id,
+        });
       } else if (
-        link.dataset.cta === "true" ||
-        link.getAttribute("data-track") === "cta"
+        trackedElement.dataset.cta === "true" ||
+        trackedElement.getAttribute("data-track") === "cta"
       ) {
-        trackExternalEvent("cta_click", {
-          link_url: href,
+        trackAnalyticsEvent("cta_click", {
+          ...externalLink,
           link_text: label,
-          page_path: window.location.pathname,
+          page_path: safeLocation.pathname,
           locale,
         });
-        sendVisitorEvent(
-          {
-            type: "cta_click",
-            path: window.location.pathname,
-            href,
-            label,
-            sessionId: session.id,
-          },
-          true,
-        );
+        trackVisitorInteraction({
+          type: "cta_click",
+          path: safeLocation.pathname,
+          ...visitorLink,
+          label,
+          sessionId: session.id,
+        });
       }
     };
 
     const pageHideHandler = () => {
-      const current = getSessionState();
-      if (!current) return;
-      sendVisitorEvent(
-        {
-          type: "session_end",
-          path: window.location.pathname,
-          sessionId: current.id,
-          durationMs: Date.now() - current.startedAt,
-          pageCount: current.pageCount,
-        },
-        true,
-      );
+      finishVisitorSession(safeLocation.pathname);
     };
 
     document.addEventListener("click", clickHandler, true);
     window.addEventListener("pagehide", pageHideHandler);
 
     return () => {
-      controller.abort();
+      window.clearTimeout(trackingTimer);
       document.removeEventListener("click", clickHandler, true);
       window.removeEventListener("pagehide", pageHideHandler);
     };

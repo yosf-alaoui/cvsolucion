@@ -23,7 +23,7 @@ export default function Footer() {
   const guidesLabel = locale === "ar" ? "الأدلة" : "Guides";
   const contactLabel = locale === "ar" ? "تواصل" : locale === "fr" ? "Contact" : "Contact";
 
-  const whatsappHref = useMemo(() => buildWhatsAppLink("+1 514 963 8719", t("whatsapp.general")), [t]);
+  const whatsappHref = useMemo(() => buildWhatsAppLink("+1 438 807 8747", t("whatsapp.general")), [t]);
 
   return (
     <footer className="bg-primary text-white">
@@ -106,7 +106,7 @@ export default function Footer() {
                   dir="ltr"
                   style={{ direction: "ltr", unicodeBidi: "isolate" }}
                 >
-                  +1 514 963 8719
+                  +1 438 807 8747
                 </a>
               </li>
             </ul>

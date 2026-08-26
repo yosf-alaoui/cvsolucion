@@ -69,4 +69,15 @@ describe("contact verification store", () => {
 
     expect(getPendingContactLeadByToken(rawToken)).toBeNull();
   });
+
+  it("consumes a career conversion marker only once", async () => {
+    const {
+      consumeCareerConversionMarker,
+      createCareerConversionMarker,
+    } = await import("./contactVerificationStore");
+    const token = createCareerConversionMarker("lead_123", 1000 * 60);
+
+    expect(consumeCareerConversionMarker(token)).toBe("lead_123");
+    expect(consumeCareerConversionMarker(token)).toBeNull();
+  });
 });

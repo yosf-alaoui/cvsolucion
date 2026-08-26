@@ -19,6 +19,7 @@ import {
   type BookingServiceType,
 } from "@/lib/bookings";
 import { saveBookingCheckoutDraft } from "@/lib/bookingCheckout";
+import { trackFunnelEvent } from "@/lib/analytics";
 import { getCustomerDashboard } from "@/lib/customer";
 import {
   formatBookingDate,
@@ -56,12 +57,11 @@ function getInitialBookingFilters() {
   const params = new URLSearchParams(window.location.search);
   const priority = params.get("priority");
   const serviceType = params.get("service");
-  const packageKey = params.get("package");
 
   return {
     priority: isBookingPriority(priority) ? priority : ("standard" as BookingPriority),
     serviceType: isBookingServiceType(serviceType) ? serviceType : ("consultation" as BookingServiceType),
-    packageKey: typeof packageKey === "string" && packageKey.trim() ? packageKey.trim() : null,
+    packageKey: null as string | null,
   };
 }
 
@@ -118,6 +118,8 @@ function getCopy(locale: string) {
       taxes: "الضرائب",
       total: "الإجمالي المستحق",
       note: "خدمة رقمية بدون شحن. كل موعد مختار يُحاسب كجلسة مستقلة.",
+      guestPreview: "يمكنك مشاهدة المواعيد والأسعار واختيار وقتك الآن. سنطلب تسجيل الدخول فقط عند الانتقال من السلة إلى الدفع.",
+      perSession: "لكل جلسة",
     };
   }
   if (locale === "fr") {
@@ -153,6 +155,8 @@ function getCopy(locale: string) {
       taxes: "Taxes",
       total: "Total a payer",
       note: "Service numerique sans livraison. Chaque horaire choisi est facture comme une session separee.",
+      guestPreview: "Vous pouvez voir les disponibilites, les prix et choisir vos horaires maintenant. La connexion sera demandee seulement avant le paiement.",
+      perSession: "par session",
     };
   }
   return {
@@ -172,12 +176,12 @@ function getCopy(locale: string) {
     summaryEmpty: "Choose one or more time slots before continuing.",
     loading: "Loading schedule...",
     reviewCart: "Review cart",
-      chooseSlot: "Choose a valid slot first.",
-      service: "Service",
-      priority: "Priority",
-      package: "Package",
-      selectedPackage: "Selected package",
-      seoTitle: "Book an appointment | CVsolucion",
+    chooseSlot: "Choose a valid slot first.",
+    service: "Service",
+    priority: "Priority",
+    package: "Package",
+    selectedPackage: "Selected package",
+    seoTitle: "Book an appointment | CVsolucion",
     appointments: "Selected sessions",
     invoice: "Invoice details",
     remove: "Remove",
@@ -187,12 +191,14 @@ function getCopy(locale: string) {
     taxes: "Taxes",
     total: "Total due now",
     note: "Digital service with no shipping. Each selected appointment is billed as a separate session.",
+    guestPreview: "You can view availability, prices, and choose your times now. Sign-in is only required before payment.",
+    perSession: "per session",
   };
 }
 
 export default function Booking() {
   const { locale } = useI18n();
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const [priority, setPriority] = useState<BookingPriority>(() => getInitialBookingFilters().priority);
   const [serviceType, setServiceType] = useState<BookingServiceType>(() => getInitialBookingFilters().serviceType);
   const [packageKey] = useState<string | null>(() => getInitialBookingFilters().packageKey);
@@ -223,17 +229,6 @@ export default function Booking() {
     [locale, selectedCountryCode, selectedRegionCode]
   );
   const bookingHref = locale === "en" ? "/book" : `/${locale}/book`;
-  const currentBookingHref =
-    typeof window === "undefined" ? bookingHref : `${window.location.pathname}${window.location.search}`;
-  const loginPath = locale === "en" ? "/login" : `/${locale}/login`;
-  const loginHref = `${loginPath}?next=${encodeURIComponent(currentBookingHref)}`;
-  const signInLabel = locale === "ar" ? "سجل الدخول للمتابعة" : locale === "fr" ? "Connectez-vous pour continuer" : "Sign in to continue";
-  const signInText =
-    locale === "ar"
-      ? "يجب تسجيل الدخول أولاً قبل رؤية المواعيد واختيار الحجز."
-      : locale === "fr"
-        ? "Vous devez vous connecter avant de voir les horaires et choisir un booking."
-        : "You must sign in before viewing availability and choosing a booking.";
   const countryLabel = locale === "ar" ? "الدولة" : locale === "fr" ? "Pays" : "Country";
   const regionLabel = locale === "ar" ? "المقاطعة / الولاية" : locale === "fr" ? "Province / Etat" : "Province / State";
   const localAreaLabel = selectedRegionLabel ? `${selectedCountryLabel} - ${selectedRegionLabel}` : selectedCountryLabel;
@@ -298,18 +293,6 @@ export default function Booking() {
   }, [days, displayTimeZone, locale]);
 
   useEffect(() => {
-    if (authLoading) {
-      setLoading(true);
-      return;
-    }
-
-    if (!user) {
-      setDays([]);
-      setScheduleOpen(true);
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
     setSelectedSlots([]);
     setStatus(null);
@@ -320,7 +303,7 @@ export default function Booking() {
       })
       .catch((error: Error) => setStatus({ tone: "error", text: error.message }))
       .finally(() => setLoading(false));
-  }, [authLoading, priority, user]);
+  }, [priority]);
 
   useEffect(() => {
     if (!user) return;
@@ -350,24 +333,37 @@ export default function Booking() {
   }, [regionOptions, selectedCountryCode]);
 
   useEffect(() => {
+    let cancelled = false;
+    setStripeConfig(null);
     getStripeBookingConfig(selectedCountryCode)
-      .then((response) => setStripeConfig(response))
-      .catch(() => setStripeConfig(null));
+      .then((response) => {
+        if (!cancelled) setStripeConfig(response);
+      })
+      .catch(() => {
+        if (!cancelled) setStripeConfig(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCountryCode]);
 
   const weeks = useMemo(() => chunkDays(localizedDays, priority === "express" ? 2 : 5), [localizedDays, priority]);
   const cartHref = locale === "en" ? "/book/cart" : `/${locale}/book/cart`;
   const priceKey = `${priority}:${serviceType}`;
   const unitAmount = stripeConfig?.prices?.[priceKey] ?? 0;
+  const formatPrice = (amount: number) =>
+    new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
+      style: "currency",
+      currency: (stripeConfig?.currency || "usd").toUpperCase(),
+    }).format(amount / 100);
+  const standardPrice = stripeConfig?.prices?.[`standard:${serviceType}`] ?? 0;
+  const expressPrice = stripeConfig?.prices?.[`express:${serviceType}`] ?? 0;
   const subtotalAmount = unitAmount * selectedSlots.length;
   const cardPaymentFeeCents = subtotalAmount > 0 ? stripeConfig?.cardPaymentFeeCents ?? 0 : 0;
   const totalAmount = subtotalAmount + cardPaymentFeeCents;
   const totalAmountLabel =
     totalAmount > 0
-      ? new Intl.NumberFormat(locale === "ar" ? "ar" : locale === "fr" ? "fr-CA" : "en-CA", {
-          style: "currency",
-          currency: (stripeConfig?.currency || "usd").toUpperCase(),
-        }).format(totalAmount / 100)
+      ? formatPrice(totalAmount)
       : null;
   const serviceLabel = serviceType === "support" ? copy.support : copy.consultation;
   const priorityLabel = priority === "express" ? copy.expressTitle : copy.standardTitle;
@@ -399,6 +395,35 @@ export default function Booking() {
       slots: selectedSlots.map((slot) => ({ id: slot.id, date: slot.date, hour: slot.hour, utcStart: slot.utcStart })),
       createdAt: Date.now(),
     }, user?.id ?? null);
+    trackFunnelEvent("add_to_cart", {
+      currency: (stripeConfig?.currency || "usd").toUpperCase(),
+      value: totalAmount / 100,
+      service_type: serviceType,
+      priority,
+      slot_count: selectedSlots.length,
+      items: [
+        {
+          item_id: `booking_${serviceType}_${priority}`,
+          item_name: `${serviceLabel} - ${priorityLabel}`,
+          item_category: "booking",
+          item_variant: priority,
+          price: unitAmount / 100,
+          quantity: selectedSlots.length,
+        },
+        ...(cardPaymentFeeCents > 0
+          ? [
+              {
+                item_id: "card_payment_fee",
+                item_name: copy.cardFee,
+                item_category: "fee",
+                item_variant: "card",
+                price: cardPaymentFeeCents / 100,
+                quantity: 1,
+              },
+            ]
+          : []),
+      ],
+    });
     window.location.href = cartHref;
   }
 
@@ -421,6 +446,11 @@ export default function Booking() {
                 <div>
                   <h2 className="text-2xl font-bold text-slate-950">{copy.standardTitle}</h2>
                   <p className="mt-3 text-base leading-7 text-slate-600">{copy.standardText}</p>
+                  {standardPrice > 0 ? (
+                    <p className="mt-3 text-sm font-bold text-primary">
+                      {formatPrice(standardPrice)} <span className="font-medium text-slate-500">{copy.perSession}</span>
+                    </p>
+                  ) : null}
                 </div>
                 <Clock3 className="h-6 w-6 text-primary" />
               </div>
@@ -434,6 +464,11 @@ export default function Booking() {
                 <div>
                   <h2 className="text-2xl font-bold text-slate-950">{copy.expressTitle}</h2>
                   <p className="mt-3 text-base leading-7 text-slate-600">{copy.expressText}</p>
+                  {expressPrice > 0 ? (
+                    <p className="mt-3 text-sm font-bold text-amber-700">
+                      {formatPrice(expressPrice)} <span className="font-medium text-slate-500">{copy.perSession}</span>
+                    </p>
+                  ) : null}
                 </div>
                 <Zap className="h-6 w-6 text-amber-500" />
               </div>
@@ -481,65 +516,58 @@ export default function Booking() {
                   </Button>
                 </div>
 
-                {authLoading ? (
-                  <div className="mt-8 text-sm text-slate-500">{copy.loading}</div>
-                ) : !user ? (
-                  <div className="mt-8 rounded-[24px] border border-slate-200 bg-white/70 p-6 text-center">
-                    <p className="text-base leading-7 text-slate-600">{signInText}</p>
-                    <Button asChild className="mt-5 rounded-full bg-primary text-white hover:bg-primary/90">
-                      <a href={loginHref} rel="nofollow">
-                        {signInLabel}
-                      </a>
-                    </Button>
+                {!user ? (
+                  <div className="mt-8 rounded-[20px] border border-primary/15 bg-primary/5 px-5 py-4 text-sm leading-7 text-slate-700">
+                    {copy.guestPreview}
                   </div>
-                ) : (
-                  <div className="mt-8 flex flex-wrap items-end gap-4">
-                    <div className="min-w-[220px] flex-1 space-y-2">
-                      <Label htmlFor="booking-country">{countryLabel}</Label>
-                      <Select
-                        value={selectedCountryCode}
-                        onValueChange={(nextCountryCode) => {
-                          setSelectedCountryCode(nextCountryCode);
-                          setSelectedRegionCode(guessBookingRegionCode(nextCountryCode, null));
-                        }}
-                      >
-                        <SelectTrigger id="booking-country" className="bg-white/85">
-                          <SelectValue placeholder={countryLabel} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {countryOptions.map((option: BookingCountryOption) => (
-                            <SelectItem key={option.code} value={option.code}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="min-w-[220px] flex-1 space-y-2">
-                      <Label htmlFor="booking-region">{regionLabel}</Label>
-                      <Select value={selectedRegionCode} onValueChange={setSelectedRegionCode}>
-                        <SelectTrigger id="booking-region" className="bg-white/85">
-                          <SelectValue placeholder={regionLabel} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {regionOptions.map((option: BookingRegionOption) => (
-                            <SelectItem key={option.code} value={option.code}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                )}
+                ) : null}
 
-                {user && loading ? (
+                <div className="mt-8 flex flex-wrap items-end gap-4">
+                  <div className="min-w-[220px] flex-1 space-y-2">
+                    <Label htmlFor="booking-country">{countryLabel}</Label>
+                    <Select
+                      value={selectedCountryCode}
+                      onValueChange={(nextCountryCode) => {
+                        setSelectedCountryCode(nextCountryCode);
+                        setSelectedRegionCode(guessBookingRegionCode(nextCountryCode, null));
+                      }}
+                    >
+                      <SelectTrigger id="booking-country" className="bg-white/85">
+                        <SelectValue placeholder={countryLabel} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {countryOptions.map((option: BookingCountryOption) => (
+                          <SelectItem key={option.code} value={option.code}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="min-w-[220px] flex-1 space-y-2">
+                    <Label htmlFor="booking-region">{regionLabel}</Label>
+                    <Select value={selectedRegionCode} onValueChange={setSelectedRegionCode}>
+                      <SelectTrigger id="booking-region" className="bg-white/85">
+                        <SelectValue placeholder={regionLabel} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {regionOptions.map((option: BookingRegionOption) => (
+                          <SelectItem key={option.code} value={option.code}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {loading ? (
                   <div className="mt-8 text-sm text-slate-500">{copy.loading}</div>
-                ) : user && !scheduleOpen ? (
+                ) : !scheduleOpen ? (
                   <div className="mt-8 rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
                     {scheduleClosedLabel}
                   </div>
-                ) : user ? (
+                ) : (
                   <div className="mt-8 space-y-8">
                     {weeks.map((week, weekIndex) => (
                       <div key={`week-${weekIndex}`} className={`grid gap-4 ${priority === "express" ? "md:grid-cols-2" : "md:grid-cols-2 xl:grid-cols-3"}`}>
@@ -577,7 +605,7 @@ export default function Booking() {
                       </div>
                     ))}
                   </div>
-                ) : null}
+                )}
               </GlassCard>
             </div>
 
@@ -616,7 +644,7 @@ export default function Booking() {
                 digitalNote={copy.note}
                 timeZoneNote={quebecReferenceLabel}
                 actionLabel={selectedSlots.length ? (totalAmountLabel ? `${copy.reviewCart} • ${totalAmountLabel}` : copy.reviewCart) : undefined}
-                actionDisabled={!selectedSlots.length}
+                actionDisabled={!selectedSlots.length || !stripeConfig || unitAmount <= 0}
                 onAction={continueToCart}
                 onRemoveSlot={(slotId) => setSelectedSlots((current) => current.filter((slot) => slot.id !== slotId))}
               />

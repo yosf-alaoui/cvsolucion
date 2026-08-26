@@ -24,10 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
-import {
-  markCareerLeadForThankYou,
-  trackCampaignEvent,
-} from "@/lib/campaignTracking";
+import { trackCampaignEvent } from "@/lib/campaignTracking";
 import {
   getBookingCountryLabel,
   getBookingCountryOptions,
@@ -35,6 +32,7 @@ import {
 } from "@/lib/bookingTime";
 import { submitContactLead } from "@/lib/contact";
 import { getDetectedCountry } from "@/lib/geo";
+import { sanitizeAnalyticsLocation } from "@shared/analyticsPrivacy";
 
 type PageLocale = "en" | "fr" | "ar";
 type SelectOption = { value: string; label: string };
@@ -71,6 +69,8 @@ type CareerCopy = {
   mainGoal: string;
   preferredTime: string;
   communicationLanguage: string;
+  optionalDetailsTitle: string;
+  optionalDetailsHint: string;
   notes: string;
   notesPlaceholder: string;
   submit: string;
@@ -198,7 +198,7 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     formKicker: "Free career evaluation",
     formTitle: "Is Cabinet Vision the right next step for you?",
     formIntro:
-      "Tell us about your current shop experience, your goals, and your preferred time. We will review the request and contact you with the best next step.",
+      "Share your contact details. You can optionally add your shop experience, goals, and preferred time to help us tailor the recommendation.",
     formNotice:
       "The evaluation is free, takes less than one minute to request, and helps us recommend the right next step before you commit to training.",
     fullName: "Full name",
@@ -211,6 +211,9 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     mainGoal: "Main goal",
     preferredTime: "Preferred time",
     communicationLanguage: "Preferred communication language",
+    optionalDetailsTitle: "Add work experience and goals (optional)",
+    optionalDetailsHint:
+      "A few extra details help us personalize your evaluation.",
     notes: "Message / notes",
     notesPlaceholder:
       "Tell us anything that would help us understand your current role or goal.",
@@ -256,7 +259,8 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
       "You want general 3D design instead of Cabinet Vision workflow",
     ],
     learningKicker: "What you will learn",
-    learningTitle: "The workflow between the customer request and the shop floor.",
+    learningTitle:
+      "The workflow between the customer request and the shop floor.",
     learningBody:
       "The program focuses on the practical Cabinet Vision knowledge used by cabinet shops, not generic software demonstrations.",
     learning: [
@@ -381,7 +385,7 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     formKicker: "Evaluation gratuite",
     formTitle: "Cabinet Vision est-il la bonne prochaine etape pour vous ?",
     formIntro:
-      "Decrivez votre experience, votre objectif et votre disponibilite. Nous examinerons la demande et vous contacterons avec la prochaine etape adaptee.",
+      "Partagez vos coordonnees. Vous pouvez ajouter votre experience, votre objectif et vos disponibilites pour personnaliser la recommandation.",
     formNotice:
       "L'evaluation est gratuite, prend moins d'une minute a demander, et nous aide a recommander la bonne prochaine etape avant tout engagement.",
     fullName: "Nom complet",
@@ -394,6 +398,10 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     mainGoal: "Objectif principal",
     preferredTime: "Moment prefere",
     communicationLanguage: "Langue de communication preferee",
+    optionalDetailsTitle:
+      "Ajouter votre experience et vos objectifs (facultatif)",
+    optionalDetailsHint:
+      "Quelques details nous aident a personnaliser votre evaluation.",
     notes: "Message / notes",
     notesPlaceholder:
       "Ajoutez tout detail utile sur votre role actuel ou votre objectif.",
@@ -485,12 +493,30 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     processBody:
       "L'evaluation evite d'acheter le mauvais niveau ou de commencer un programme qui ne correspond pas a votre experience.",
     process: [
-      ["Demandez une evaluation gratuite", "Remplissez le formulaire avec votre role, votre experience, votre objectif et votre disponibilite."],
-      ["Nous examinons la demande", "Nous verifions si la formation convient et quel niveau est logique."],
-      ["Nous vous contactons", "Nous confirmons la prochaine etape par email, telephone ou WhatsApp."],
-      ["Nous definissons le parcours", "Debutant, atelier-design, CNC ou workflow de production."],
-      ["Sessions en direct", "Vous apprenez avec un vrai formateur dans Cabinet Vision."],
-      ["Pratique et correction", "Vous pratiquez entre les sessions et recevez un retour direct."],
+      [
+        "Demandez une evaluation gratuite",
+        "Remplissez le formulaire avec votre role, votre experience, votre objectif et votre disponibilite.",
+      ],
+      [
+        "Nous examinons la demande",
+        "Nous verifions si la formation convient et quel niveau est logique.",
+      ],
+      [
+        "Nous vous contactons",
+        "Nous confirmons la prochaine etape par email, telephone ou WhatsApp.",
+      ],
+      [
+        "Nous definissons le parcours",
+        "Debutant, atelier-design, CNC ou workflow de production.",
+      ],
+      [
+        "Sessions en direct",
+        "Vous apprenez avec un vrai formateur dans Cabinet Vision.",
+      ],
+      [
+        "Pratique et correction",
+        "Vous pratiquez entre les sessions et recevez un retour direct.",
+      ],
     ],
     proofKicker: "Pourquoi CVsolucion",
     proofTitle: "Une formation liee a la vraie production.",
@@ -506,13 +532,34 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     faqKicker: "FAQ",
     faqTitle: "Questions avant de demander l'evaluation",
     faq: [
-      ["Dois-je posseder une licence Cabinet Vision ?", "Non. Vous pouvez commencer sans posseder de licence."],
-      ["Ai-je besoin d'un ordinateur puissant ?", "Non. La formation peut se faire a distance avec l'environnement prepare du formateur."],
-      ["La formation est-elle en direct ?", "Oui. Elle est animee en direct par un formateur."],
-      ["Puis-je suivre la formation apres le travail ?", "Oui. L'horaire peut etre adapte a vos heures de travail et a votre fuseau."],
-      ["Est-ce adapte aux debutants ?", "Le programme convient surtout aux personnes qui connaissent deja l'atelier, le bois, le CNC, l'installation ou la production."],
-      ["Est-ce qu'un emploi est garanti ?", "Non. L'objectif est de developper des competences pratiques utilisees dans les ateliers."],
-      ["Est-ce uniquement pour le Canada et les Etats-Unis ?", "La formation est a distance, mais le contenu reflete principalement les workflows de ces marches."],
+      [
+        "Dois-je posseder une licence Cabinet Vision ?",
+        "Non. Vous pouvez commencer sans posseder de licence.",
+      ],
+      [
+        "Ai-je besoin d'un ordinateur puissant ?",
+        "Non. La formation peut se faire a distance avec l'environnement prepare du formateur.",
+      ],
+      [
+        "La formation est-elle en direct ?",
+        "Oui. Elle est animee en direct par un formateur.",
+      ],
+      [
+        "Puis-je suivre la formation apres le travail ?",
+        "Oui. L'horaire peut etre adapte a vos heures de travail et a votre fuseau.",
+      ],
+      [
+        "Est-ce adapte aux debutants ?",
+        "Le programme convient surtout aux personnes qui connaissent deja l'atelier, le bois, le CNC, l'installation ou la production.",
+      ],
+      [
+        "Est-ce qu'un emploi est garanti ?",
+        "Non. L'objectif est de developper des competences pratiques utilisees dans les ateliers.",
+      ],
+      [
+        "Est-ce uniquement pour le Canada et les Etats-Unis ?",
+        "La formation est a distance, mais le contenu reflete principalement les workflows de ces marches.",
+      ],
     ],
     finalTitle: "Commencez par une evaluation de carriere gratuite.",
     finalBody:
@@ -552,7 +599,7 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     formKicker: "تقييم مهني مجاني",
     formTitle: "هل Cabinet Vision هو الخطوة المناسبة لك؟",
     formIntro:
-      "أخبرنا عن خبرتك الحالية وهدفك والوقت الذي تفضله. سنراجع الطلب ونتواصل معك لتحديد أفضل خطوة تالية.",
+      "شارك معلومات التواصل الأساسية. ويمكنك اختياريا إضافة خبرتك وهدفك والوقت المفضل لنخصص التوصية لك.",
     formNotice:
       "التقييم مجاني، وطلبه يستغرق أقل من دقيقة، ويساعدنا على اقتراح الخطوة المناسبة قبل أي التزام بالتدريب.",
     fullName: "الاسم الكامل",
@@ -565,6 +612,8 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     mainGoal: "هدفك الرئيسي",
     preferredTime: "الوقت المفضل",
     communicationLanguage: "لغة التواصل المفضلة",
+    optionalDetailsTitle: "أضف خبرتك وأهدافك (اختياري)",
+    optionalDetailsHint: "بعض التفاصيل الإضافية تساعدنا على تخصيص تقييمك.",
     notes: "رسالة / ملاحظات",
     notesPlaceholder: "أضف أي تفاصيل تساعدنا على فهم دورك الحالي أو هدفك.",
     submit: "اطلب تقييمي المجاني",
@@ -603,7 +652,13 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
       "تعلم سير عمل CNC / S2M",
       "تطوير مستواي الحالي في Cabinet Vision",
     ]),
-    timeOptions: options(["الصباح", "بعد الظهر", "المساء", "نهاية الأسبوع", "مرن"]),
+    timeOptions: options([
+      "الصباح",
+      "بعد الظهر",
+      "المساء",
+      "نهاية الأسبوع",
+      "مرن",
+    ]),
     languageOptions: communicationLanguageOptions,
     audienceKicker: "لمن هذا التدريب",
     audienceTitle: "مصمم للأشخاص الذين يعرفون الورشة من الداخل.",
@@ -648,10 +703,19 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     processBody:
       "يمنعك التقييم من شراء مستوى غير مناسب أو البدء في برنامج لا يطابق خبرتك.",
     process: [
-      ["اطلب تقييما مهنيا مجانيا", "املأ النموذج بدورك وخبرتك وهدفك والوقت المفضل."],
+      [
+        "اطلب تقييما مهنيا مجانيا",
+        "املأ النموذج بدورك وخبرتك وهدفك والوقت المفضل.",
+      ],
       ["نراجع طلبك", "نتأكد هل التدريب مناسب ومن أي مستوى يجب أن تبدأ."],
-      ["نتواصل معك", "نؤكد الخطوة التالية عبر البريد أو الهاتف أو واتساب وننسق الوقت."],
-      ["نحدد مسار التدريب", "مبتدئ أو انتقال من الورشة للتصميم أو CNC أو سير الإنتاج."],
+      [
+        "نتواصل معك",
+        "نؤكد الخطوة التالية عبر البريد أو الهاتف أو واتساب وننسق الوقت.",
+      ],
+      [
+        "نحدد مسار التدريب",
+        "مبتدئ أو انتقال من الورشة للتصميم أو CNC أو سير الإنتاج.",
+      ],
       ["حصص تدريب مباشرة", "تتعلم مع مدرب حقيقي داخل Cabinet Vision."],
       ["تطبيق وتصحيح", "تطبق بين الحصص وتحصل على تصحيح مباشر."],
     ],
@@ -669,13 +733,31 @@ const copyByLocale: Record<PageLocale, CareerCopy> = {
     faqKicker: "أسئلة شائعة",
     faqTitle: "أسئلة قبل طلب التقييم",
     faq: [
-      ["هل أحتاج إلى رخصة Cabinet Vision؟", "لا. يمكنك البدء بدون امتلاك رخصة."],
-      ["هل أحتاج إلى كمبيوتر قوي؟", "لا. يمكن تنفيذ التدريب عن بعد عبر بيئة المدرب المجهزة."],
+      [
+        "هل أحتاج إلى رخصة Cabinet Vision؟",
+        "لا. يمكنك البدء بدون امتلاك رخصة.",
+      ],
+      [
+        "هل أحتاج إلى كمبيوتر قوي؟",
+        "لا. يمكن تنفيذ التدريب عن بعد عبر بيئة المدرب المجهزة.",
+      ],
       ["هل التدريب مباشر؟", "نعم. التدريب مباشر مع مدرب وليس فيديوهات مسجلة."],
-      ["هل أستطيع التدريب بعد العمل؟", "نعم. يمكن تنسيق الحصص حسب ساعات عملك ومنطقتك الزمنية."],
-      ["هل يناسب المبتدئين تماما؟", "يناسب أكثر من يعرف الورشة أو النجارة أو CNC أو التركيب أو الإنتاج."],
-      ["هل يضمن لي وظيفة؟", "لا توجد وظيفة مضمونة. الهدف هو بناء مهارات عملية تستعملها الورش."],
-      ["هل التدريب خاص بكندا وأمريكا؟", "التدريب عن بعد، لكن المحتوى يعكس بشكل أساسي سير العمل في هذين السوقين."],
+      [
+        "هل أستطيع التدريب بعد العمل؟",
+        "نعم. يمكن تنسيق الحصص حسب ساعات عملك ومنطقتك الزمنية.",
+      ],
+      [
+        "هل يناسب المبتدئين تماما؟",
+        "يناسب أكثر من يعرف الورشة أو النجارة أو CNC أو التركيب أو الإنتاج.",
+      ],
+      [
+        "هل يضمن لي وظيفة؟",
+        "لا توجد وظيفة مضمونة. الهدف هو بناء مهارات عملية تستعملها الورش.",
+      ],
+      [
+        "هل التدريب خاص بكندا وأمريكا؟",
+        "التدريب عن بعد، لكن المحتوى يعكس بشكل أساسي سير العمل في هذين السوقين.",
+      ],
     ],
     finalTitle: "ابدأ بتقييم مهني مجاني.",
     finalBody:
@@ -765,6 +847,7 @@ export default function TrainingCareer() {
   const tracking = useMemo(() => {
     if (typeof window === "undefined") return {};
     const params = new URLSearchParams(window.location.search);
+    const landingPage = sanitizeAnalyticsLocation(window.location).href;
     return {
       utm_source: params.get("utm_source") || "",
       utm_medium: params.get("utm_medium") || "",
@@ -772,11 +855,11 @@ export default function TrainingCareer() {
       utm_content: params.get("utm_content") || "",
       utm_term: params.get("utm_term") || "",
       fbclid: params.get("fbclid") || "",
-      landing_page: window.location.href,
+      landing_page: landingPage,
     };
   }, []);
   const whatsappHref = buildWhatsAppLink(
-    "+1 514 963 8719",
+    "+1 438 807 8747",
     copy.whatsappMessage,
   );
   const countryOptions = useMemo(
@@ -800,7 +883,9 @@ export default function TrainingCareer() {
     getDetectedCountry()
       .then((response) => {
         if (cancelled || countryManuallySelected.current) return;
-        const detectedCountryCode = guessBookingCountryCode(response.countryCode);
+        const detectedCountryCode = guessBookingCountryCode(
+          response.countryCode,
+        );
         if (!detectedCountryCode) return;
         setForm((current) => {
           if (current.countryCode || countryManuallySelected.current) {
@@ -954,7 +1039,15 @@ export default function TrainingCareer() {
         source: "career_evaluation",
         tracking,
       });
+      trackCampaignEvent("Form_Submit", {
+        form_name: "career_evaluation",
+        locale: pageLocale,
+      });
       if (response.pendingEmailVerification) {
+        trackCampaignEvent("Email_Verification_Required", {
+          form_name: "career_evaluation",
+          locale: pageLocale,
+        });
         setVerificationEmail(response.email || form.email);
         setBusy(false);
         return;
@@ -962,7 +1055,6 @@ export default function TrainingCareer() {
       if (!response.leadId) {
         throw new Error(copy.formError);
       }
-      markCareerLeadForThankYou(response.leadId);
       window.location.assign(
         localPath(pageLocale, "/training/career/thank-you"),
       );
@@ -996,7 +1088,9 @@ export default function TrainingCareer() {
               </div>
               <h1 className="mt-6 max-w-3xl text-5xl font-black leading-[0.96] text-slate-950 sm:text-7xl">
                 <span className="block">{copy.headlineTop}</span>
-                <span className="block text-primary">{copy.headlineBottom}</span>
+                <span className="block text-primary">
+                  {copy.headlineBottom}
+                </span>
               </h1>
               <p className="mt-6 max-w-2xl text-xl font-bold leading-8 text-slate-800">
                 {copy.campaignLine}
@@ -1183,52 +1277,6 @@ export default function TrainingCareer() {
                       onChange={updateCountry}
                     />
                   </div>
-                  <FieldSelect
-                    id="career-role"
-                    label={copy.currentRole}
-                    value={form.currentRole}
-                    options={copy.roleOptions}
-                    onChange={(value) => updateForm("currentRole", value)}
-                    required={false}
-                  />
-                  <FieldSelect
-                    id="career-shop"
-                    label={copy.worksInShop}
-                    value={form.worksInShop}
-                    options={copy.shopOptions}
-                    onChange={(value) => updateForm("worksInShop", value)}
-                    required={false}
-                  />
-                  <FieldSelect
-                    id="career-experience"
-                    label={copy.usesCabinetVision}
-                    value={form.cabinetVisionExperience}
-                    options={copy.experienceOptions}
-                    onChange={(value) =>
-                      updateForm("cabinetVisionExperience", value)
-                    }
-                    required={false}
-                  />
-                  <FieldSelect
-                    id="career-goal"
-                    label={copy.mainGoal}
-                    value={form.mainGoal}
-                    options={copy.goalOptions}
-                    onChange={(value) => updateForm("mainGoal", value)}
-                    required={false}
-                  />
-                  <div className="sm:col-span-2">
-                    <FieldSelect
-                      id="career-time"
-                      label={copy.preferredTime}
-                      value={form.preferredTime}
-                      options={copy.timeOptions}
-                      onChange={(value) =>
-                        updateForm("preferredTime", value)
-                      }
-                      required={false}
-                    />
-                  </div>
                   <div className="sm:col-span-2">
                     <FieldSelect
                       id="career-communication-language"
@@ -1242,18 +1290,77 @@ export default function TrainingCareer() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="career-notes">{copy.notes}</Label>
-                  <Textarea
-                    id="career-notes"
-                    className="min-h-32"
-                    placeholder={copy.notesPlaceholder}
-                    value={form.notes}
-                    onChange={(event) =>
-                      updateForm("notes", event.target.value)
-                    }
-                  />
-                </div>
+                <details className="group overflow-hidden rounded-md border border-slate-200 bg-white/65">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-start">
+                    <span>
+                      <span className="block text-sm font-bold text-slate-900">
+                        {copy.optionalDetailsTitle}
+                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-500">
+                        {copy.optionalDetailsHint}
+                      </span>
+                    </span>
+                    <ArrowDown className="h-5 w-5 shrink-0 text-primary transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="grid gap-5 border-t border-slate-200 p-4 sm:grid-cols-2">
+                    <FieldSelect
+                      id="career-role"
+                      label={copy.currentRole}
+                      value={form.currentRole}
+                      options={copy.roleOptions}
+                      onChange={(value) => updateForm("currentRole", value)}
+                      required={false}
+                    />
+                    <FieldSelect
+                      id="career-shop"
+                      label={copy.worksInShop}
+                      value={form.worksInShop}
+                      options={copy.shopOptions}
+                      onChange={(value) => updateForm("worksInShop", value)}
+                      required={false}
+                    />
+                    <FieldSelect
+                      id="career-experience"
+                      label={copy.usesCabinetVision}
+                      value={form.cabinetVisionExperience}
+                      options={copy.experienceOptions}
+                      onChange={(value) =>
+                        updateForm("cabinetVisionExperience", value)
+                      }
+                      required={false}
+                    />
+                    <FieldSelect
+                      id="career-goal"
+                      label={copy.mainGoal}
+                      value={form.mainGoal}
+                      options={copy.goalOptions}
+                      onChange={(value) => updateForm("mainGoal", value)}
+                      required={false}
+                    />
+                    <div className="sm:col-span-2">
+                      <FieldSelect
+                        id="career-time"
+                        label={copy.preferredTime}
+                        value={form.preferredTime}
+                        options={copy.timeOptions}
+                        onChange={(value) => updateForm("preferredTime", value)}
+                        required={false}
+                      />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="career-notes">{copy.notes}</Label>
+                      <Textarea
+                        id="career-notes"
+                        className="min-h-28"
+                        placeholder={copy.notesPlaceholder}
+                        value={form.notes}
+                        onChange={(event) =>
+                          updateForm("notes", event.target.value)
+                        }
+                      />
+                    </div>
+                  </div>
+                </details>
 
                 {verificationEmail ? (
                   <div className="border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm leading-7 text-emerald-900">
@@ -1265,9 +1372,7 @@ export default function TrainingCareer() {
                         </div>
                         <p className="mt-1">
                           {copy.verificationBody}{" "}
-                          <span className="font-bold">
-                            {verificationEmail}
-                          </span>
+                          <span className="font-bold">{verificationEmail}</span>
                         </p>
                         <p className="mt-1 text-emerald-800">
                           {copy.verificationHint}

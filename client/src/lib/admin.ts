@@ -326,6 +326,14 @@ export type AdminDashboardGa4 = {
     whatsappClicks: number;
     emailClicks: number;
     ctaClicks: number;
+    formStarts: number;
+    formSubmits: number;
+    verificationRequired: number;
+    leads: number;
+    contacts: number;
+    addToCarts: number;
+    beginCheckouts: number;
+    purchases: number;
   };
   topPages: Array<{ pagePath: string; views: number }>;
   trafficSources: Array<{ sourceMedium: string; users: number }>;
@@ -806,7 +814,10 @@ export type AdminInvoicePayload = Partial<
   >
 >;
 
-export function updateAdminInvoice(invoiceId: string, payload: AdminInvoicePayload) {
+export function updateAdminInvoice(
+  invoiceId: string,
+  payload: AdminInvoicePayload,
+) {
   return adminRequest<{ ok: true; invoice: AdminDashboardInvoice }>(
     `/api/admin/invoices/${encodeURIComponent(invoiceId)}`,
     {
@@ -816,7 +827,10 @@ export function updateAdminInvoice(invoiceId: string, payload: AdminInvoicePaylo
   );
 }
 
-export function issueAdminInvoice(invoiceId: string, payload: AdminInvoicePayload) {
+export function issueAdminInvoice(
+  invoiceId: string,
+  payload: AdminInvoicePayload,
+) {
   return adminRequest<{ ok: true; invoice: AdminDashboardInvoice }>(
     `/api/admin/invoices/${encodeURIComponent(invoiceId)}/issue`,
     {
@@ -826,7 +840,10 @@ export function issueAdminInvoice(invoiceId: string, payload: AdminInvoicePayloa
   );
 }
 
-export function mergeAdminInvoices(invoiceId: string, sourceInvoiceIds: string[]) {
+export function mergeAdminInvoices(
+  invoiceId: string,
+  sourceInvoiceIds: string[],
+) {
   return adminRequest<{
     ok: true;
     invoice: AdminDashboardInvoice;

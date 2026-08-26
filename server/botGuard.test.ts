@@ -34,4 +34,18 @@ describe("bot guard", () => {
     expect(shouldIgnoreVisitorTracking(chrome)).toBe(false);
     expect(getBotDecision(chrome).automated).toBe(false);
   });
+
+  it("allows browser automation but excludes it from visitor reporting", () => {
+    const headlessChrome =
+      "Mozilla/5.0 AppleWebKit/537.36 HeadlessChrome/150.0.0.0 Safari/537.36";
+
+    expect(shouldBlockBotRequest(headlessChrome)).toBe(false);
+    expect(shouldIgnoreVisitorTracking(headlessChrome)).toBe(true);
+    expect(getBotDecision("Chrome-Lighthouse")).toMatchObject({
+      automated: true,
+      allowed: true,
+      blocked: false,
+      label: "Browser automation",
+    });
+  });
 });

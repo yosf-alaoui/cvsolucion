@@ -15,6 +15,8 @@ import { getBookingCountryLabel, getBookingCountryOptions, guessBookingCountryCo
 import { getDetectedCountry } from "@/lib/geo";
 import { setCsrfToken } from "@/lib/csrf";
 import { validatePasswordPolicy } from "@shared/passwordPolicy";
+import { normalizeSafeLocalRedirect } from "@shared/safeRedirect";
+import { getInitialSensitiveSearch } from "@/lib/sensitiveUrl";
 
 type AuthMode = "login" | "signup";
 
@@ -77,7 +79,7 @@ export default function Login() {
         : "We use the country to show the correct price.";
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(getInitialSensitiveSearch());
     const next = params.get("mode");
     const reset = params.get("reset");
     const recovery = params.get("recovery");
@@ -121,12 +123,7 @@ export default function Login() {
   const termsHref = locale === "en" ? "/terms" : `/${locale}/terms`;
   const nextHref = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
-    const rawNext = params.get("next")?.trim();
-    if (!rawNext) return homeHref;
-    if (rawNext.startsWith("/") && !rawNext.startsWith("//")) {
-      return rawNext;
-    }
-    return homeHref;
+    return normalizeSafeLocalRedirect(params.get("next"), homeHref);
   }, [homeHref]);
 
   const mapAuthError = (message: string) => {
@@ -227,7 +224,15 @@ export default function Login() {
           setStatusTone("error");
           return;
         }
-        await signup(email, password, locale, acceptTerms, countryCode, selectedCountryLabel);
+        await signup(
+          email,
+          password,
+          locale,
+          acceptTerms,
+          countryCode,
+          selectedCountryLabel,
+          nextHref,
+        );
         setStatus(t("auth.checkEmail"));
         setStatusTone("success");
         setAcceptTerms(false);

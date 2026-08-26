@@ -17,6 +17,10 @@ const allowedAutomationPatterns: Array<[RegExp, string]> = [
   [/\bslackbot\b|\bdiscordbot\b|\btelegrambot\b/i, "Chat preview"],
   [/\bpinterestbot\b/i, "Pinterest preview"],
   [/\bahrefsbot\b/i, "Ahrefs"],
+  [
+    /\bheadlesschrome\b|\bchrome-lighthouse\b|\bplaywright\b|\bpuppeteer\b/i,
+    "Browser automation",
+  ],
 ];
 
 const blockedAutomationPatterns: Array<[RegExp, string]> = [

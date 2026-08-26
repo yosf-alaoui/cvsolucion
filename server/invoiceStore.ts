@@ -235,8 +235,8 @@ function defaultSellerName() {
 function defaultSellerPhone() {
   const configuredPhone = normalizeText(process.env.INVOICE_SELLER_PHONE) || "";
   const configuredDigits = configuredPhone.replace(/[^\d]/g, "");
-  return !configuredPhone || configuredDigits === "14388078747"
-    ? "+1 514 963 8719"
+  return !configuredPhone || configuredDigits === "15149638719"
+    ? "+1 438 807 8747"
     : configuredPhone;
 }
 

@@ -57,7 +57,7 @@ type InvoiceForm = {
 const DEFAULT_SELLER = {
   name: "Namdaja Service CVsolucion",
   email: "contact@cvsolucion.com",
-  phone: "+1 514 963 8719",
+  phone: "+1 438 807 8747",
   address: "377 Rue st pierre Rimouski, QC Canada",
   taxId: "Not registered for GST/QST",
   website: "https://cvsolucion.com",

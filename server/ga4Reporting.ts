@@ -25,6 +25,14 @@ export type Ga4DashboardSnapshot = {
     whatsappClicks: number;
     emailClicks: number;
     ctaClicks: number;
+    formStarts: number;
+    formSubmits: number;
+    verificationRequired: number;
+    leads: number;
+    contacts: number;
+    addToCarts: number;
+    beginCheckouts: number;
+    purchases: number;
   };
   topPages: Array<{ pagePath: string; views: number }>;
   trafficSources: Array<{ sourceMedium: string; users: number }>;
@@ -36,12 +44,10 @@ const TOKEN_SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CACHE_MS = 1000 * 60 * 5;
 
-let cache:
-  | {
-      expiresAt: number;
-      value: Ga4DashboardSnapshot;
-    }
-  | null = null;
+let cache: {
+  expiresAt: number;
+  value: Ga4DashboardSnapshot;
+} | null = null;
 
 function base64UrlEncode(value: Buffer | string) {
   return Buffer.from(value)
@@ -83,7 +89,7 @@ async function getAccessToken(serviceAccount: Ga4ServiceAccount) {
       aud: serviceAccount.token_uri || TOKEN_URL,
       exp: now + 3600,
       iat: now,
-    })
+    }),
   );
 
   const signer = crypto.createSign("RSA-SHA256");
@@ -104,23 +110,38 @@ async function getAccessToken(serviceAccount: Ga4ServiceAccount) {
     }),
   });
 
-  const data = (await response.json().catch(() => ({}))) as { access_token?: string; error_description?: string; error?: string };
+  const data = (await response.json().catch(() => ({}))) as {
+    access_token?: string;
+    error_description?: string;
+    error?: string;
+  };
   if (!response.ok || !data.access_token) {
-    throw new Error(data.error_description || data.error || "Failed to obtain GA4 access token.");
+    throw new Error(
+      data.error_description ||
+        data.error ||
+        "Failed to obtain GA4 access token.",
+    );
   }
 
   return data.access_token;
 }
 
-async function runReport(accessToken: string, propertyId: string, body: Record<string, unknown>) {
-  const response = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
+async function runReport(
+  accessToken: string,
+  propertyId: string,
+  body: Record<string, unknown>,
+) {
+  const response = await fetch(
+    `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+  );
 
   const data = (await response.json().catch(() => ({}))) as any;
   if (!response.ok) {
@@ -138,7 +159,10 @@ function dimensionValue(row: any, index: number) {
   return String(row?.dimensionValues?.[index]?.value || "");
 }
 
-function createEmptySnapshot(propertyId: string | null, error: string | null = null): Ga4DashboardSnapshot {
+function createEmptySnapshot(
+  propertyId: string | null,
+  error: string | null = null,
+): Ga4DashboardSnapshot {
   return {
     enabled: false,
     propertyId,
@@ -156,6 +180,14 @@ function createEmptySnapshot(propertyId: string | null, error: string | null = n
       whatsappClicks: 0,
       emailClicks: 0,
       ctaClicks: 0,
+      formStarts: 0,
+      formSubmits: 0,
+      verificationRequired: 0,
+      leads: 0,
+      contacts: 0,
+      addToCarts: 0,
+      beginCheckouts: 0,
+      purchases: 0,
     },
     topPages: [],
     trafficSources: [],
@@ -179,14 +211,27 @@ export async function getGa4DashboardSnapshot() {
   try {
     const accessToken = await getAccessToken(serviceAccount);
 
-    const [overview1d, overview7d, events7d, topPages, trafficSources, countries, devices] = await Promise.all([
+    const [
+      overview1d,
+      overview7d,
+      events7d,
+      topPages,
+      trafficSources,
+      countries,
+      devices,
+    ] = await Promise.all([
       runReport(accessToken, propertyId, {
         dateRanges: [{ startDate: "today", endDate: "today" }],
         metrics: [{ name: "activeUsers" }],
       }),
       runReport(accessToken, propertyId, {
         dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
-        metrics: [{ name: "activeUsers" }, { name: "sessions" }, { name: "screenPageViews" }, { name: "averageSessionDuration" }],
+        metrics: [
+          { name: "activeUsers" },
+          { name: "sessions" },
+          { name: "screenPageViews" },
+          { name: "averageSessionDuration" },
+        ],
       }),
       runReport(accessToken, propertyId, {
         dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
@@ -196,7 +241,20 @@ export async function getGa4DashboardSnapshot() {
           filter: {
             fieldName: "eventName",
             inListFilter: {
-              values: ["page_view", "whatsapp_click", "email_click", "cta_click"],
+              values: [
+                "page_view",
+                "whatsapp_click",
+                "email_click",
+                "cta_click",
+                "form_start",
+                "form_submit",
+                "email_verification_required",
+                "generate_lead",
+                "contact",
+                "add_to_cart",
+                "begin_checkout",
+                "purchase",
+              ],
             },
           },
         },
@@ -254,6 +312,14 @@ export async function getGa4DashboardSnapshot() {
         whatsappClicks: eventMap.get("whatsapp_click") || 0,
         emailClicks: eventMap.get("email_click") || 0,
         ctaClicks: eventMap.get("cta_click") || 0,
+        formStarts: eventMap.get("form_start") || 0,
+        formSubmits: eventMap.get("form_submit") || 0,
+        verificationRequired: eventMap.get("email_verification_required") || 0,
+        leads: eventMap.get("generate_lead") || 0,
+        contacts: eventMap.get("contact") || 0,
+        addToCarts: eventMap.get("add_to_cart") || 0,
+        beginCheckouts: eventMap.get("begin_checkout") || 0,
+        purchases: eventMap.get("purchase") || 0,
       },
       topPages: (topPages.rows || []).map((row: any) => ({
         pagePath: dimensionValue(row, 0) || "/",
@@ -280,7 +346,10 @@ export async function getGa4DashboardSnapshot() {
 
     return snapshot;
   } catch (error: any) {
-    const snapshot = createEmptySnapshot(propertyId, error?.message || "Failed to load GA4 data.");
+    const snapshot = createEmptySnapshot(
+      propertyId,
+      error?.message || "Failed to load GA4 data.",
+    );
     cache = {
       value: snapshot,
       expiresAt: Date.now() + 1000 * 60,

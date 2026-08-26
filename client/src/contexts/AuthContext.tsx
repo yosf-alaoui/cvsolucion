@@ -21,7 +21,15 @@ type AuthContextValue = {
   loading: boolean;
   refresh: () => Promise<AuthUser | null>;
   login: (email: string, password: string, options?: { adminOnly?: boolean }) => Promise<AuthUser>;
-  signup: (email: string, password: string, locale: string, termsAccepted: boolean, countryCode: string, country: string) => Promise<void>;
+  signup: (
+    email: string,
+    password: string,
+    locale: string,
+    termsAccepted: boolean,
+    countryCode: string,
+    country: string,
+    next?: string,
+  ) => Promise<void>;
   logout: () => Promise<void>;
   sendReset: (email: string, locale: string, target?: "site" | "admin") => Promise<void>;
   resetPassword: (token: string, password: string) => Promise<void>;
@@ -76,8 +84,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsTrainer(Boolean(response.isTrainer ?? (nextRole === "trainer")));
         return response.user;
       },
-      signup: async (email, password, locale, termsAccepted, countryCode, country) => {
-        await signUp(email, password, locale, termsAccepted, countryCode, country);
+      signup: async (email, password, locale, termsAccepted, countryCode, country, next) => {
+        await signUp(email, password, locale, termsAccepted, countryCode, country, next);
       },
       logout: async () => {
         await logoutRequest();

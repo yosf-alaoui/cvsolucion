@@ -17,6 +17,7 @@ import {
 import { getBookingCountryLabel, getBookingRegionLabel } from "@/lib/bookingTime";
 import { getBookingAvailability, type BookingAvailabilityResponse } from "@/lib/bookings";
 import { getStripeBookingConfig, type StripeConfigResponse } from "@/lib/stripeBooking";
+import { trackFunnelEvent } from "@/lib/analytics";
 
 function getCopy(locale: string) {
   if (locale === "ar") {
@@ -127,6 +128,7 @@ export default function BookingCart() {
   const [draft, setDraft] = useState<BookingCheckoutDraft | null>(() => getBookingCheckoutDraft(currentDraftOwner));
   const [stripeConfig, setStripeConfig] = useState<StripeConfigResponse | null>(null);
   const [availability, setAvailability] = useState<BookingAvailabilityResponse | null>(null);
+  const [availabilityError, setAvailabilityError] = useState(false);
 
   const copy = useMemo(() => getCopy(locale), [locale]);
   const bookingHref = locale === "en" ? "/book" : `/${locale}/book`;
@@ -146,23 +148,42 @@ export default function BookingCart() {
   }, [currentDraftOwner]);
 
   useEffect(() => {
+    let cancelled = false;
+    setStripeConfig(null);
     getStripeBookingConfig(draft?.countryCode)
-      .then((response) => setStripeConfig(response))
-      .catch(() => setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", cardPaymentFeeCents: 1500, prices: {} }));
+      .then((response) => {
+        if (!cancelled) setStripeConfig(response);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStripeConfig({ enabled: false, publishableKey: null, currency: "usd", cardPaymentFeeCents: 1500, prices: {} });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [draft?.countryCode]);
 
   useEffect(() => {
-    if (!user || !draft?.slots.length) {
+    if (!draft?.slots.length) {
       setAvailability(null);
+      setAvailabilityError(false);
       return;
     }
 
+    setAvailabilityError(false);
     getBookingAvailability(draft.priority)
       .then((response) => setAvailability(response))
-      .catch(() => setAvailability(null));
-  }, [draft?.priority, draft?.slots.length, user]);
+      .catch(() => {
+        setAvailability(null);
+        setAvailabilityError(true);
+      });
+  }, [draft?.priority, draft?.slots.length]);
 
   const unitAmount = draft ? stripeConfig?.prices?.[`${draft.priority}:${draft.serviceType}`] ?? 0 : 0;
+  const subtotalAmount = unitAmount * (draft?.slots.length || 0);
+  const cardPaymentFeeCents = subtotalAmount > 0 ? stripeConfig?.cardPaymentFeeCents ?? 0 : 0;
+  const checkoutValue = subtotalAmount + cardPaymentFeeCents;
   const serviceLabel = draft ? (draft.serviceType === "support" ? copy.support : copy.consultation) : "";
   const priorityLabel = draft ? (draft.priority === "express" ? copy.express : copy.standard) : "";
   const packageLabel = draft ? getPackageLabel(draft.packageKey, locale) : null;
@@ -177,9 +198,21 @@ export default function BookingCart() {
     );
   }, [availability]);
   const unavailableSlotIds = useMemo(
-    () => draft?.slots.filter((slot) => !availableSlotIds.has(slot.id)).map((slot) => slot.id) ?? [],
-    [availableSlotIds, draft?.slots]
+    () =>
+      availability
+        ? draft?.slots
+            .filter((slot) => !availableSlotIds.has(slot.id))
+            .map((slot) => slot.id) ?? []
+        : [],
+    [availability, availableSlotIds, draft?.slots]
   );
+  const availabilityChecked = Boolean(availability) || availabilityError;
+  const availabilityErrorText =
+    locale === "ar"
+      ? "تعذر تحديث حالة المواعيد الآن. سنعيد التحقق منها بأمان قبل الدفع."
+      : locale === "fr"
+        ? "Impossible d'actualiser les disponibilités. Elles seront vérifiées à nouveau avant le paiement."
+        : "We could not refresh availability. It will be checked again safely before payment.";
   const localizedArea = draft?.countryCode
     ? [
         getBookingCountryLabel(draft.countryCode, locale),
@@ -199,6 +232,40 @@ export default function BookingCart() {
   const replaceHref = draft
     ? `${bookingHref}?priority=${encodeURIComponent(draft.priority)}&service=${encodeURIComponent(draft.serviceType)}${draft.packageKey ? `&package=${encodeURIComponent(draft.packageKey)}` : ""}`
     : bookingHref;
+
+  function handleCheckoutClick() {
+    if (!draft) return;
+    trackFunnelEvent(user ? "checkout_continue" : "checkout_sign_in", {
+      currency: (stripeConfig?.currency || "usd").toUpperCase(),
+      value: checkoutValue / 100,
+      service_type: draft.serviceType,
+      priority: draft.priority,
+      slot_count: draft.slots.length,
+      user_status: user ? "registered" : "anonymous",
+      items: [
+        {
+          item_id: `booking_${draft.serviceType}_${draft.priority}`,
+          item_name: `${serviceLabel} - ${priorityLabel}`,
+          item_category: "booking",
+          item_variant: draft.priority,
+          price: unitAmount / 100,
+          quantity: draft.slots.length,
+        },
+        ...(cardPaymentFeeCents > 0
+          ? [
+              {
+                item_id: "card_payment_fee",
+                item_name: copy.cardFee,
+                item_category: "fee",
+                item_variant: "card",
+                price: cardPaymentFeeCents / 100,
+                quantity: 1,
+              },
+            ]
+          : []),
+      ],
+    });
+  }
 
   return (
     <div className="site-page min-h-screen bg-transparent">
@@ -223,6 +290,11 @@ export default function BookingCart() {
               </GlassCard>
             ) : (
               <div className="space-y-6">
+                {availabilityError ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-900">
+                    {availabilityErrorText}
+                  </div>
+                ) : null}
                 <BookingOrderSummary
                   locale={locale}
                   currency={stripeConfig?.currency || "usd"}
@@ -262,11 +334,26 @@ export default function BookingCart() {
                   <Button asChild variant="outline" className="rounded-full border-slate-200 bg-white/80">
                     <a href={bookingHref}>{copy.back}</a>
                   </Button>
-                  <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90" disabled={unavailableSlotIds.length > 0}>
-                    <a href={user ? checkoutHref : loginHref} rel="nofollow">
+                  {!availabilityChecked || unavailableSlotIds.length > 0 ? (
+                    <Button
+                      type="button"
+                      className="rounded-full bg-primary text-white hover:bg-primary/90"
+                      disabled
+                    >
                       {user ? copy.checkout : copy.signIn}
-                    </a>
-                  </Button>
+                    </Button>
+                  ) : (
+                    <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90">
+                      <a
+                        href={user ? checkoutHref : loginHref}
+                        rel="nofollow"
+                        data-track="cta"
+                        onClick={handleCheckoutClick}
+                      >
+                        {user ? copy.checkout : copy.signIn}
+                      </a>
+                    </Button>
+                  )}
                 </div>
               </div>
             )}

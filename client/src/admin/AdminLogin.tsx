@@ -8,15 +8,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { loginWithPasswordForAdmin, verifyAdminLoginCode } from "@/lib/auth";
 import { setCsrfToken } from "@/lib/csrf";
 import { validatePasswordPolicy } from "@shared/passwordPolicy";
+import { normalizeSafeLocalRedirect } from "@shared/safeRedirect";
+import { getInitialSensitiveSearch } from "@/lib/sensitiveUrl";
 
 type LoginState = "login" | "reset" | "recovery" | "otp";
 
 function getSafeNextPath() {
   const params = new URLSearchParams(window.location.search);
-  const rawNext = params.get("next")?.trim();
-  if (rawNext?.startsWith("/") && !rawNext.startsWith("//")) {
-    if (rawNext === "/" || rawNext.startsWith("/dashboard")) return rawNext;
-  }
+  const nextPath = normalizeSafeLocalRedirect(params.get("next"), "/dashboard");
+  if (nextPath === "/" || nextPath.startsWith("/dashboard")) return nextPath;
   return "/dashboard";
 }
 
@@ -45,7 +45,7 @@ export default function AdminLogin() {
   }, [adminCode, confirmPassword, email, newPassword, password, pendingAdminEmail, resetPasswordMessage, resetToken, state]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(getInitialSensitiveSearch());
     const recovery = params.get("recovery");
     const token = params.get("token");
     const reset = params.get("reset");

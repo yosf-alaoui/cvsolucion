@@ -1,6 +1,9 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import { scrubInitialSensitiveUrl } from "@/lib/sensitiveUrl";
+
+scrubInitialSensitiveUrl();
 
 const currentPath = window.location.pathname.replace(/\/+$/, "") || "/";
 const isCareerLanding =

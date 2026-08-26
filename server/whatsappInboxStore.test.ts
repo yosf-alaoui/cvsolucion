@@ -28,13 +28,13 @@ describe("WhatsApp inbox store", () => {
       await import("./whatsappInboxStore");
 
     const first = recordWhatsAppInboundMessage({
-      phone: "+1 (514) 963-8719",
+      phone: "+1 (438) 807-8747",
       contactName: "Test Client",
       whatsappMessageId: "wamid.test-1",
       body: "Hello",
     });
     const duplicate = recordWhatsAppInboundMessage({
-      phone: "15149638719",
+      phone: "14388078747",
       contactName: "Test Client",
       whatsappMessageId: "wamid.test-1",
       body: "Hello again",
@@ -44,7 +44,7 @@ describe("WhatsApp inbox store", () => {
     expect(duplicate.duplicate).toBe(true);
     expect(listWhatsAppInboxConversations()).toHaveLength(1);
     expect(listWhatsAppInboxConversations()[0]).toMatchObject({
-      phone: "15149638719",
+      phone: "14388078747",
       unreadCount: 1,
       status: "needs_reply",
     });
@@ -59,7 +59,7 @@ describe("WhatsApp inbox store", () => {
     } = await import("./whatsappInboxStore");
 
     recordWhatsAppOutboundMessage({
-      phone: "15149638719",
+      phone: "14388078747",
       whatsappMessageId: "wamid.sent-1",
       body: "Thanks",
       sentByEmail: "admin@example.com",

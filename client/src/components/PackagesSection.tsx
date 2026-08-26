@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import GlassCard from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
-import { useI18n } from "@/i18n/i18n";
-import { useAuth } from "@/contexts/AuthContext";
+import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
 import { getPublicCatalog, type PublicCatalogPackage } from "@/lib/catalog";
-import { getBookingHref } from "@/lib/site";
+import { WHATSAPP_PHONE } from "@/lib/site";
 
 /**
  * Packages Section - CVsolucion (Upgraded)
@@ -13,7 +12,6 @@ import { getBookingHref } from "@/lib/site";
  */
 export default function PackagesSection() {
   const { t, locale } = useI18n();
-  const { user } = useAuth();
 
   type ServicePackage = {
     title: string;
@@ -26,41 +24,27 @@ export default function PackagesSection() {
 
   const fallbackPackages = (t("packages.cards") as ServicePackage[]) || [];
   const [packages, setPackages] = useState<ServicePackage[]>(fallbackPackages);
-  const loginHref = locale === "en" ? "/login" : `/${locale}/login`;
-  const canSeePrice = Boolean(user?.emailVerifiedAt);
+  const requestLabel =
+    locale === "ar"
+      ? "اطلب هذه الباقة"
+      : locale === "fr"
+        ? "Demander cette offre"
+        : "Request this package";
+  const scopeNote =
+    locale === "ar"
+      ? "نؤكد نطاق الباقة وموعدها معك قبل إرسال رابط الدفع. الحجز بالساعة متاح من صفحة المواعيد."
+      : locale === "fr"
+        ? "Nous confirmons le périmètre et la date avant d'envoyer le lien de paiement. Les séances horaires restent disponibles sur la page de réservation."
+        : "We confirm the package scope and date before sending its payment link. Hourly sessions remain available on the booking page.";
 
-  function buildPackageBookingHref(pkg: ServicePackage, index: number) {
-    const baseHref = getBookingHref(locale);
-    const normalized = `${pkg.title} ${pkg.subtitle}`.toLowerCase();
-
-    let serviceType: "consultation" | "support" = "consultation";
-    let priority: "standard" | "express" = "standard";
-    let packageKey = `package-${index + 1}`;
-
-    if (normalized.includes("audit")) {
-      serviceType = "consultation";
-      packageKey = "audit";
-    } else if (normalized.includes("fix")) {
-      serviceType = "support";
-      packageKey = "fix-day";
-    } else if (normalized.includes("support") || pkg.highlight) {
-      serviceType = "support";
-      packageKey = "support-plan";
-    } else if (index === 0) {
-      serviceType = "support";
-      packageKey = "support-plan";
-    } else if (index === 2) {
-      serviceType = "support";
-      packageKey = "fix-day";
-    }
-
-    const params = new URLSearchParams({
-      service: serviceType,
-      priority,
-      package: packageKey,
-    });
-
-    return `${baseHref}${baseHref.includes("?") ? "&" : "?"}${params.toString()}`;
+  function buildPackageRequestHref(pkg: ServicePackage) {
+    const message =
+      locale === "ar"
+        ? `مرحبًا CVsolucion، أود طلب باقة ${pkg.title}.`
+        : locale === "fr"
+          ? `Bonjour CVsolucion, je souhaite demander l'offre ${pkg.title}.`
+          : `Hello CVsolucion, I would like to request the ${pkg.title} package.`;
+    return buildWhatsAppLink(WHATSAPP_PHONE, message);
   }
 
   useEffect(() => {
@@ -96,24 +80,14 @@ export default function PackagesSection() {
         </div>
 
         <div className="card-stage mx-auto grid max-w-6xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {packages.map((pkg, index) => (
+          {packages.map((pkg) => (
             <GlassCard key={pkg.title} strong={pkg.highlight} className="p-8">
               <div className="mb-6 text-center">
                 <h3 className="mb-1 text-2xl font-bold text-primary">{pkg.title}</h3>
                 <div className="text-sm text-muted-foreground">{pkg.subtitle}</div>
 
                 {pkg.price ? (
-                  canSeePrice ? (
-                    <div className="mt-3 text-3xl font-bold text-primary">{pkg.price}</div>
-                  ) : (
-                    <a
-                      href={loginHref}
-                      rel="nofollow"
-                      className="mt-3 inline-flex text-sm font-semibold text-primary transition-colors hover:text-primary/80"
-                    >
-                      {t("packages.priceHidden")}
-                    </a>
-                  )
+                  <div className="mt-3 text-3xl font-bold text-primary">{pkg.price}</div>
                 ) : null}
 
                 <div className="text-muted-foreground">{pkg.duration}</div>
@@ -130,7 +104,12 @@ export default function PackagesSection() {
                 ))}
               </ul>
 
-              <a href={buildPackageBookingHref(pkg, index)}>
+              <a
+                href={buildPackageRequestHref(pkg)}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-track="cta"
+              >
                 <Button
                   className={`w-full ${
                     pkg.highlight
@@ -138,14 +117,16 @@ export default function PackagesSection() {
                       : "bg-secondary text-primary hover:bg-secondary/90"
                   }`}
                 >
-                  {t("packages.cta")}
+                  {requestLabel}
                 </Button>
               </a>
             </GlassCard>
           ))}
         </div>
 
-        <p className="mt-10 text-center text-sm text-muted-foreground">{t("packages.note")}</p>
+        <p className="mx-auto mt-10 max-w-3xl text-center text-sm leading-6 text-muted-foreground">
+          {scopeNote}
+        </p>
       </div>
     </section>
   );

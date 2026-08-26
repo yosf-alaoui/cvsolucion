@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Check, Lock, MessageCircle, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, Check, MessageCircle, Sparkles } from "lucide-react";
 import Footer from "@/components/Footer";
 import GlassCard from "@/components/GlassCard";
 import Header from "@/components/Header";
@@ -17,6 +17,7 @@ import {
   type TrainingPriceKey,
   type TrainingPricingResponse,
 } from "@/lib/trainingCheckout";
+import { trackFunnelEvent } from "@/lib/analytics";
 
 type PageLocale = "en" | "fr" | "ar";
 type LevelCopy = {
@@ -66,6 +67,39 @@ function moneyLabel(amount: number, locale: PageLocale, currency: string) {
   }).format(amount / 100);
 }
 
+function numericHours(value: string) {
+  const match = value.match(/\d+(?:[.,]\d+)?/);
+  return match ? Number(match[0].replace(",", ".")) : 0;
+}
+
+function getBundleDetails(locale: PageLocale, levelCount: number, totalHours: number) {
+  if (locale === "fr") {
+    return {
+      hours: `${totalHours} heures`,
+      duration: `${levelCount} niveaux`,
+      prerequisite: `Du niveau 1 au niveau ${levelCount}`,
+      certification: `${levelCount} certifications incluses`,
+      project: `Niveaux 1 a ${levelCount}, ${levelCount} projets de fin de niveau et certifications incluses.`,
+    };
+  }
+  if (locale === "ar") {
+    return {
+      hours: `${totalHours} ساعة`,
+      duration: `${levelCount} مستويات`,
+      prerequisite: `من المستوى 1 إلى المستوى ${levelCount}`,
+      certification: `${levelCount} شهادات مشمولة`,
+      project: `المستويات من 1 إلى ${levelCount}، مع ${levelCount} مشاريع نهائية والشهادات مشمولة.`,
+    };
+  }
+  return {
+    hours: `${totalHours} hours`,
+    duration: `${levelCount} levels`,
+    prerequisite: `Level 1 to Level ${levelCount}`,
+    certification: `${levelCount} certifications included`,
+    project: `Levels 1 to ${levelCount}, ${levelCount} capstone projects, and certifications included.`,
+  };
+}
+
 function getCopy(locale: PageLocale) {
   const shared = {
     en: {
@@ -79,9 +113,11 @@ function getCopy(locale: PageLocale) {
       programTitle: "Four levels, one coherent path.",
       programSubtitle: "Each level is autonomous and certified. Start where you are and progress at your pace.",
       pricingTitle: "Choose your level and pay securely",
-      pricingSubtitle: "Prices appear only after login. Payment is processed inside the site with Stripe.",
-      loginToSeePrice: "Log in to see price",
-      signIn: "Sign in",
+      pricingSubtitle: "Compare every price before you sign in. An account is required only when you continue to secure payment.",
+      priceUnavailable: "Price unavailable",
+      viewPricing: "View levels and prices",
+      signIn: "Sign in to pay",
+      continuePayment: "Continue to secure payment",
       select: "Select this level",
       selected: "Selected",
       completePath: "Complete CV Professional Path",
@@ -124,9 +160,11 @@ function getCopy(locale: PageLocale) {
       programTitle: "Quatre niveaux, un parcours cohérent.",
       programSubtitle: "Chaque niveau est autonome et certifié. Commencez où vous en êtes, progressez à votre rythme.",
       pricingTitle: "Choisissez votre niveau et payez en sécurité",
-      pricingSubtitle: "Les prix apparaissent uniquement après connexion. Le paiement est traité dans le site avec Stripe.",
-      loginToSeePrice: "Connectez-vous pour voir le prix",
-      signIn: "Se connecter",
+      pricingSubtitle: "Comparez tous les prix avant de vous connecter. Un compte est requis seulement pour continuer vers le paiement sécurisé.",
+      priceUnavailable: "Prix indisponible",
+      viewPricing: "Voir les niveaux et les prix",
+      signIn: "Se connecter pour payer",
+      continuePayment: "Continuer vers le paiement sécurisé",
       select: "Choisir ce niveau",
       selected: "Sélectionné",
       completePath: "Parcours CV Professionnel Complet",
@@ -169,9 +207,11 @@ function getCopy(locale: PageLocale) {
       programTitle: "أربعة مستويات، مسار واحد منظم.",
       programSubtitle: "كل مستوى مستقل ومعتمد. ابدأ من مستواك الحالي وتقدم حسب وتيرتك.",
       pricingTitle: "اختر المستوى وادفع بأمان",
-      pricingSubtitle: "الأسعار لا تظهر إلا بعد تسجيل الدخول. الدفع يتم داخل الموقع عبر Stripe.",
-      loginToSeePrice: "سجل الدخول لرؤية السعر",
-      signIn: "تسجيل الدخول",
+      pricingSubtitle: "قارن جميع الأسعار قبل تسجيل الدخول. تحتاج إلى حساب فقط عند الانتقال إلى الدفع الآمن.",
+      priceUnavailable: "السعر غير متاح",
+      viewPricing: "شاهد المستويات والأسعار",
+      signIn: "سجل الدخول للدفع",
+      continuePayment: "متابعة إلى الدفع الآمن",
       select: "اختر هذا المستوى",
       selected: "تم الاختيار",
       completePath: "المسار الاحترافي الكامل",
@@ -213,31 +253,54 @@ export default function Training() {
   const { user, loading: authLoading } = useAuth();
   const pageLocale: PageLocale = locale === "fr" || locale === "ar" ? locale : "en";
   const copy = useMemo(() => getCopy(pageLocale), [pageLocale]);
-  const [selectedLevel, setSelectedLevel] = useState<TrainingPriceKey>("level1");
+  const [selectedLevel, setSelectedLevel] = useState<TrainingPriceKey>(() => {
+    if (typeof window === "undefined") return "level1";
+    return new URLSearchParams(window.location.search).get("program") || "level1";
+  });
   const [programRecords, setProgramRecords] = useState<PublicTrainingProgram[] | null>(null);
   const [pricing, setPricing] = useState<TrainingPricingResponse | null>(null);
+  const [pricingLoading, setPricingLoading] = useState(true);
   const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [purchaseComplete, setPurchaseComplete] = useState(false);
+  const paymentRequestId = useRef(0);
 
   const programs = useMemo(() => {
+    const fallbackHours = copy.levels.reduce((total, level) => total + numericHours(level.hours), 0);
+    const fallbackBundle = getBundleDetails(pageLocale, copy.levels.length, fallbackHours);
     const fallbackPrograms: LevelCopy[] = [
       ...copy.levels,
       {
         id: "bundle",
         badge: copy.bundleBadge,
         title: copy.completePath,
-        hours: "115 hours",
-        duration: "4 levels",
-        prerequisite: "",
-        certification: "",
-        project: copy.bundleText,
-        modules: [],
+        ...fallbackBundle,
+        modules: copy.levels.map((level) => level.title),
         featured: true,
       },
     ];
 
     if (programRecords === null) return fallbackPrograms;
+
+    const levelRecords = programRecords
+      .filter((program) => !program.featured && program.key !== "bundle")
+      .sort((a, b) => a.order - b.order);
+    const totalHours = levelRecords.reduce((total, program) => {
+      const translated = program.translations[pageLocale]?.title
+        ? program.translations[pageLocale]
+        : program.translations.en;
+      return total + numericHours(translated.hours);
+    }, 0);
+    const bundleDetails = levelRecords.length && totalHours
+      ? getBundleDetails(pageLocale, levelRecords.length, totalHours)
+      : null;
+    const bundleModules = levelRecords.map((program) => {
+      const translated = program.translations[pageLocale]?.title
+        ? program.translations[pageLocale]
+        : program.translations.en;
+      return translated.title;
+    });
 
     return [...programRecords]
       .sort((a, b) => a.order - b.order)
@@ -246,33 +309,89 @@ export default function Training() {
           ? program.translations[pageLocale]
           : program.translations.en;
         const fallback = fallbackPrograms.find((item) => item.id === program.key);
+        const isBundle = program.featured || program.key === "bundle";
         return {
           id: program.key || program.id,
           badge: translated.badge || fallback?.badge || program.key,
           title: translated.title || fallback?.title || program.key,
-          hours: translated.hours || fallback?.hours || "",
-          duration: translated.duration || fallback?.duration || "",
-          prerequisite: translated.prerequisite || fallback?.prerequisite || "",
-          certification: translated.certification || fallback?.certification || "",
-          project: translated.project || fallback?.project || "",
-          modules: translated.modules?.length ? translated.modules : fallback?.modules || [],
+          hours: isBundle && bundleDetails ? bundleDetails.hours : translated.hours || fallback?.hours || "",
+          duration: isBundle && bundleDetails ? bundleDetails.duration : translated.duration || fallback?.duration || "",
+          prerequisite: isBundle && bundleDetails ? bundleDetails.prerequisite : translated.prerequisite || fallback?.prerequisite || "",
+          certification: isBundle && bundleDetails ? bundleDetails.certification : translated.certification || fallback?.certification || "",
+          project: isBundle && bundleDetails ? bundleDetails.project : translated.project || fallback?.project || "",
+          modules: isBundle && bundleModules.length
+            ? bundleModules
+            : translated.modules?.length
+              ? translated.modules
+              : fallback?.modules || [],
           featured: program.featured,
         };
       });
   }, [copy, pageLocale, programRecords]);
 
-  const displayLevels = programs.filter((program) => !program.featured && program.id !== "bundle");
+  const displayLevels = useMemo(
+    () => programs.filter((program) => !program.featured && program.id !== "bundle"),
+    [programs],
+  );
+  const pageStats = useMemo(() => {
+    const totalHours = displayLevels.reduce((total, level) => total + numericHours(level.hours), 0);
+    const moduleCount = displayLevels.reduce((total, level) => total + level.modules.length, 0);
+    return [
+      [String(displayLevels.length), copy.stats[0][1]],
+      [`${totalHours}h`, copy.stats[1][1]],
+      [String(moduleCount), copy.stats[2][1]],
+      copy.stats[3],
+    ];
+  }, [copy.stats, displayLevels]);
   const selected = programs.find((level) => level.id === selectedLevel) ?? programs[0] ?? null;
   const selectedProgramId = selected?.id ?? "";
   const selectedPrice = getProgramPrice(selectedProgramId);
   const currency = pricing?.currency || "usd";
   const selectedCardPaymentFee = selectedPrice > 0 ? pricing?.cardPaymentFeeCents ?? 0 : 0;
   const selectedTotal = selectedPrice + selectedCardPaymentFee;
-  const selectedPriceLabel = selectedPrice ? moneyLabel(selectedPrice, pageLocale, currency) : copy.loginToSeePrice;
-  const selectedTotalLabel = selectedTotal ? moneyLabel(selectedTotal, pageLocale, currency) : copy.loginToSeePrice;
-  const paymentReady = Boolean(selectedProgramId && user && pricing?.enabled && pricing.publishableKey && selectedPrice > 0);
-  const loginHref = `${localPath(pageLocale, "/login")}?next=${encodeURIComponent(localPath(pageLocale, "/training"))}`;
-  const whatsappHref = buildWhatsAppLink("+1 514 963 8719", copy.contactText);
+  const trainingCheckoutItems = selected
+    ? [
+        {
+          item_id: selectedProgramId,
+          item_name: selected.title || selectedProgramId,
+          item_category: "training",
+          price: selectedPrice / 100,
+          quantity: 1,
+        },
+        ...(selectedCardPaymentFee > 0
+          ? [
+              {
+                item_id: "card_payment_fee",
+                item_name: copy.cardFee,
+                item_category: "fee",
+                price: selectedCardPaymentFee / 100,
+                quantity: 1,
+              },
+            ]
+          : []),
+      ]
+    : [];
+  const selectedPriceLabel = pricingLoading
+    ? "..."
+    : selectedPrice
+      ? moneyLabel(selectedPrice, pageLocale, currency)
+      : copy.priceUnavailable;
+  const selectedTotalLabel = pricingLoading
+    ? "..."
+    : selectedTotal
+      ? moneyLabel(selectedTotal, pageLocale, currency)
+      : copy.priceUnavailable;
+  const paymentReady = Boolean(
+    !purchaseComplete &&
+      selectedProgramId &&
+      user &&
+      pricing?.enabled &&
+      pricing.publishableKey &&
+      selectedPrice > 0,
+  );
+  const trainingReturnHref = `${localPath(pageLocale, "/training")}?program=${encodeURIComponent(selectedProgramId)}`;
+  const loginHref = `${localPath(pageLocale, "/login")}?next=${encodeURIComponent(trainingReturnHref)}`;
+  const whatsappHref = buildWhatsAppLink("+1 438 807 8747", copy.contactText);
 
   function getProgramPrice(programId: TrainingPriceKey) {
     const programPrice = pricing?.programs?.find((program) => program.key === programId || program.id === programId)?.priceCents;
@@ -301,52 +420,111 @@ export default function Training() {
   }, [programs, selectedLevel]);
 
   useEffect(() => {
-    if (!user) {
-      setPricing(null);
-      setPaymentClientSecret(null);
-      return;
-    }
-    getTrainingPricing()
-      .then((response) => setPricing(response))
-      .catch((error: Error) => setStatus({ tone: "error", text: error.message }));
-  }, [user]);
-
-  useEffect(() => {
-    if (!paymentReady) {
-      setPaymentClientSecret(null);
-      return;
-    }
-
     let cancelled = false;
-    setPaymentClientSecret(null);
-    setPaymentLoading(true);
-    createTrainingPaymentIntent({ programId: selectedProgramId, locale: pageLocale })
+    setPricingLoading(true);
+    getTrainingPricing()
       .then((response) => {
-        if (!cancelled) setPaymentClientSecret(response.clientSecret);
+        if (!cancelled) setPricing(response);
       })
       .catch((error: Error) => {
-        if (!cancelled) setStatus({ tone: "error", text: error.message });
+        if (!cancelled) {
+          setPricing(null);
+          setStatus({ tone: "error", text: error.message });
+        }
       })
       .finally(() => {
-        if (!cancelled) setPaymentLoading(false);
+        if (!cancelled) setPricingLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [pageLocale, paymentReady, selectedProgramId]);
+  }, []);
+
+  function chooseLevel(level: TrainingPriceKey) {
+    if (level === selectedLevel) return;
+    const nextProgram = programs.find((program) => program.id === level);
+    const nextPrice = getProgramPrice(level);
+    trackFunnelEvent("select_item", {
+      item_list_name: "training_programs",
+      currency: currency.toUpperCase(),
+      value: nextPrice / 100,
+      items: [
+        {
+          item_id: level,
+          item_name: nextProgram?.title || level,
+          item_category: "training",
+          price: nextPrice / 100,
+          quantity: 1,
+        },
+      ],
+    });
+    paymentRequestId.current += 1;
+    setPaymentClientSecret(null);
+    setPaymentLoading(false);
+    setPurchaseComplete(false);
+    setStatus(null);
+    setSelectedLevel(level);
+  }
+
+  async function handlePreparePayment() {
+    if (!paymentReady || paymentLoading || paymentClientSecret) return;
+
+    trackFunnelEvent("begin_checkout", {
+      currency: currency.toUpperCase(),
+      value: selectedTotal / 100,
+      program_id: selectedProgramId,
+      items: trainingCheckoutItems,
+    });
+    const requestId = ++paymentRequestId.current;
+    setStatus(null);
+    setPaymentLoading(true);
+    try {
+      const response = await createTrainingPaymentIntent({ programId: selectedProgramId, locale: pageLocale });
+      if (requestId === paymentRequestId.current) {
+        setPaymentClientSecret(response.clientSecret);
+        trackFunnelEvent("payment_form_opened", {
+          currency: currency.toUpperCase(),
+          value: selectedTotal / 100,
+          program_id: selectedProgramId,
+          items: trainingCheckoutItems,
+        });
+      }
+    } catch (error) {
+      if (requestId === paymentRequestId.current) {
+        trackFunnelEvent("checkout_error", {
+          checkout_stage: "payment_intent_creation",
+          error_type: error instanceof Error ? error.name : "unknown",
+          program_id: selectedProgramId,
+        });
+        setStatus({ tone: "error", text: error instanceof Error ? error.message : copy.unavailable });
+      }
+    } finally {
+      if (requestId === paymentRequestId.current) {
+        setPaymentLoading(false);
+      }
+    }
+  }
 
   async function handlePaymentSuccess(paymentIntentId: string) {
     await recordTrainingPurchase({ programId: selectedProgramId, paymentIntentId, locale: pageLocale });
+    trackFunnelEvent("purchase", {
+      transaction_id: paymentIntentId,
+      currency: currency.toUpperCase(),
+      value: selectedTotal / 100,
+      program_id: selectedProgramId,
+      items: trainingCheckoutItems,
+    });
     setStatus({ tone: "success", text: copy.success });
+    setPurchaseComplete(true);
+    paymentRequestId.current += 1;
     setPaymentClientSecret(null);
   }
 
   function getPrice(level: TrainingPriceKey) {
-    if (authLoading) return "...";
-    if (!user) return copy.loginToSeePrice;
+    if (pricingLoading) return "...";
     const amount = getProgramPrice(level);
-    return amount ? moneyLabel(amount, pageLocale, currency) : "...";
+    return amount ? moneyLabel(amount, pageLocale, currency) : copy.priceUnavailable;
   }
 
   const structuredData = useMemo(
@@ -384,8 +562,14 @@ export default function Training() {
                 {copy.h1}
               </h1>
               <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-slate-600">{copy.intro}</p>
+              <Button asChild className="mt-7 rounded-full bg-primary px-6 text-white hover:bg-primary/90">
+                <a href="#training-pricing">
+                  <ArrowDown className="mr-2 h-4 w-4" />
+                  {copy.viewPricing}
+                </a>
+              </Button>
               <div className="mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {copy.stats.map(([value, label]) => (
+                {pageStats.map(([value, label]) => (
                   <div key={label} className="rounded-[24px] border border-primary/15 bg-white/75 p-5 shadow-sm">
                     <div className="text-3xl font-black text-primary">{value}</div>
                     <div className="mt-2 text-sm font-semibold text-slate-600">{label}</div>
@@ -436,7 +620,7 @@ export default function Training() {
           </div>
         </section>
 
-        <section className="container mt-16">
+        <section id="training-pricing" className="container mt-16 scroll-mt-28">
           <div className="grid gap-8 xl:grid-cols-[1fr_420px]">
             <div>
               <h2 className="text-3xl font-extrabold tracking-tight text-slate-950 sm:text-5xl">{copy.pricingTitle}</h2>
@@ -446,7 +630,7 @@ export default function Training() {
                   <button
                     key={level.id}
                     type="button"
-                    onClick={() => setSelectedLevel(level.id)}
+                    onClick={() => chooseLevel(level.id)}
                     className={`rounded-[28px] border p-6 text-left transition ${selectedLevel === level.id ? "border-primary bg-primary/8 shadow-lg" : "border-slate-200 bg-white/78 hover:border-primary/35"}`}
                   >
                     <div className="flex items-start justify-between gap-4">
@@ -457,7 +641,6 @@ export default function Training() {
                       </div>
                       <div className="text-right">
                         <div className="text-xl font-black text-primary">{getPrice(level.id)}</div>
-                        {!user ? <Lock className="ml-auto mt-2 h-4 w-4 text-slate-400" /> : null}
                       </div>
                     </div>
                     <span className={`mt-5 inline-flex rounded-full px-4 py-2 text-sm font-bold ${selectedLevel === level.id ? "bg-primary text-white" : "bg-slate-100 text-slate-700"}`}>
@@ -474,7 +657,7 @@ export default function Training() {
                   <div className="text-xs font-bold uppercase tracking-[0.22em] text-primary">{selected.badge}</div>
                   <h3 className="mt-3 text-3xl font-black text-slate-950">{selected.title}</h3>
                   <div className="mt-4 text-4xl font-black text-primary">{selectedPriceLabel}</div>
-                  {user && selectedPrice > 0 ? (
+                  {selectedPrice > 0 ? (
                     <div className="mt-5 space-y-2 rounded-2xl border border-slate-200 bg-white/70 p-4 text-sm">
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-slate-500">{copy.subtotal}</span>
@@ -495,7 +678,7 @@ export default function Training() {
                   <p className="mt-4 text-sm leading-7 text-slate-600">{selected.project}</p>
                   {!authLoading && !user ? (
                     <Button asChild className="mt-6 w-full rounded-full bg-primary text-white hover:bg-primary/90">
-                      <a href={loginHref} rel="nofollow">
+                      <a href={loginHref} rel="nofollow" data-track="cta">
                         {copy.signIn}
                       </a>
                     </Button>
@@ -505,7 +688,9 @@ export default function Training() {
                 <GlassCard className="card-static rounded-[32px] p-7 text-sm text-slate-600">{copy.unavailable}</GlassCard>
               )}
 
-              {!user ? null : !pricing?.enabled ? (
+              {!user || purchaseComplete ? null : pricingLoading ? (
+                <GlassCard className="card-static rounded-[32px] p-7 text-sm text-slate-600">{copy.preparing}</GlassCard>
+              ) : !pricing?.enabled ? (
                 <GlassCard className="card-static rounded-[32px] p-7 text-sm text-slate-600">{copy.unavailable}</GlassCard>
               ) : paymentLoading ? (
                 <GlassCard className="card-static rounded-[32px] p-7 text-sm text-slate-600">{copy.preparing}</GlassCard>
@@ -529,9 +714,25 @@ export default function Training() {
                     payNow: copy.payNow,
                     processing: copy.processing,
                   }}
+                  analyticsParams={{
+                    currency: currency.toUpperCase(),
+                    value: selectedTotal / 100,
+                    program_id: selectedProgramId,
+                    items: trainingCheckoutItems,
+                  }}
                   onSuccess={handlePaymentSuccess}
                 />
-              ) : null}
+              ) : (
+                <Button
+                  type="button"
+                  disabled={!paymentReady}
+                  onClick={handlePreparePayment}
+                  data-track="cta"
+                  className="h-12 w-full rounded-full bg-primary text-white hover:bg-primary/90"
+                >
+                  {copy.continuePayment}
+                </Button>
+              )}
 
               {status ? (
                 <div className={`rounded-2xl border px-4 py-3 text-sm ${status.tone === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
