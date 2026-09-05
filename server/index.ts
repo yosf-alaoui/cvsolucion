@@ -50,6 +50,7 @@ import {
 import { RecipientEmailRejectedError, sendAuthEmail } from "./authMailer";
 import {
   assertWhatsAppWebhookConfiguration,
+  isWhatsAppIntegrationConfigured,
   validateWhatsAppWebhookTarget,
   verifyMetaWebhookSignature,
 } from "./whatsappWebhook";
@@ -3928,7 +3929,16 @@ function handleWhatsAppWebhookEvent(
 }
 
 async function startServer() {
-  assertWhatsAppWebhookConfiguration();
+  const whatsappWebhookReady = assertWhatsAppWebhookConfiguration();
+  if (
+    process.env.NODE_ENV === "production" &&
+    isWhatsAppIntegrationConfigured() &&
+    !whatsappWebhookReady
+  ) {
+    console.warn(
+      "[whatsapp:webhook-disabled] WHATSAPP_APP_SECRET is missing; inbound events will be rejected.",
+    );
+  }
   const app = express();
   const server = createServer(app);
 

@@ -69,13 +69,22 @@ describe("WhatsApp webhook protection", () => {
     ).toBe(false);
   });
 
-  it("refuses to start a configured production integration with missing secrets", () => {
-    expect(() =>
+  it("keeps the site available but the webhook closed when the app secret is missing", () => {
+    expect(
       assertWhatsAppWebhookConfiguration({
         NODE_ENV: "production",
         WHATSAPP_ACCESS_TOKEN: "token",
         WHATSAPP_PHONE_NUMBER_ID: "phone-1",
+        WHATSAPP_BUSINESS_ACCOUNT_ID: "waba-1",
+        WHATSAPP_WEBHOOK_VERIFY_TOKEN: "verify-token",
       }),
-    ).toThrow(/WHATSAPP_APP_SECRET/);
+    ).toBe(false);
+    expect(() =>
+      assertWhatsAppWebhookConfiguration({
+        NODE_ENV: "production",
+        WHATSAPP_ACCESS_TOKEN: "token",
+        WHATSAPP_WEBHOOK_VERIFY_TOKEN: "verify-token",
+      }),
+    ).toThrow(/WHATSAPP_PHONE_NUMBER_ID/);
   });
 });

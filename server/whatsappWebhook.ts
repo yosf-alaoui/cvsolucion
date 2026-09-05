@@ -34,13 +34,14 @@ export function isWhatsAppIntegrationConfigured(
 export function assertWhatsAppWebhookConfiguration(
   env: NodeJS.ProcessEnv = process.env,
 ) {
+  const config = getWhatsAppWebhookConfig(env);
   if (env.NODE_ENV !== "production" || !isWhatsAppIntegrationConfigured(env)) {
-    return;
+    return Boolean(
+      config.appSecret && config.businessAccountId && config.phoneNumberId,
+    );
   }
 
-  const config = getWhatsAppWebhookConfig(env);
   const missing = [
-    !config.appSecret ? "WHATSAPP_APP_SECRET" : null,
     !config.businessAccountId ? "WHATSAPP_BUSINESS_ACCOUNT_ID" : null,
     !config.phoneNumberId ? "WHATSAPP_PHONE_NUMBER_ID" : null,
     !clean(env.WHATSAPP_WEBHOOK_VERIFY_TOKEN)
@@ -56,6 +57,11 @@ export function assertWhatsAppWebhookConfiguration(
       )}`,
     );
   }
+
+  // The application may remain available without the optional inbound
+  // webhook credential, but POST events still fail closed in
+  // verifyMetaWebhookSignature until the real Meta app secret is configured.
+  return Boolean(config.appSecret);
 }
 
 export function verifyMetaWebhookSignature(
