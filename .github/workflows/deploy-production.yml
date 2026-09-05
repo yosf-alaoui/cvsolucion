@@ -64,7 +64,16 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
-          ssh-keyscan -p "${DEPLOY_PORT:-22}" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          HOST_KEYS_FILE="$(mktemp)"
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 10 -p "${DEPLOY_PORT:-22}" "$DEPLOY_HOST" > "$HOST_KEYS_FILE"; then
+              break
+            fi
+            sleep 2
+          done
+          test -s "$HOST_KEYS_FILE"
+          cat "$HOST_KEYS_FILE" >> ~/.ssh/known_hosts
+          rm -f "$HOST_KEYS_FILE"
 
       - name: Upload Release
         run: |
@@ -98,6 +107,15 @@ jobs:
           PM2_BIN="$(command -v pm2 || true)"
           APP_NODE_INTERPRETER="$(command -v node || true)"
 
+          start_pm2_release() {
+            config_path="$1"
+            if "$PM2_BIN" describe "$PM2_APP" >/dev/null 2>&1; then
+              "$PM2_BIN" delete "$PM2_APP"
+            fi
+            PM2_APP_NAME="$PM2_APP" APP_NODE_INTERPRETER="$APP_NODE_INTERPRETER" \
+              "$PM2_BIN" start "$config_path" --only "$PM2_APP" --update-env
+          }
+
           rollback() {
             code=$?
             trap - ERR
@@ -106,16 +124,13 @@ jobs:
                 rm -f "$NEXT_LINK"
                 ln -s "$PREVIOUS_RELEASE" "$NEXT_LINK"
                 mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
-                PM2_APP_NAME="$PM2_APP" APP_NODE_INTERPRETER="$APP_NODE_INTERPRETER" \
-                  "$PM2_BIN" startOrReload \
-                  "$CURRENT_LINK/ecosystem.config.cjs" --only "$PM2_APP" --update-env || true
+                start_pm2_release "$CURRENT_LINK/ecosystem.config.cjs" || true
               else
                 # First atomic deployment: the legacy app directory is still
                 # untouched and remains the rollback target.
-                PM2_APP_NAME="$PM2_APP" APP_NODE_INTERPRETER="$APP_NODE_INTERPRETER" \
-                  "$PM2_BIN" startOrReload \
-                  "$APP_DIR/ecosystem.config.cjs" --only "$PM2_APP" --update-env || true
+                start_pm2_release "$APP_DIR/ecosystem.config.cjs" || true
               fi
+              "$PM2_BIN" save || true
             fi
             exit "$code"
           }
@@ -233,21 +248,27 @@ jobs:
           pnpm run storage:rebuild
           pnpm run storage:health
 
+          EXPECTED_INDEX_MARKER="$(grep -om1 'assets/main-[^"]*\.js' "$RELEASE/dist/public/index.html")"
+          if [ -z "$EXPECTED_INDEX_MARKER" ]; then
+            echo "Unable to identify the release entry asset." >&2
+            exit 1
+          fi
+
           stage "Switching the current release atomically"
           rm -f "$NEXT_LINK"
           ln -s "$RELEASE" "$NEXT_LINK"
           mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
           SWITCHED=1
-          PM2_APP_NAME="$PM2_APP" APP_NODE_INTERPRETER="$APP_NODE_INTERPRETER" \
-            "$PM2_BIN" startOrReload \
-            "$CURRENT_LINK/ecosystem.config.cjs" --only "$PM2_APP" --update-env
+          start_pm2_release "$CURRENT_LINK/ecosystem.config.cjs"
           "$PM2_BIN" save
 
           APP_PORT="$(grep -E '^PORT=' "$APP_DIR/.env" | cut -d= -f2- || true)"
           if [ -z "$APP_PORT" ]; then APP_PORT=3000; fi
           HEALTHY=0
           for attempt in 1 2 3 4 5; do
-            if curl -fsS "http://127.0.0.1:${APP_PORT}/api/auth/me" >/dev/null; then
+            LIVE_INDEX="$(curl -fsS "http://127.0.0.1:${APP_PORT}/" || true)"
+            if curl -fsS "http://127.0.0.1:${APP_PORT}/api/auth/me" >/dev/null \
+              && [[ "$LIVE_INDEX" == *"$EXPECTED_INDEX_MARKER"* ]]; then
               HEALTHY=1
               break
             fi
