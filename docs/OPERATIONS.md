@@ -3,9 +3,12 @@
 ## Production Runtime
 
 - App directory: `/var/www/cvsolucion`
+- Active release link: `/var/www/cvsolucion/current`
+- Release directory: `/var/www/cvsolucion/releases/<git-sha>`
 - Shared data directory: `/var/www/cvsolucion_shared/data`
 - PM2 app name: `cvsolucion`
 - Default app port: `3000`
+- Node runtime: Node 24 LTS (the deploy refuses a different major version)
 - Storage driver: `APP_STORAGE_DRIVER=sqlite`
 - SQLite database: `/var/www/cvsolucion_shared/data/cvsolucion.sqlite`
 - JSON mirror: optional. Keep `APP_SQLITE_JSON_MIRROR=false` after SQLite is verified to avoid stale JSON files becoming a deploy source.
@@ -13,6 +16,7 @@
 Recommended security environment:
 
 ```bash
+APP_BIND_HOST=127.0.0.1
 ADMIN_SESSION_MAX_AGE_MS=43200000
 ADMIN_EMAIL_OTP_ENABLED=false
 VISITOR_RETENTION_DAYS=180
@@ -49,10 +53,10 @@ pnpm run backup:rclone
 Required production environment:
 
 ```bash
-RCLONE_CONFIG=/root/.config/rclone/rclone.conf
+RCLONE_CONFIG=/home/cvsolucion/.config/rclone/rclone.conf
 RCLONE_BACKUP_REMOTE=cvsolucion-drive:cvsolucion-backups
 RCLONE_BACKUP_RETENTION_DAYS=30
-BACKUP_OUTPUT_DIR=/root/backups
+BACKUP_OUTPUT_DIR=/var/backups/cvsolucion
 BACKUP_ENCRYPTION_PASSPHRASE=
 REQUIRE_ENCRYPTED_BACKUPS=true
 ```
@@ -65,7 +69,7 @@ Useful setup checks:
 rclone version
 rclone listremotes
 rclone lsd cvsolucion-drive:
-rclone copy /root/backups/example.tar.gz cvsolucion-drive:cvsolucion-backups --dry-run
+rclone copy /var/backups/cvsolucion/example.tar.gz cvsolucion-drive:cvsolucion-backups --dry-run
 ```
 
 Legacy direct Google Drive API backup is still available:
@@ -83,7 +87,7 @@ GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/var/www/cvsolucion_shared/secrets/google-driv
 GOOGLE_DRIVE_BACKUP_FOLDER_ID=
 GOOGLE_DRIVE_BACKUP_FOLDER_NAME=CVsolucion production backups
 GOOGLE_DRIVE_BACKUP_RETENTION_DAYS=30
-BACKUP_OUTPUT_DIR=/root/backups
+BACKUP_OUTPUT_DIR=/var/backups/cvsolucion
 BACKUP_ENCRYPTION_PASSPHRASE=
 REQUIRE_ENCRYPTED_BACKUPS=true
 ```
@@ -93,6 +97,15 @@ Prefer `GOOGLE_DRIVE_BACKUP_FOLDER_ID` because folder names are not unique. If u
 Google service accounts cannot upload into a normal personal Drive quota. Use a Google Workspace Shared Drive folder, or switch this backup to an OAuth user flow if the target account is a personal Google Drive.
 
 The backup command creates a safe SQLite backup with `better-sqlite3`, includes the production `uploads/` directory when present, stores a local `.tar.gz` copy, uploads it to Drive, and prunes Drive backups older than the configured retention window. Set `BACKUP_ENCRYPTION_PASSPHRASE` to upload `.tar.gz.enc` encrypted archives. Set `REQUIRE_ENCRYPTED_BACKUPS=true` in production so a missing passphrase fails the backup instead of uploading plain data.
+
+Create a consistent local backup and verify an isolated restore with:
+
+```bash
+pnpm run backup:local
+pnpm run backup:verify -- /path/to/cvsolucion-backup-....tar.gz.enc
+```
+
+`backup:verify` decrypts and extracts into a temporary directory, parses the manifest, runs SQLite `quick_check`, reports the document count, and removes the temporary restore. Schedule this check periodically and alert on failure. Keep the decryption passphrase outside the application host as well as in the protected runtime secret store.
 
 ## Scheduled Backup Timer
 
@@ -134,9 +147,11 @@ The `Deploy Production` workflow is manual and requires these repository or envi
 - `PRODUCTION_APP_DIR`
 - `PRODUCTION_PM2_APP`
 
+Use a dedicated, non-root deployment/service account. Grant it write access only to the application, release, shared-data, and backup directories plus the narrowly required PM2 commands. Verify key-based login and recovery access before setting `PermitRootLogin no` and `PasswordAuthentication no` in SSH, then reload SSH and test a second session before closing the first.
+
 ## Deploy Safety
 
-The deploy workflow runs:
+The deploy workflow builds and checks a new immutable release before changing the `current` symlink. It runs:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -146,15 +161,16 @@ pnpm run check
 pnpm run audit:prod
 pnpm run build
 pnpm run test:e2e
+pnpm run backup:local
 pnpm run storage:rebuild
 pnpm run storage:health
-pm2 restart cvsolucion --update-env
+pm2 startOrReload current/ecosystem.config.cjs --only cvsolucion --update-env
 ```
 
-Before changing production data, it creates a tar backup under:
+Before changing production data, it creates a consistent SQLite backup under `BACKUP_OUTPUT_DIR`. The deployment then atomically switches `current`, checks the local health endpoint, and restores the prior symlink automatically if health fails. It keeps five release directories as rollback candidates.
 
 ```bash
-/root/backups/
+/var/backups/cvsolucion/
 ```
 
 ## Manual Health Check
@@ -176,7 +192,7 @@ Expected:
 
 ## Security Headers
 
-Express sets the application CSP and core security headers. In production, Nginx should be the only public layer adding static-site security headers; hide duplicate upstream headers for proxied responses to avoid repeated `Content-Security-Policy`, `X-Content-Type-Options`, and related values.
+Express is the single owner of CSP for proxied responses and sets the other core security headers. Nginx must pass that CSP through without adding a second policy. This lets Express remove analytics origins for requests carrying `DNT: 1`. Use [`deploy/nginx/cvsolucion-proxy.conf`](../deploy/nginx/cvsolucion-proxy.conf) inside the HTTPS proxy location; it also replaces client-supplied forwarding headers instead of appending them.
 
 Quick checks:
 
@@ -185,19 +201,19 @@ curl -I https://cvsolucion.com/
 curl -I 'https://cvsolucion.com/assets/index-does-not-exist.js?cache-miss=1'
 ```
 
-Expected: one public CSP header on HTML responses, one `X-Content-Type-Options` header, and missing assets returning `404`.
+Expected: one public CSP header on HTML responses, one `X-Content-Type-Options` header, and missing assets returning `404`. Also verify `curl -I -H 'DNT: 1'` returns a CSP without Google, Meta, Ahrefs, or Clarity origins.
 
 ## Rollback Notes
 
-If a deployment fails before PM2 restart, the previous PM2 process remains online.
-
-If it fails after PM2 stop, the deploy workflow attempts to restart `cvsolucion` and preserve SQLite mode.
+If a deployment fails before the atomic switch, the previous PM2 process remains online. If the new release fails its health check, the workflow restores the previous `current` target and reloads it.
 
 For manual rollback:
 
 ```bash
 cd /var/www/cvsolucion
-pm2 restart cvsolucion --update-env
+ln -s /var/www/cvsolucion/releases/<known-good-sha> .current-manual
+mv -Tf .current-manual current
+PM2_APP_NAME=cvsolucion pm2 startOrReload current/ecosystem.config.cjs --only cvsolucion --update-env
 ```
 
-Data backups can be restored from `/root/backups/` if a migration issue is confirmed.
+Data backups can be restored from `/var/backups/cvsolucion/` if a migration issue is confirmed.

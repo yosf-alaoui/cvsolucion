@@ -11,6 +11,7 @@ import { getBookingHref } from "@/lib/site";
 import {
   getSeoKnowledgePageByCanonicalPath,
   getSeoKnowledgePageContent,
+  type SeoKnowledgePage,
 } from "@shared/seoKnowledgePages";
 import { getSeoServicePageByCanonicalPath } from "@shared/seoServicePages";
 import { getSeoServicePageContent } from "@shared/seoServicePageLocales";
@@ -132,7 +133,6 @@ function currentPageUrl(locale: "en" | "fr" | "ar", canonicalPath: string) {
 export default function SeoKnowledgeLanding() {
   const [location] = useLocation();
   const { locale } = useI18n();
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
   const canonicalPath = stripLocale(location.replace(/\/+$/, "") || "/");
   const page = getSeoKnowledgePageByCanonicalPath(canonicalPath);
 
@@ -140,6 +140,23 @@ export default function SeoKnowledgeLanding() {
     return null;
   }
 
+  return (
+    <SeoKnowledgeLandingContent
+      key={page.canonicalPath}
+      page={page}
+      locale={locale}
+    />
+  );
+}
+
+function SeoKnowledgeLandingContent({
+  page,
+  locale,
+}: {
+  page: SeoKnowledgePage;
+  locale: "en" | "fr" | "ar";
+}) {
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
   const copy = uiCopy[locale];
   const pageContent = getSeoKnowledgePageContent(page, locale);
   const currentUrl = currentPageUrl(locale, page.canonicalPath);

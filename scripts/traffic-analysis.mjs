@@ -53,7 +53,9 @@ function sourceForVisitor(visitor) {
     return { source: "google", medium: "paid", category: "paid_search" };
   }
   if (visitor.fbclid) {
-    return { source: "meta", medium: "paid", category: "paid_social" };
+    // fbclid proves a Facebook/Instagram click, not that the placement was
+    // paid. Paid classification requires explicit UTM/campaign evidence.
+    return { source: "meta", medium: "click_id", category: "social_unknown" };
   }
   if (visitor.msclkid) {
     return { source: "microsoft", medium: "paid", category: "paid_search" };

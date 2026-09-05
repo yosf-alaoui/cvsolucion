@@ -2284,6 +2284,7 @@ export default function AdminDashboard() {
                           <RequestsManager
                             locale={locale}
                             leads={filteredLeads}
+                            notifications={data?.contactNotifications || []}
                           />
                         </Suspense>
                       </TabsContent>

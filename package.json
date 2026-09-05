@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "dev": "concurrently -k \"pnpm run dev:server\" \"pnpm run dev:client\"",
     "dev:client": "vite --host",
@@ -15,7 +18,7 @@
     "test": "vitest run --config vitest.config.ts",
     "test:e2e": "node scripts/e2e-smoke.mjs",
     "test:modules": "tsx modules/tests/smoke.ts",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && node scripts/audit-react-hooks.mjs",
     "secrets:audit": "node scripts/secrets-audit.mjs",
     "audit:prod": "pnpm audit --prod",
     "storage:migrate": "tsx scripts/migrate-json-to-sqlite.mjs",
@@ -24,6 +27,8 @@
     "traffic:report": "node scripts/traffic-analysis.mjs",
     "backup:drive": "node scripts/google-drive-backup.mjs",
     "backup:rclone": "node scripts/rclone-drive-backup.mjs",
+    "backup:local": "node scripts/rclone-drive-backup.mjs --local-only",
+    "backup:verify": "node scripts/verify-backup-restore.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -58,15 +63,15 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@stripe/react-stripe-js": "^6.0.0",
     "@stripe/stripe-js": "^9.0.0",
-    "@tiptap/core": "^3.20.4",
-    "@tiptap/extension-color": "^3.20.4",
-    "@tiptap/extension-image": "^3.20.4",
-    "@tiptap/extension-link": "^3.20.4",
-    "@tiptap/extension-placeholder": "^3.20.4",
-    "@tiptap/extension-text-style": "^3.20.4",
-    "@tiptap/extension-underline": "^3.20.4",
-    "@tiptap/react": "^3.20.4",
-    "@tiptap/starter-kit": "^3.20.4",
+    "@tiptap/core": "^3.30.4",
+    "@tiptap/extension-color": "^3.30.4",
+    "@tiptap/extension-image": "^3.30.4",
+    "@tiptap/extension-link": "^3.30.4",
+    "@tiptap/extension-placeholder": "^3.30.4",
+    "@tiptap/extension-text-style": "^3.30.4",
+    "@tiptap/extension-underline": "^3.30.4",
+    "@tiptap/react": "^3.30.4",
+    "@tiptap/starter-kit": "^3.30.4",
     "better-sqlite3": "^12.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -129,7 +134,7 @@
   "pnpm": {
     "overrides": {
       "path-to-regexp": "0.1.13",
-      "qs": "6.15.2",
+      "qs": "6.16.0",
       "tailwindcss>nanoid": "3.3.7",
       "markdown-it": "14.2.0",
       "markdown-it>linkify-it": "5.0.2",

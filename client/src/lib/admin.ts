@@ -251,6 +251,17 @@ export type AdminContactLead = {
   createdAt: string;
 };
 
+export type AdminContactNotification = {
+  id: string;
+  leadId: string;
+  kind: "admin_email" | "whatsapp_template" | "career_start_email";
+  status: "queued" | "processing" | "sent" | "failed";
+  attempts: number;
+  nextAttemptAt: string;
+  lastError: string | null;
+  updatedAt: string;
+};
+
 export type AdminDashboardInvoiceLineItem = {
   id: string;
   description: string;
@@ -353,6 +364,7 @@ export type AdminDashboardResponse = {
     updatedAt: string;
   };
   leads: AdminContactLead[];
+  contactNotifications: AdminContactNotification[];
   sessions: AdminDashboardSession[];
   events: AdminDashboardEvent[];
   insights: AdminDashboardInsights;
@@ -507,6 +519,13 @@ async function adminRequest<T>(input: string, init?: RequestInit): Promise<T> {
     throw new Error(data.error || "Admin request failed.");
   }
   return data;
+}
+
+export function retryAdminContactNotification(jobId: string) {
+  return adminRequest<{ ok: true; job: AdminContactNotification }>(
+    `/api/admin/contact-notifications/${encodeURIComponent(jobId)}/retry`,
+    { method: "POST", body: "{}" },
+  );
 }
 
 export async function getAdminDashboard() {

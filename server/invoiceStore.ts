@@ -179,7 +179,15 @@ function normalizeRequiredText(value: unknown, fallback: string) {
 
 function normalizeCurrency(value: unknown) {
   const currency = String(value || "").trim().toLowerCase();
-  return /^[a-z]{3}$/.test(currency) ? currency : "cad";
+  return currency === "cad" || currency === "usd" ? currency : "cad";
+}
+
+function assertSupportedCurrency(value: unknown) {
+  const currency = String(value || "").trim().toLowerCase();
+  if (currency !== "cad" && currency !== "usd") {
+    throw new Error("Invoices currently support CAD and USD only.");
+  }
+  return currency;
 }
 
 function normalizeCountryCode(value: unknown) {
@@ -265,21 +273,43 @@ function defaultServiceDescription(booking?: BookingRecord | null) {
   return `${service} - ${priority}`;
 }
 
-function normalizeLineItems(input: unknown, fallbackDescription: string, subtotalAmount: number) {
+function normalizeLineItems(
+  input: unknown,
+  fallbackDescription: string,
+  subtotalAmount: number,
+  strict = false,
+) {
   const items = Array.isArray(input) ? input : [];
   const normalized = items
     .map((item) => {
       const record = item as Partial<InvoiceLineItem>;
       const quantity = Number(record.quantity);
-      const unitAmount = normalizeAmount(record.unitAmount);
-      const amount = normalizeAmount(record.amount || Math.round((Number.isFinite(quantity) ? quantity : 1) * unitAmount));
       const description = normalizeText(record.description);
+      const validQuantity = Number.isFinite(quantity) && quantity > 0 && quantity <= 10_000;
+      const normalizedQuantity = validQuantity ? quantity : 1;
+      const submittedAmount = normalizeAmount(record.amount);
+      const unitAmount = normalizeAmount(
+        record.unitAmount ||
+          (submittedAmount > 0
+            ? Math.round(submittedAmount / normalizedQuantity)
+            : 0),
+      );
+      const amount = Math.round(normalizedQuantity * unitAmount);
+
+      if (strict && (!description || !validQuantity || unitAmount <= 0)) {
+        throw new Error(
+          "Every invoice line requires a description, a positive quantity, and a positive unit amount.",
+        );
+      }
+      if (strict && typeof record.amount === "number" && submittedAmount !== amount) {
+        throw new Error("Invoice line amount must equal quantity multiplied by unit amount.");
+      }
       if (!description || amount <= 0) return null;
       return {
         id: normalizeText(record.id) || randomId("line"),
         description,
-        quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
-        unitAmount: unitAmount || amount,
+        quantity: normalizedQuantity,
+        unitAmount,
         amount,
       };
     })
@@ -298,6 +328,14 @@ function normalizeLineItems(input: unknown, fallbackDescription: string, subtota
   ];
 }
 
+function lineItemsSubtotal(lineItems: InvoiceLineItem[]) {
+  return lineItems.reduce((total, line) => total + line.amount, 0);
+}
+
+function taxFromRate(subtotalAmount: number, taxRate: number | null) {
+  return taxRate === null ? null : Math.round((subtotalAmount * taxRate) / 100);
+}
+
 function nextInvoiceNumber(db: InvoiceDb) {
   db.lastSequence += 1;
   const date = new Date();
@@ -312,9 +350,16 @@ function normalizeLegacyInvoice(raw: any): InvoiceRecord {
   const serviceDescription =
     normalizeText(raw.serviceDescription) ||
     defaultServiceDescription(raw.serviceType ? (raw as BookingRecord) : null);
-  const subtotalAmount = normalizeAmount(raw.subtotalAmount ?? raw.totalAmount);
-  const taxAmount = normalizeAmount(raw.taxAmount);
-  const totalAmount = normalizeAmount(raw.totalAmount || subtotalAmount + taxAmount);
+  const legacySubtotalAmount = normalizeAmount(raw.subtotalAmount ?? raw.totalAmount);
+  const lineItems = normalizeLineItems(
+    raw.lineItems,
+    serviceDescription,
+    legacySubtotalAmount,
+  );
+  const subtotalAmount = lineItemsSubtotal(lineItems);
+  const taxRate = normalizeTaxRate(raw.taxRate);
+  const taxAmount = taxFromRate(subtotalAmount, taxRate) ?? normalizeAmount(raw.taxAmount);
+  const totalAmount = subtotalAmount + taxAmount;
   const issuedAt = normalizeText(raw.issuedAt);
   const requestedAt = normalizeText(raw.requestedAt) || issuedAt || normalizeText(raw.createdAt) || nowIso();
 
@@ -332,7 +377,7 @@ function normalizeLegacyInvoice(raw: any): InvoiceRecord {
     taxAmount,
     totalAmount,
     taxLabel: normalizeText(raw.taxLabel),
-    taxRate: normalizeTaxRate(raw.taxRate),
+    taxRate,
     customerType: raw.customerType === "company" ? "company" : "individual",
     customerName: normalizeRequiredText(raw.customerName || raw.name, "Customer"),
     email: normalizeRequiredText(raw.email, ""),
@@ -364,7 +409,7 @@ function normalizeLegacyInvoice(raw: any): InvoiceRecord {
     date: normalizeText(raw.date),
     hour: typeof raw.hour === "number" ? raw.hour : null,
     locale: raw.locale || "en",
-    lineItems: normalizeLineItems(raw.lineItems, serviceDescription, subtotalAmount),
+    lineItems,
   };
 }
 
@@ -496,6 +541,23 @@ export function upsertInvoiceRequestFromPayment(input: PaidInvoiceRequestInput) 
       ? "company"
       : "individual";
 
+  const currency = assertSupportedCurrency(input.currency);
+  const lineItems = normalizeLineItems(
+    input.lineItems,
+    serviceDescription,
+    subtotalAmount,
+    Boolean(input.lineItems),
+  );
+  const calculatedSubtotal = lineItemsSubtotal(lineItems);
+  if (calculatedSubtotal !== subtotalAmount) {
+    throw new Error("Invoice subtotal does not match the calculated line items.");
+  }
+  const taxRate = normalizeTaxRate(input.taxRate);
+  const calculatedTax = taxFromRate(calculatedSubtotal, taxRate);
+  if (calculatedTax !== null && calculatedTax !== taxAmount) {
+    throw new Error("Invoice tax amount does not match the configured tax rate.");
+  }
+
   const invoice: InvoiceRecord = {
     id: randomId(),
     invoiceNumber: null,
@@ -505,12 +567,12 @@ export function upsertInvoiceRequestFromPayment(input: PaidInvoiceRequestInput) 
     requestedAt: timestamp,
     issuedAt: null,
     updatedAt: timestamp,
-    currency: normalizeCurrency(input.currency),
-    subtotalAmount,
-    taxAmount,
-    totalAmount,
+    currency,
+    subtotalAmount: calculatedSubtotal,
+    taxAmount: calculatedTax ?? taxAmount,
+    totalAmount: calculatedSubtotal + (calculatedTax ?? taxAmount),
     taxLabel: normalizeText(input.taxLabel),
-    taxRate: normalizeTaxRate(input.taxRate),
+    taxRate,
     customerType,
     customerName,
     email,
@@ -549,11 +611,7 @@ export function upsertInvoiceRequestFromPayment(input: PaidInvoiceRequestInput) 
     date: null,
     hour: null,
     locale: input.locale || "en",
-    lineItems: normalizeLineItems(
-      input.lineItems,
-      serviceDescription,
-      subtotalAmount,
-    ),
+    lineItems,
   };
 
   db.invoices.push(invoice);
@@ -574,10 +632,16 @@ export function mergeInvoicesByAdmin(input: {
 
   const target = db.invoices.find((invoice) => invoice.id === targetInvoiceId);
   if (!target) throw new Error("Target invoice not found.");
+  if (target.status === "issued") {
+    throw new Error("Issued invoices are immutable and cannot be merged.");
+  }
 
   const sources = sourceIds.map((sourceId) => {
     const source = db.invoices.find((invoice) => invoice.id === sourceId);
     if (!source) throw new Error("One of the selected invoices was not found.");
+    if (source.status === "issued") {
+      throw new Error("Issued invoices are immutable and cannot be merged.");
+    }
     return source;
   });
 
@@ -662,15 +726,36 @@ function applyAdminUpdate(invoice: InvoiceRecord, input: AdminInvoiceUpdateInput
   if (typeof input.sellerWebsite !== "undefined") invoice.sellerWebsite = normalizeText(input.sellerWebsite) || defaultSellerWebsite();
   if (typeof input.paymentTerms !== "undefined") invoice.paymentTerms = normalizeText(input.paymentTerms);
   if (typeof input.dueDate !== "undefined") invoice.dueDate = normalizeText(input.dueDate);
-  if (typeof input.currency === "string") invoice.currency = normalizeCurrency(input.currency);
-  if (typeof input.subtotalAmount === "number") invoice.subtotalAmount = normalizeAmount(input.subtotalAmount);
-  if (typeof input.taxAmount === "number") invoice.taxAmount = normalizeAmount(input.taxAmount);
+  if (typeof input.currency === "string") invoice.currency = assertSupportedCurrency(input.currency);
   if (typeof input.taxLabel !== "undefined") invoice.taxLabel = normalizeText(input.taxLabel);
   if (typeof input.taxRate !== "undefined") invoice.taxRate = normalizeTaxRate(input.taxRate);
-  invoice.totalAmount = invoice.subtotalAmount + invoice.taxAmount;
   if (typeof input.lineItems !== "undefined") {
-    invoice.lineItems = normalizeLineItems(input.lineItems, invoice.serviceDescription, invoice.subtotalAmount);
+    const lineItems = normalizeLineItems(
+      input.lineItems,
+      invoice.serviceDescription,
+      invoice.subtotalAmount,
+      true,
+    );
+    const calculatedSubtotal = lineItemsSubtotal(lineItems);
+    if (
+      typeof input.subtotalAmount === "number" &&
+      normalizeAmount(input.subtotalAmount) !== calculatedSubtotal
+    ) {
+      throw new Error("Invoice subtotal does not match the calculated line items.");
+    }
+    invoice.lineItems = lineItems;
+    invoice.subtotalAmount = calculatedSubtotal;
   }
+  const rateTax = taxFromRate(invoice.subtotalAmount, invoice.taxRate);
+  const submittedTax =
+    typeof input.taxAmount === "number"
+      ? normalizeAmount(input.taxAmount)
+      : invoice.taxAmount;
+  if (rateTax !== null && typeof input.taxAmount === "number" && submittedTax !== rateTax) {
+    throw new Error("Invoice tax amount does not match the configured tax rate.");
+  }
+  invoice.taxAmount = rateTax ?? submittedTax;
+  invoice.totalAmount = invoice.subtotalAmount + invoice.taxAmount;
   invoice.updatedAt = nowIso();
 }
 
@@ -678,6 +763,9 @@ export function updateInvoiceByAdmin(input: AdminInvoiceUpdateInput) {
   const db = loadDb();
   const invoice = db.invoices.find((item) => item.id === input.invoiceId);
   if (!invoice) throw new Error("Invoice not found.");
+  if (invoice.status === "issued") {
+    throw new Error("Issued invoices are immutable. Create a documented correction instead.");
+  }
   applyAdminUpdate(invoice, input);
   saveDb(db);
   return invoice;
@@ -687,6 +775,7 @@ export function issueInvoiceByAdmin(input: AdminInvoiceUpdateInput) {
   const db = loadDb();
   const invoice = db.invoices.find((item) => item.id === input.invoiceId);
   if (!invoice) throw new Error("Invoice not found.");
+  if (invoice.status === "issued") return invoice;
   applyAdminUpdate(invoice, input);
   if (!invoice.customerName || !invoice.email || !invoice.country || !invoice.billingAddress) {
     throw new Error("Customer name, email, country, and billing address are required before issuing an invoice.");

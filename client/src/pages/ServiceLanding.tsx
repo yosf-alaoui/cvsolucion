@@ -372,8 +372,6 @@ function ServiceImage({
 export default function ServiceLanding() {
   const [location] = useLocation();
   const { locale } = useI18n();
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
-
   const canonicalPath = stripLocale(location.replace(/\/+$/, "") || "/");
   const page = getSeoServicePageByCanonicalPath(canonicalPath);
 
@@ -381,6 +379,23 @@ export default function ServiceLanding() {
     return null;
   }
 
+  return (
+    <ServiceLandingContent
+      key={page.canonicalPath}
+      page={page}
+      locale={locale}
+    />
+  );
+}
+
+function ServiceLandingContent({
+  page,
+  locale,
+}: {
+  page: SeoServicePage;
+  locale: "en" | "fr" | "ar";
+}) {
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
   const Icon = serviceIcons[page.key];
   const pageContent = getSeoServicePageContent(page, locale);
   const pageImages = getSeoServicePageImageSet(page.key);

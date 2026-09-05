@@ -115,10 +115,14 @@ function getVerifiedFromAddress() {
 export async function sendAuthEmail(options: MailOptions) {
   const transporter = getTransporter();
   if (!transporter) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "SMTP configuration is incomplete. SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS are required in production.",
+      );
+    }
     console.log("[auth-email:dev-fallback]", {
-      to: options.to,
       subject: options.subject,
-      text: options.text,
+      recipientDomain: options.to.split("@").pop() || "unknown",
     });
     return;
   }
@@ -136,8 +140,8 @@ export async function sendAuthEmail(options: MailOptions) {
     });
 
     console.log("[auth-email:sent]", {
-      to: options.to,
       subject: options.subject,
+      recipientDomain: options.to.split("@").pop() || "unknown",
       messageId: info.messageId,
       accepted: info.accepted,
       rejected: info.rejected,
@@ -145,8 +149,8 @@ export async function sendAuthEmail(options: MailOptions) {
     });
   } catch (error) {
     console.error("[auth-email:error]", {
-      to: options.to,
       subject: options.subject,
+      recipientDomain: options.to.split("@").pop() || "unknown",
       error: error instanceof Error ? error.stack || error.message : String(error),
     });
     if (isRecipientMailboxRejected(error)) {

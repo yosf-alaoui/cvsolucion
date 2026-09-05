@@ -156,14 +156,20 @@ function assertRcloneExists() {
 }
 
 async function main() {
-  assertRcloneExists();
+  const localOnly = process.argv.includes("--local-only");
+  if (!localOnly) assertRcloneExists();
 
   const remote = normalizeRemote(process.env.RCLONE_BACKUP_REMOTE || "");
-  if (!remote) {
+  if (!localOnly && !remote) {
     throw new Error("RCLONE_BACKUP_REMOTE is required, for example: cvsolucion-drive:cvsolucion-backups");
   }
 
   const archivePath = encryptArchiveIfConfigured(await createArchive());
+  if (localOnly) {
+    console.log(`Archive: ${archivePath}`);
+    console.log("Upload: skipped (--local-only)");
+    return;
+  }
   const retentionDays = Number(process.env.RCLONE_BACKUP_RETENTION_DAYS || DEFAULT_RETENTION_DAYS);
   const baseArgs = rcloneArgs();
 

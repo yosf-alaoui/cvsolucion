@@ -1,5 +1,9 @@
 name: Deploy Production
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
 
@@ -23,7 +27,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install
@@ -75,45 +79,66 @@ jobs:
             "APP_DIR='$DEPLOY_APP_DIR' PM2_APP='$DEPLOY_PM2_APP' RELEASE_SHA='$GITHUB_SHA' bash -s" <<'REMOTE'
           set -Eeuo pipefail
 
+          if ! printf '%s' "$RELEASE_SHA" | grep -Eq '^[a-f0-9]{40}$'; then
+            echo "Invalid release SHA" >&2
+            exit 1
+          fi
+
+          ARCHIVE="/tmp/cvsolucion-${RELEASE_SHA}.tar.gz"
+          RELEASES_DIR="$APP_DIR/releases"
+          RELEASE="$RELEASES_DIR/$RELEASE_SHA"
+          CURRENT_LINK="$APP_DIR/current"
+          NEXT_LINK="$APP_DIR/.current-${RELEASE_SHA}"
+          PREVIOUS_RELEASE="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+          SWITCHED=0
+
           rollback() {
             code=$?
-            if [ "${STOPPED:-0}" = "1" ]; then
-              cd "$APP_DIR" || true
-              if grep -q '^APP_STORAGE_DRIVER=' .env; then
-                sed -i 's|^APP_STORAGE_DRIVER=.*|APP_STORAGE_DRIVER=sqlite|' .env || true
+            trap - ERR
+            if [ "$SWITCHED" = "1" ]; then
+              if [ -n "$PREVIOUS_RELEASE" ] && [ -d "$PREVIOUS_RELEASE" ]; then
+                rm -f "$NEXT_LINK"
+                ln -s "$PREVIOUS_RELEASE" "$NEXT_LINK"
+                mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
+                PM2_APP_NAME="$PM2_APP" pm2 startOrReload \
+                  "$CURRENT_LINK/ecosystem.config.cjs" --only "$PM2_APP" --update-env || true
+              else
+                # First atomic deployment: the legacy app directory is still
+                # untouched and remains the rollback target.
+                PM2_APP_NAME="$PM2_APP" pm2 startOrReload \
+                  "$APP_DIR/ecosystem.config.cjs" --only "$PM2_APP" --update-env || true
               fi
-              pm2 restart "$PM2_APP" --update-env || true
             fi
             exit "$code"
           }
           trap rollback ERR
 
-          STOPPED=0
-          ARCHIVE="/tmp/cvsolucion-${RELEASE_SHA}.tar.gz"
-          RELEASE="/tmp/cvsolucion-${RELEASE_SHA}"
-          cd "$APP_DIR"
+          test -d "$APP_DIR"
+          test -f "$APP_DIR/.env"
+          test -f "$ARCHIVE"
+          mkdir -p "$RELEASES_DIR"
 
-          DATA_DIR="$(grep -E '^APP_DATA_DIR=' .env | cut -d= -f2- || true)"
+          DATA_DIR="$(grep -E '^APP_DATA_DIR=' "$APP_DIR/.env" | cut -d= -f2- || true)"
           if [ -z "$DATA_DIR" ]; then DATA_DIR="$APP_DIR/data"; fi
+          case "$DATA_DIR" in
+            /*) ;;
+            *) DATA_DIR="$APP_DIR/$DATA_DIR" ;;
+          esac
 
-          mkdir -p /root/backups
-          tar -czf "/root/backups/cvsolucion-data-${RELEASE_SHA}.tar.gz" -C "$(dirname "$DATA_DIR")" "$(basename "$DATA_DIR")"
-
+          # RELEASE is constrained to RELEASES_DIR by the validated SHA above.
           rm -rf "$RELEASE"
           mkdir -p "$RELEASE"
           tar -xzf "$ARCHIVE" -C "$RELEASE"
-          rsync -a --delete \
-            --exclude='.env' \
-            --exclude='data/' \
-            --exclude='node_modules/' \
-            --exclude='dist/' \
-            --exclude='.git/' \
-            "$RELEASE"/ "$APP_DIR"/
+          ln -s "$APP_DIR/.env" "$RELEASE/.env"
+          rm -rf "$RELEASE/data"
+          ln -s "$DATA_DIR" "$RELEASE/data"
 
-          chmod 600 .env 2>/dev/null || true
+          chmod 600 "$APP_DIR/.env"
           find "$DATA_DIR" -type d -exec chmod 700 {} +
           find "$DATA_DIR" -type f \( -name '*.json' -o -name '*.sqlite' -o -name '*.sqlite-wal' -o -name '*.sqlite-shm' \) -exec chmod 600 {} +
 
+          cd "$RELEASE"
+          node -e "if (Number(process.versions.node.split('.')[0]) !== 24) process.exit(1)"
           pnpm install --frozen-lockfile
           pnpm test
           pnpm run secrets:audit
@@ -122,21 +147,41 @@ jobs:
           pnpm run build
           pnpm run test:e2e
 
-          pm2 stop "$PM2_APP"
-          STOPPED=1
+          # Use SQLite's online backup API instead of archiving a live WAL set.
+          pnpm run backup:local
           pnpm run storage:rebuild
           pnpm run storage:health
-          pm2 restart "$PM2_APP" --update-env
-          STOPPED=0
+
+          rm -f "$NEXT_LINK"
+          ln -s "$RELEASE" "$NEXT_LINK"
+          mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
+          SWITCHED=1
+          PM2_APP_NAME="$PM2_APP" pm2 startOrReload \
+            "$CURRENT_LINK/ecosystem.config.cjs" --only "$PM2_APP" --update-env
           pm2 save
 
+          APP_PORT="$(grep -E '^PORT=' "$APP_DIR/.env" | cut -d= -f2- || true)"
+          if [ -z "$APP_PORT" ]; then APP_PORT=3000; fi
+          HEALTHY=0
           for attempt in 1 2 3 4 5; do
-            if curl -fsS "http://127.0.0.1:${PORT:-3000}/api/auth/me" >/dev/null; then
-              exit 0
+            if curl -fsS "http://127.0.0.1:${APP_PORT}/api/auth/me" >/dev/null; then
+              HEALTHY=1
+              break
             fi
             sleep 2
           done
 
-          echo "Production health check failed" >&2
-          exit 1
+          if [ "$HEALTHY" != "1" ]; then
+            echo "Production health check failed" >&2
+            exit 1
+          fi
+
+          SWITCHED=0
+          rm -f "$ARCHIVE"
+          # Keep the current release plus four prior rollback candidates.
+          find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
+            | sort -nr \
+            | tail -n +6 \
+            | cut -d' ' -f2- \
+            | xargs -r rm -rf
           REMOTE

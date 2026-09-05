@@ -19,8 +19,30 @@ export type ContactLead = {
   createdAt: string;
 };
 
+export type ContactNotificationKind =
+  | "admin_email"
+  | "whatsapp_template"
+  | "career_start_email";
+
+export type ContactNotificationJob = {
+  id: string;
+  leadId: string;
+  kind: ContactNotificationKind;
+  sourceType: "contact" | "career_evaluation";
+  locale: string;
+  source: string;
+  tracking: Record<string, string>;
+  status: "queued" | "processing" | "sent" | "failed";
+  attempts: number;
+  nextAttemptAt: string;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type ContactDb = {
   leads: ContactLead[];
+  notifications: ContactNotificationJob[];
 };
 
 type SqliteDatabase = Database.Database;
@@ -29,7 +51,7 @@ const DATA_DIR = getAppDataDir();
 const DB_PATH = path.join(DATA_DIR, "contact-leads.json");
 
 function ensureDbFile() {
-  ensureJsonFile(DB_PATH, { leads: [] });
+  ensureJsonFile(DB_PATH, { leads: [], notifications: [] });
 }
 
 function text(value: unknown) {
@@ -58,6 +80,12 @@ function loadStructuredDb(): ContactDb | null {
   if (!isSqliteStorageEnabled()) return null;
 
   return withDocumentDatabase((sqlite) => {
+    const document = sqlite
+      .prepare("SELECT value FROM documents WHERE key = ?")
+      .get("contact-leads.json") as { value: string } | undefined;
+    const documentDb = document
+      ? (JSON.parse(document.value) as Partial<ContactDb>)
+      : {};
     const rows = sqlite
       .prepare(
         `
@@ -91,6 +119,7 @@ function loadStructuredDb(): ContactDb | null {
         message: text(row.message),
         createdAt: text(row.createdAt),
       })),
+      notifications: documentDb.notifications ?? [],
     };
   });
 }
@@ -101,24 +130,29 @@ function loadDb(): ContactDb {
   if (structured) return structured;
 
   const parsed = readJsonFile<Partial<ContactDb>>(DB_PATH);
-  return { leads: parsed.leads ?? [] };
+  return {
+    leads: parsed.leads ?? [],
+    notifications: parsed.notifications ?? [],
+  };
 }
 
 function saveDb(db: ContactDb) {
   writeJsonFileAtomic(DB_PATH, db);
 }
 
-export function storeContactLead(input: {
+type ContactLeadInput = {
+  id?: string;
   name: string;
   email: string;
   company?: string | null;
   phone?: string | null;
   interest?: string | null;
   message: string;
-}) {
-  const db = loadDb();
-  const lead: ContactLead = {
-    id: crypto.randomBytes(12).toString("hex"),
+};
+
+function buildContactLead(input: ContactLeadInput): ContactLead {
+  return {
+    id: input.id?.trim() || crypto.randomBytes(12).toString("hex"),
     name: input.name.trim(),
     email: input.email.trim().toLowerCase(),
     company: input.company?.trim() || null,
@@ -127,10 +161,123 @@ export function storeContactLead(input: {
     message: input.message.trim(),
     createdAt: new Date().toISOString(),
   };
+}
+
+export function storeContactLead(input: ContactLeadInput) {
+  const db = loadDb();
+  const lead = buildContactLead(input);
 
   db.leads.unshift(lead);
   saveDb(db);
   return lead;
+}
+
+export function storeContactLeadWithNotifications(
+  input: ContactLeadInput,
+  context: {
+    sourceType: "contact" | "career_evaluation";
+    locale: string;
+    source: string;
+    tracking?: Record<string, string> | null;
+  },
+) {
+  const db = loadDb();
+  const lead = buildContactLead(input);
+  const existingLead = db.leads.find((candidate) => candidate.id === lead.id);
+  if (existingLead) {
+    return {
+      lead: existingLead,
+      notifications: db.notifications.filter((job) => job.leadId === lead.id),
+    };
+  }
+  const timestamp = lead.createdAt;
+  const kinds: ContactNotificationKind[] = ["admin_email", "whatsapp_template"];
+  if (context.sourceType === "career_evaluation") kinds.push("career_start_email");
+
+  const notifications = kinds.map<ContactNotificationJob>((kind) => ({
+    id: `contact-notification:${lead.id}:${kind}`,
+    leadId: lead.id,
+    kind,
+    sourceType: context.sourceType,
+    locale: context.locale,
+    source: context.source,
+    tracking: context.tracking || {},
+    status: "queued",
+    attempts: 0,
+    nextAttemptAt: timestamp,
+    lastError: null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }));
+
+  db.leads.unshift(lead);
+  db.notifications.push(...notifications);
+  saveDb(db);
+  return { lead, notifications };
+}
+
+export function claimDueContactNotification(now = new Date()) {
+  const db = loadDb();
+  const nowMs = now.getTime();
+  const staleProcessingBefore = nowMs - 10 * 60_000;
+  const job = db.notifications.find((candidate) => {
+    const due = new Date(candidate.nextAttemptAt).getTime() <= nowMs;
+    const stale =
+      candidate.status === "processing" &&
+      new Date(candidate.updatedAt).getTime() <= staleProcessingBefore;
+    return (candidate.status === "queued" && due) || stale;
+  });
+  if (!job) return null;
+
+  job.status = "processing";
+  job.attempts += 1;
+  job.updatedAt = now.toISOString();
+  saveDb(db);
+  return { ...job };
+}
+
+export function markContactNotificationSent(jobId: string) {
+  const db = loadDb();
+  const job = db.notifications.find((candidate) => candidate.id === jobId);
+  if (!job) return null;
+  job.status = "sent";
+  job.lastError = null;
+  job.updatedAt = new Date().toISOString();
+  saveDb(db);
+  return { ...job };
+}
+
+export function markContactNotificationFailed(jobId: string, error: unknown) {
+  const db = loadDb();
+  const job = db.notifications.find((candidate) => candidate.id === jobId);
+  if (!job) return null;
+  const now = Date.now();
+  const retryDelay = Math.min(30_000 * 2 ** Math.max(0, job.attempts - 1), 30 * 60_000);
+  job.status = job.attempts >= 6 ? "failed" : "queued";
+  job.nextAttemptAt = new Date(now + retryDelay).toISOString();
+  job.lastError = String(error instanceof Error ? error.message : error).slice(0, 500);
+  job.updatedAt = new Date(now).toISOString();
+  saveDb(db);
+  return { ...job };
+}
+
+export function retryContactNotification(jobId: string) {
+  const db = loadDb();
+  const job = db.notifications.find((candidate) => candidate.id === jobId);
+  if (!job) return null;
+  job.status = "queued";
+  job.attempts = 0;
+  job.nextAttemptAt = new Date().toISOString();
+  job.lastError = null;
+  job.updatedAt = job.nextAttemptAt;
+  saveDb(db);
+  return { ...job };
+}
+
+export function listContactNotifications() {
+  return [...loadDb().notifications].sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt),
+  );
 }
 
 export function listContactLeads() {

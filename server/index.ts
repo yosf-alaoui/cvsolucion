@@ -49,6 +49,11 @@ import {
 } from "./authStore";
 import { RecipientEmailRejectedError, sendAuthEmail } from "./authMailer";
 import {
+  assertWhatsAppWebhookConfiguration,
+  validateWhatsAppWebhookTarget,
+  verifyMetaWebhookSignature,
+} from "./whatsappWebhook";
+import {
   normalizeAuthLocale,
   renderAuthEmailTemplate,
 } from "./authEmailTemplates";
@@ -117,8 +122,15 @@ import {
   updateBookingScheduleSettings,
 } from "./bookingSettingsStore";
 import {
+  claimDueContactNotification,
   listContactLeads,
+  listContactNotifications,
+  markContactNotificationFailed,
+  markContactNotificationSent,
+  retryContactNotification,
   storeContactLead,
+  storeContactLeadWithNotifications,
+  type ContactNotificationJob,
   type ContactLead,
 } from "./contactStore";
 import {
@@ -1869,10 +1881,8 @@ function requireTrustedBrowserMutation(
 }
 
 function getRequestIp(req: express.Request) {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded) {
-    return forwarded.split(",")[0].trim();
-  }
+  // Express derives req.ip from the socket and the explicitly configured
+  // trusted proxy. Reading X-Forwarded-For directly would trust user input.
   return req.ip || null;
 }
 
@@ -1930,6 +1940,12 @@ function rateLimit(options: {
     const current = rateLimitStore.get(bucketKey);
 
     if (!current || current.resetAt <= now) {
+      if (!current && rateLimitStore.size >= RATE_LIMIT_MAX_BUCKETS) {
+        res.setHeader("Retry-After", "60");
+        return res.status(429).json({
+          error: "Request limiter is at capacity. Please try again shortly.",
+        });
+      }
       rateLimitStore.set(bucketKey, {
         count: 1,
         resetAt: now + options.windowMs,
@@ -2460,17 +2476,12 @@ async function sendCareerWhatsAppStartEmail(args: {
   });
 }
 
-function queueCareerWhatsAppStartEmail(lead: ContactLead) {
+async function sendCareerWhatsAppStartEmailIfEligible(lead: ContactLead) {
   const fields = parseLeadMessageFields(lead.message);
   const countryCode = normalizeCountryCode(leadField(fields, ["Country code"]));
   if (countryCode !== "US") return;
   const language = leadField(fields, ["Preferred communication language"]);
-  void sendCareerWhatsAppStartEmail({ lead, language }).catch((error) => {
-    console.error("[whatsapp:us-start-email-error]", {
-      leadId: lead.id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  });
+  await sendCareerWhatsAppStartEmail({ lead, language });
 }
 
 function isCareerEvaluationLead(lead: ContactLead) {
@@ -2771,33 +2782,6 @@ async function sendWhatsAppLeadTemplate(args: {
     }
     throw error;
   }
-}
-
-function queueWhatsAppLeadTemplate(args: {
-  lead: ContactLead;
-  sourceType: ContactSourceType;
-}) {
-  void sendWhatsAppLeadTemplate(args)
-    .then((result) => {
-      if (result.sent) {
-        console.log("[whatsapp:lead] template sent", {
-          leadId: args.lead.id,
-          messageId: result.messageId || null,
-        });
-        return;
-      }
-      console.log("[whatsapp:lead] template skipped", {
-        leadId: args.lead.id,
-        reason: result.reason,
-      });
-    })
-    .catch((error) => {
-      console.error("[whatsapp:lead:error]", {
-        leadId: args.lead.id,
-        error:
-          error instanceof Error ? error.stack || error.message : String(error),
-      });
-    });
 }
 
 function getCommunicationLanguageLabel(
@@ -3792,38 +3776,85 @@ async function sendInvoiceIssuedNotification(
 }
 
 function storeConfirmedContactLead(pendingLead: PendingContactLead) {
-  return storeContactLead({
-    name: pendingLead.name,
-    email: pendingLead.email,
-    company: pendingLead.company,
-    phone: pendingLead.phone,
-    interest: pendingLead.interest,
-    message: pendingLead.message,
+  return storeContactLeadWithNotifications(
+    {
+      id: pendingLead.id,
+      name: pendingLead.name,
+      email: pendingLead.email,
+      company: pendingLead.company,
+      phone: pendingLead.phone,
+      interest: pendingLead.interest,
+      message: pendingLead.message,
+    },
+    {
+      sourceType: pendingLead.sourceType,
+      locale: pendingLead.locale,
+      source: pendingLead.source,
+      tracking: pendingLead.tracking,
+    },
+  ).lead;
+}
+
+let contactNotificationDrainActive = false;
+
+async function deliverContactNotification(job: ContactNotificationJob) {
+  const lead = findContactLeadById(job.leadId);
+  if (!lead) throw new Error("Contact lead no longer exists.");
+
+  if (job.kind === "admin_email") {
+    await sendContactLeadNotification({
+      lead,
+      sourceType: job.sourceType,
+      locale: normalizeAuthLocale(job.locale),
+      source: job.source,
+      tracking: job.tracking,
+    });
+    return;
+  }
+  if (job.kind === "career_start_email") {
+    await sendCareerWhatsAppStartEmailIfEligible(lead);
+    return;
+  }
+
+  const result = await sendWhatsAppLeadTemplate({
+    lead,
+    sourceType: job.sourceType,
   });
+  if (!result.sent) throw new Error(result.reason || "WhatsApp template was not sent.");
+}
+
+async function drainContactNotifications() {
+  if (contactNotificationDrainActive) return;
+  contactNotificationDrainActive = true;
+  try {
+    for (let processed = 0; processed < 20; processed += 1) {
+      const job = claimDueContactNotification();
+      if (!job) break;
+      try {
+        await deliverContactNotification(job);
+        markContactNotificationSent(job.id);
+      } catch (error) {
+        markContactNotificationFailed(job.id, error);
+        console.error("[contact-notification:failed]", {
+          jobId: job.id,
+          leadId: job.leadId,
+          kind: job.kind,
+          attempt: job.attempts,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  } finally {
+    contactNotificationDrainActive = false;
+  }
+}
+
+function wakeContactNotificationWorker() {
+  void drainContactNotifications();
 }
 
 function getWhatsAppWebhookVerifyToken() {
   return String(process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "").trim();
-}
-
-function verifyMetaWebhookSignature(signatureHeader: string, payload: Buffer) {
-  const appSecret = String(process.env.WHATSAPP_APP_SECRET || "").trim();
-  if (!appSecret) return true;
-
-  const match = /^sha256=([a-f0-9]{64})$/i.exec(signatureHeader);
-  if (!match) return false;
-
-  const expected = crypto
-    .createHmac("sha256", appSecret)
-    .update(payload)
-    .digest("hex");
-  const actualBuffer = Buffer.from(match[1], "hex");
-  const expectedBuffer = Buffer.from(expected, "hex");
-
-  return (
-    actualBuffer.length === expectedBuffer.length &&
-    crypto.timingSafeEqual(actualBuffer, expectedBuffer)
-  );
 }
 
 function handleWhatsAppWebhookVerification(
@@ -3873,6 +3904,11 @@ function handleWhatsAppWebhookEvent(
     return res.status(400).json({ error: "Invalid JSON payload." });
   }
 
+  if (!validateWhatsAppWebhookTarget(body)) {
+    console.warn("[whatsapp:webhook] unexpected account or phone target");
+    return res.status(403).json({ error: "Unexpected webhook target." });
+  }
+
   console.log("[whatsapp:webhook] event received", {
     object:
       body && typeof body === "object" && "object" in body
@@ -3892,10 +3928,13 @@ function handleWhatsAppWebhookEvent(
 }
 
 async function startServer() {
+  assertWhatsAppWebhookConfiguration();
   const app = express();
   const server = createServer(app);
 
-  app.set("trust proxy", true);
+  // Nginx is expected to connect over loopback. Never trust an arbitrary
+  // proxy chain supplied by a public client.
+  app.set("trust proxy", "loopback");
   app.disable("x-powered-by");
 
   app.post(
@@ -4134,6 +4173,13 @@ async function startServer() {
       .trim();
     const origin = host ? `${forwardedProto}://${host}` : "";
     const scriptAssetsSource = origin ? `${origin}/assets/` : "'self'";
+    const externalTrackingDisabled = _req.get("dnt") === "1";
+    const analyticsScriptSources = externalTrackingDisabled
+      ? ""
+      : " https://analytics.ahrefs.com https://www.googletagmanager.com https://www.google-analytics.com https://connect.facebook.net https://www.clarity.ms https://scripts.clarity.ms";
+    const analyticsConnectSources = externalTrackingDisabled
+      ? ""
+      : " https://analytics.ahrefs.com https://www.google-analytics.com https://analytics.google.com https://*.google-analytics.com https://*.clarity.ms https://c.bing.com https://www.facebook.com";
     const contentSecurityPolicy = [
       "default-src 'self'",
       "base-uri 'self'",
@@ -4142,8 +4188,8 @@ async function startServer() {
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https:",
       "style-src 'self' 'unsafe-inline'",
-      `script-src 'unsafe-inline' ${scriptAssetsSource} https://js.stripe.com https://analytics.ahrefs.com https://www.googletagmanager.com https://www.google-analytics.com https://connect.facebook.net`,
-      "connect-src 'self' https: wss:",
+      `script-src 'unsafe-inline' ${scriptAssetsSource} https://js.stripe.com${analyticsScriptSources}`,
+      `connect-src 'self' https://api.stripe.com${analyticsConnectSources}`,
       "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://www.googletagmanager.com",
       "worker-src 'self' blob:",
       "manifest-src 'self'",
@@ -5451,7 +5497,11 @@ async function startServer() {
         const source = req.get("referer") || appOrigin(req);
         const auth = getCurrentUser(req);
 
-        if (sourceType === "career_evaluation" && !auth) {
+        const authenticatedEmailMatches =
+          Boolean(auth?.user.emailVerifiedAt) &&
+          auth?.user.email.trim().toLowerCase() === email.toLowerCase();
+
+        if (sourceType === "career_evaluation" && !authenticatedEmailMatches) {
           const { rawToken } = createPendingContactLead(
             {
               name,
@@ -5500,24 +5550,28 @@ async function startServer() {
           });
         }
 
-        const lead = storeContactLead({
-          name,
-          email,
-          company,
-          phone: normalizedPhone,
-          interest,
-          message,
-        });
-        await sendContactLeadNotification({
-          lead,
-          sourceType,
-          locale,
-          source,
-          tracking,
-        });
-        queueWhatsAppLeadTemplate({ lead, sourceType });
+        const rawIdempotencyKey = String(req.get("idempotency-key") || "").trim();
+        const idempotentLeadId = /^[A-Za-z0-9:_-]{16,200}$/.test(rawIdempotencyKey)
+          ? crypto
+              .createHash("sha256")
+              .update(`contact:${rawIdempotencyKey}`)
+              .digest("hex")
+              .slice(0, 24)
+          : undefined;
+        const { lead } = storeContactLeadWithNotifications(
+          {
+            id: idempotentLeadId,
+            name,
+            email,
+            company,
+            phone: normalizedPhone,
+            interest,
+            message,
+          },
+          { sourceType, locale, source, tracking },
+        );
+        wakeContactNotificationWorker();
         if (sourceType === "career_evaluation") {
-          queueCareerWhatsAppStartEmail(lead);
           const conversionToken = createCareerConversionMarker(
             lead.id,
             CAREER_CONVERSION_MARKER_MS,
@@ -5535,10 +5589,74 @@ async function startServer() {
   app.get(
     "/api/contact/confirm",
     rateLimit({ key: "contact-confirm", windowMs: 1000 * 60 * 10, limit: 30 }),
+    (req, res) => {
+      const token = String(req.query.token || "");
+      const locale = normalizeAuthLocale(String(req.query.locale || "en"));
+      const pendingLead = getPendingContactLeadByToken(token);
+      const fallbackUrl = `${appOrigin(req)}${localePrefix(locale)}/training/career?confirmation=expired`;
+
+      if (!pendingLead) {
+        return res.redirect(302, fallbackUrl);
+      }
+
+      const copy =
+        locale === "ar"
+          ? {
+              lang: "ar",
+              dir: "rtl",
+              title: "تأكيد عنوان البريد الإلكتروني",
+              body: "اضغط الزر لإكمال إرسال طلبك إلى CVsolucion.",
+              action: "تأكيد وإرسال الطلب",
+            }
+          : locale === "fr"
+            ? {
+                lang: "fr",
+                dir: "ltr",
+                title: "Confirmer votre adresse courriel",
+                body: "Cliquez sur le bouton pour transmettre votre demande à CVsolucion.",
+                action: "Confirmer et envoyer",
+              }
+            : {
+                lang: "en",
+                dir: "ltr",
+                title: "Confirm your email address",
+                body: "Select the button to finish sending your request to CVsolucion.",
+                action: "Confirm and send request",
+              };
+
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Referrer-Policy", "no-referrer");
+      return res.status(200).type("html").send(`<!doctype html>
+<html lang="${copy.lang}" dir="${copy.dir}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>${escapeHtml(copy.title)}</title>
+</head>
+<body style="margin:0;background:#f8fafc;color:#0f172a;font-family:Arial,sans-serif">
+  <main style="max-width:560px;margin:12vh auto;padding:32px;border:1px solid #e2e8f0;border-radius:20px;background:#fff">
+    <h1>${escapeHtml(copy.title)}</h1>
+    <p>${escapeHtml(copy.body)}</p>
+    <form method="post" action="/api/contact/confirm">
+      <input type="hidden" name="token" value="${escapeHtml(token)}">
+      <input type="hidden" name="locale" value="${escapeHtml(locale)}">
+      <button type="submit" style="border:0;border-radius:10px;background:#1d4ed8;color:#fff;padding:12px 18px;font-weight:700;cursor:pointer">${escapeHtml(copy.action)}</button>
+    </form>
+  </main>
+</body>
+</html>`);
+    },
+  );
+
+  app.post(
+    "/api/contact/confirm",
+    express.urlencoded({ extended: false, limit: "10kb" }),
+    rateLimit({ key: "contact-confirm-submit", windowMs: 1000 * 60 * 10, limit: 20 }),
     async (req, res, next) => {
       try {
-        const token = String(req.query.token || "");
-        const locale = normalizeAuthLocale(String(req.query.locale || "en"));
+        const token = String(req.body?.token || "");
+        const locale = normalizeAuthLocale(String(req.body?.locale || "en"));
         const pendingLead = getPendingContactLeadByToken(token);
         const fallbackUrl = `${appOrigin(req)}${localePrefix(locale)}/training/career?confirmation=expired`;
 
@@ -5548,28 +5666,7 @@ async function startServer() {
 
         const lead = storeConfirmedContactLead(pendingLead);
         markPendingContactLeadConfirmed(pendingLead.id);
-        void sendContactLeadNotification({
-          lead,
-          sourceType: pendingLead.sourceType,
-          locale: pendingLead.locale,
-          source: pendingLead.source,
-          tracking: pendingLead.tracking,
-        }).catch((error) => {
-          console.error("[contact-confirm:admin-email-error]", {
-            leadId: lead.id,
-            error:
-              error instanceof Error
-                ? error.stack || error.message
-                : String(error),
-          });
-        });
-        queueWhatsAppLeadTemplate({
-          lead,
-          sourceType: pendingLead.sourceType,
-        });
-        if (pendingLead.sourceType === "career_evaluation") {
-          queueCareerWhatsAppStartEmail(lead);
-        }
+        wakeContactNotificationWorker();
 
         const conversionToken = createCareerConversionMarker(
           lead.id,
@@ -6633,6 +6730,16 @@ async function startServer() {
         invoices,
         bookingSchedule: getBookingScheduleSettings(),
         leads,
+        contactNotifications: listContactNotifications().map((job) => ({
+          id: job.id,
+          leadId: job.leadId,
+          kind: job.kind,
+          status: job.status,
+          attempts: job.attempts,
+          nextAttemptAt: job.nextAttemptAt,
+          lastError: job.lastError,
+          updatedAt: job.updatedAt,
+        })),
         visitors,
         conversations: getConversationsSnapshot(visitors),
         whatsappInbox: {
@@ -6642,6 +6749,37 @@ async function startServer() {
         ga4,
         chat: {
           enabled: isChatEnabled(),
+        },
+      });
+    },
+  );
+
+  app.post(
+    "/api/admin/contact-notifications/:jobId/retry",
+    rateLimit({
+      key: "admin-contact-notification-retry",
+      windowMs: 1000 * 60 * 5,
+      limit: 60,
+    }),
+    (req, res) => {
+      const auth = requireAdmin(req, res);
+      if (!auth) return;
+      const job = retryContactNotification(String(req.params.jobId || ""));
+      if (!job) {
+        return res.status(404).json({ error: "Notification job was not found." });
+      }
+      wakeContactNotificationWorker();
+      return res.json({
+        ok: true,
+        job: {
+          id: job.id,
+          leadId: job.leadId,
+          kind: job.kind,
+          status: job.status,
+          attempts: job.attempts,
+          nextAttemptAt: job.nextAttemptAt,
+          lastError: job.lastError,
+          updatedAt: job.updatedAt,
         },
       });
     },
@@ -9328,11 +9466,27 @@ async function startServer() {
     },
   );
 
+  const configuredPort = Number(
+    process.env.PORT || (process.env.NODE_ENV === "production" ? 3000 : 3001),
+  );
   const port =
-    process.env.PORT || (process.env.NODE_ENV === "production" ? 3000 : 3001);
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+    Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65_535
+      ? configuredPort
+      : process.env.NODE_ENV === "production"
+        ? 3000
+        : 3001;
+  const bindHost =
+    process.env.APP_BIND_HOST ||
+    (process.env.NODE_ENV === "production" ? "127.0.0.1" : "0.0.0.0");
+  server.listen(port, bindHost, () => {
+    console.log(`Server running on http://${bindHost}:${port}/`);
     console.log("Security headers enabled");
+    wakeContactNotificationWorker();
+    const contactNotificationTimer = setInterval(
+      wakeContactNotificationWorker,
+      30_000,
+    );
+    contactNotificationTimer.unref();
     try {
       const backfilledMessages = ensureWhatsAppInboxBackfilledFromCareer();
       if (backfilledMessages > 0) {

@@ -173,30 +173,6 @@
     }
   }
 
-  @keyframes card-screen-escape {
-    0% {
-      transform: perspective(1600px) translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg) scale(1);
-    }
-    16% {
-      transform: perspective(1600px) translate3d(-4px, -8px, 0) rotateX(4deg) rotateY(-5deg) scale(1.02);
-    }
-    32% {
-      transform: perspective(1600px) translate3d(5px, -13px, 0) rotateX(6deg) rotateY(5deg) scale(1.035);
-    }
-    48% {
-      transform: perspective(1600px) translate3d(-3px, -11px, 0) rotateX(5deg) rotateY(-4deg) scale(1.03);
-    }
-    64% {
-      transform: perspective(1600px) translate3d(4px, -15px, 0) rotateX(7deg) rotateY(4deg) scale(1.04);
-    }
-    82% {
-      transform: perspective(1600px) translate3d(-1px, -12px, 0) rotateX(5deg) rotateY(-1deg) scale(1.032);
-    }
-    100% {
-      transform: perspective(1600px) translate3d(0, -12px, 0) rotateX(5deg) rotateY(0deg) scale(1.032);
-    }
-  }
-
   /**
    * Custom container utility that centers content and adds responsive padding.
    *
@@ -262,10 +238,10 @@
     backdrop-filter: blur(30px) saturate(170%);
     -webkit-backdrop-filter: blur(30px) saturate(170%);
     transition:
-      transform 260ms ease,
-      box-shadow 220ms ease,
-      border-color 220ms ease,
-      filter 220ms ease;
+      transform 1100ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 900ms ease,
+      border-color 700ms ease,
+      filter 700ms ease;
     will-change: transform, box-shadow, filter;
   }
 
@@ -326,10 +302,10 @@
     backdrop-filter: blur(34px) saturate(180%);
     -webkit-backdrop-filter: blur(34px) saturate(180%);
     transition:
-      transform 260ms ease,
-      box-shadow 220ms ease,
-      border-color 220ms ease,
-      filter 220ms ease;
+      transform 1100ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 900ms ease,
+      border-color 700ms ease,
+      filter 700ms ease;
     will-change: transform, box-shadow, filter;
   }
 
@@ -378,7 +354,7 @@
   .glass-card:hover,
   .card-glass-strong:hover,
   .glass-card-strong:hover {
-    animation: card-screen-escape 760ms cubic-bezier(0.22, 1, 0.36, 1) 1 both;
+    transform: perspective(1600px) translate3d(0, -10px, 36px) scale(1.025);
     border-color: rgb(var(--card-neon-rgb) / 0.5);
     box-shadow:
       0 0 0 1px rgb(var(--card-neon-rgb) / 0.22),
@@ -431,7 +407,6 @@
     .glass-card:hover,
     .card-glass-strong:hover,
     .glass-card-strong:hover {
-      animation: none;
       transform: none;
     }
   }
@@ -503,7 +478,6 @@
     .glass-card:hover,
     .card-glass-strong:hover,
     .glass-card-strong:hover {
-      animation: none;
       transform: none;
       filter: none;
       border-color: rgb(var(--card-neon-rgb) / 0.34);

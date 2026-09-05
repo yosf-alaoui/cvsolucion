@@ -43,6 +43,36 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
 }
 
 export function submitContactLead(payload: ContactPayload) {
+  const fingerprint = JSON.stringify(payload);
+  let hash = 2166136261;
+  for (let index = 0; index < fingerprint.length; index += 1) {
+    hash ^= fingerprint.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  const storageKey = `cvsolucion:contact-idempotency:${(hash >>> 0).toString(16)}`;
+  let idempotencyKey = "";
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(storageKey) || "null") as {
+      key?: string;
+      createdAt?: number;
+    } | null;
+    if (
+      stored?.key &&
+      Number.isFinite(stored.createdAt) &&
+      Date.now() - Number(stored.createdAt) < 30 * 60_000
+    ) {
+      idempotencyKey = stored.key;
+    } else {
+      idempotencyKey = crypto.randomUUID();
+      sessionStorage.setItem(
+        storageKey,
+        JSON.stringify({ key: idempotencyKey, createdAt: Date.now() }),
+      );
+    }
+  } catch {
+    idempotencyKey = crypto.randomUUID();
+  }
+
   return request<{
     ok: true;
     leadId?: string;
@@ -50,6 +80,7 @@ export function submitContactLead(payload: ContactPayload) {
     email?: string;
   }>("/api/contact", {
     method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
     body: JSON.stringify(payload),
   });
 }

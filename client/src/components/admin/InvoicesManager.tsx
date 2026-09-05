@@ -157,8 +157,10 @@ function buildPayload(form: InvoiceForm) {
     })
     .filter((line) => line.description && line.amount > 0);
   const subtotalAmount = lineItems.reduce((sum, line) => sum + line.amount, 0);
-  const taxAmount = parseMoney(form.taxAmount);
   const taxRate = form.taxRate.trim() ? Number(form.taxRate.replace(",", ".")) : null;
+  const taxAmount = Number.isFinite(taxRate)
+    ? Math.round((subtotalAmount * Number(taxRate)) / 100)
+    : parseMoney(form.taxAmount);
 
   return {
     customerType: form.customerType,
@@ -257,7 +259,12 @@ export default function InvoicesManager({
       ),
     [form?.lineItems],
   );
-  const taxAmount = parseMoney(form?.taxAmount || "0");
+  const parsedTaxRate = form?.taxRate.trim()
+    ? Number(form.taxRate.replace(",", "."))
+    : null;
+  const taxAmount = Number.isFinite(parsedTaxRate)
+    ? Math.round((subtotalAmount * Number(parsedTaxRate)) / 100)
+    : parseMoney(form?.taxAmount || "0");
   const totalAmount = subtotalAmount + taxAmount;
 
   const updateField = <Key extends keyof InvoiceForm>(key: Key, value: InvoiceForm[Key]) => {
