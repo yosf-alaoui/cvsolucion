@@ -79,6 +79,10 @@ jobs:
             "APP_DIR='$DEPLOY_APP_DIR' PM2_APP='$DEPLOY_PM2_APP' RELEASE_SHA='$GITHUB_SHA' bash -s" <<'REMOTE'
           set -Eeuo pipefail
 
+          stage() {
+            printf '\n==> %s\n' "$1"
+          }
+
           if ! printf '%s' "$RELEASE_SHA" | grep -Eq '^[a-f0-9]{40}$'; then
             echo "Invalid release SHA" >&2
             exit 1
@@ -91,6 +95,8 @@ jobs:
           NEXT_LINK="$APP_DIR/.current-${RELEASE_SHA}"
           PREVIOUS_RELEASE="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
           SWITCHED=0
+          PM2_BIN="$(command -v pm2 || true)"
+          APP_NODE_INTERPRETER="$(command -v node || true)"
 
           rollback() {
             code=$?
@@ -100,12 +106,14 @@ jobs:
                 rm -f "$NEXT_LINK"
                 ln -s "$PREVIOUS_RELEASE" "$NEXT_LINK"
                 mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
-                PM2_APP_NAME="$PM2_APP" pm2 startOrReload \
+                PM2_APP_NAME="$PM2_APP" APP_NODE_INTERPRETER="$APP_NODE_INTERPRETER" \
+                  "$PM2_BIN" startOrReload \
                   "$CURRENT_LINK/ecosystem.config.cjs" --only "$PM2_APP" --update-env || true
               else
                 # First atomic deployment: the legacy app directory is still
                 # untouched and remains the rollback target.
-                PM2_APP_NAME="$PM2_APP" pm2 startOrReload \
+                PM2_APP_NAME="$PM2_APP" APP_NODE_INTERPRETER="$APP_NODE_INTERPRETER" \
+                  "$PM2_BIN" startOrReload \
                   "$APP_DIR/ecosystem.config.cjs" --only "$PM2_APP" --update-env || true
               fi
             fi
@@ -113,6 +121,7 @@ jobs:
           }
           trap rollback ERR
 
+          stage "Validating the remote application layout"
           test -d "$APP_DIR"
           test -f "$APP_DIR/.env"
           test -f "$ARCHIVE"
@@ -125,6 +134,7 @@ jobs:
             *) DATA_DIR="$APP_DIR/$DATA_DIR" ;;
           esac
 
+          stage "Preparing immutable release $RELEASE_SHA"
           # RELEASE is constrained to RELEASES_DIR by the validated SHA above.
           rm -rf "$RELEASE"
           mkdir -p "$RELEASE"
@@ -138,7 +148,37 @@ jobs:
           find "$DATA_DIR" -type f \( -name '*.json' -o -name '*.sqlite' -o -name '*.sqlite-wal' -o -name '*.sqlite-shm' \) -exec chmod 600 {} +
 
           cd "$RELEASE"
-          node -e "if (Number(process.versions.node.split('.')[0]) !== 24) process.exit(1)"
+
+          stage "Selecting the Node 24 runtime"
+          NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+          if [ -s "$NVM_DIR/nvm.sh" ]; then
+            export NVM_DIR
+            set +u
+            # shellcheck source=/dev/null
+            . "$NVM_DIR/nvm.sh"
+            nvm install 24
+            nvm use 24
+            set -u
+          fi
+
+          APP_NODE_INTERPRETER="$(command -v node || true)"
+          NODE_VERSION="$(node --version 2>/dev/null || true)"
+          echo "Using Node ${NODE_VERSION:-unavailable}"
+          if ! node -e "if (Number(process.versions.node.split('.')[0]) !== 24) process.exit(1)"; then
+            echo "Node 24 is required. Install it for the deployment user or configure NVM in $NVM_DIR." >&2
+            exit 1
+          fi
+          if ! command -v pnpm >/dev/null 2>&1; then
+            corepack enable
+            corepack prepare pnpm@10.4.1 --activate
+          fi
+          if [ -z "$PM2_BIN" ]; then PM2_BIN="$(command -v pm2 || true)"; fi
+          if [ -z "$PM2_BIN" ]; then
+            echo "PM2 is not available for the deployment user." >&2
+            exit 1
+          fi
+
+          stage "Installing and verifying the release"
           pnpm install --frozen-lockfile
           pnpm test
           pnpm run secrets:audit
@@ -152,13 +192,15 @@ jobs:
           pnpm run storage:rebuild
           pnpm run storage:health
 
+          stage "Switching the current release atomically"
           rm -f "$NEXT_LINK"
           ln -s "$RELEASE" "$NEXT_LINK"
           mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
           SWITCHED=1
-          PM2_APP_NAME="$PM2_APP" pm2 startOrReload \
+          PM2_APP_NAME="$PM2_APP" APP_NODE_INTERPRETER="$APP_NODE_INTERPRETER" \
+            "$PM2_BIN" startOrReload \
             "$CURRENT_LINK/ecosystem.config.cjs" --only "$PM2_APP" --update-env
-          pm2 save
+          "$PM2_BIN" save
 
           APP_PORT="$(grep -E '^PORT=' "$APP_DIR/.env" | cut -d= -f2- || true)"
           if [ -z "$APP_PORT" ]; then APP_PORT=3000; fi
@@ -176,6 +218,7 @@ jobs:
             exit 1
           fi
 
+          stage "Deployment completed successfully"
           SWITCHED=0
           rm -f "$ARCHIVE"
           # Keep the current release plus four prior rollback candidates.
