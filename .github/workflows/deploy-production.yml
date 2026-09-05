@@ -150,22 +150,63 @@ jobs:
           cd "$RELEASE"
 
           stage "Selecting the Node 24 runtime"
+          PINNED_NODE_VERSION="$(tr -d '[:space:]' < .nvmrc)"
+          if [ "$PINNED_NODE_VERSION" != "24.20.0" ]; then
+            echo "The deployment bootstrap checksum must be updated for Node $PINNED_NODE_VERSION." >&2
+            exit 1
+          fi
           NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
           if [ -s "$NVM_DIR/nvm.sh" ]; then
             export NVM_DIR
             set +u
             # shellcheck source=/dev/null
             . "$NVM_DIR/nvm.sh"
-            nvm install 24
-            nvm use 24
+            nvm install "$PINNED_NODE_VERSION"
+            nvm use "$PINNED_NODE_VERSION"
             set -u
+          fi
+
+          if ! node -e "if (process.versions.node !== '$PINNED_NODE_VERSION') process.exit(1)" 2>/dev/null; then
+            case "$(uname -m)" in
+              x86_64)
+                NODE_ARCH="x64"
+                NODE_SHA256="855d581f8a4eb1a8117e3426de25fe02770592febcfb31369aee1ffbfee9e8ec"
+                ;;
+              aarch64|arm64)
+                NODE_ARCH="arm64"
+                NODE_SHA256="3515603e2487879a39bc75716f1a2affd027500c64ba50e845cf72cb33219013"
+                ;;
+              *)
+                echo "Unsupported server architecture: $(uname -m)" >&2
+                exit 1
+                ;;
+            esac
+
+            RUNTIME_ROOT="$APP_DIR/.runtime"
+            NODE_RUNTIME="$RUNTIME_ROOT/node-v${PINNED_NODE_VERSION}-linux-${NODE_ARCH}"
+            NODE_ARCHIVE_NAME="node-v${PINNED_NODE_VERSION}-linux-${NODE_ARCH}.tar.gz"
+            NODE_ARCHIVE="$RUNTIME_ROOT/$NODE_ARCHIVE_NAME"
+            NODE_TEMP="$RUNTIME_ROOT/.node-v${PINNED_NODE_VERSION}-linux-${NODE_ARCH}-install"
+            if [ ! -x "$NODE_RUNTIME/bin/node" ]; then
+              stage "Installing verified Node $PINNED_NODE_VERSION in the application runtime"
+              mkdir -p "$RUNTIME_ROOT"
+              rm -rf "$NODE_TEMP"
+              mkdir -p "$NODE_TEMP"
+              curl -fsSLo "$NODE_ARCHIVE" \
+                "https://nodejs.org/dist/v${PINNED_NODE_VERSION}/${NODE_ARCHIVE_NAME}"
+              printf '%s  %s\n' "$NODE_SHA256" "$NODE_ARCHIVE" | sha256sum -c -
+              tar -xzf "$NODE_ARCHIVE" --strip-components=1 -C "$NODE_TEMP"
+              mv "$NODE_TEMP" "$NODE_RUNTIME"
+              rm -f "$NODE_ARCHIVE"
+            fi
+            export PATH="$NODE_RUNTIME/bin:$PATH"
           fi
 
           APP_NODE_INTERPRETER="$(command -v node || true)"
           NODE_VERSION="$(node --version 2>/dev/null || true)"
           echo "Using Node ${NODE_VERSION:-unavailable}"
-          if ! node -e "if (Number(process.versions.node.split('.')[0]) !== 24) process.exit(1)"; then
-            echo "Node 24 is required. Install it for the deployment user or configure NVM in $NVM_DIR." >&2
+          if ! node -e "if (process.versions.node !== '$PINNED_NODE_VERSION') process.exit(1)"; then
+            echo "Node $PINNED_NODE_VERSION is required for deployment." >&2
             exit 1
           fi
           if ! command -v pnpm >/dev/null 2>&1; then

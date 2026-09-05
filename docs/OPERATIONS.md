@@ -8,7 +8,7 @@
 - Shared data directory: `/var/www/cvsolucion_shared/data`
 - PM2 app name: `cvsolucion`
 - Default app port: `3000`
-- Node runtime: Node 24 LTS (the deploy refuses a different major version)
+- Node runtime: Node 24.20.0 LTS. Deployment uses NVM when available or installs the official archive under `.runtime` after verifying its pinned SHA-256 checksum.
 - Storage driver: `APP_STORAGE_DRIVER=sqlite`
 - SQLite database: `/var/www/cvsolucion_shared/data/cvsolucion.sqlite`
 - JSON mirror: optional. Keep `APP_SQLITE_JSON_MIRROR=false` after SQLite is verified to avoid stale JSON files becoming a deploy source.
