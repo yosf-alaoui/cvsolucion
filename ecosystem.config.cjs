@@ -7,7 +7,10 @@ module.exports = {
       cwd: __dirname,
       script: path.join(__dirname, "dist", "index.js"),
       interpreter: process.env.APP_NODE_INTERPRETER || "node",
-      exec_mode: "cluster",
+      // PM2 cluster workers inherit the Node runtime that started the PM2 daemon,
+      // which can differ from the interpreter selected for this application.
+      // Fork mode guarantees that native dependencies use APP_NODE_INTERPRETER.
+      exec_mode: "fork",
       instances: 1,
       env: {
         NODE_ENV: "production",

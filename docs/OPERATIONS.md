@@ -177,6 +177,7 @@ Before changing production data, it creates a consistent SQLite backup under `BA
 
 ```bash
 curl -fsS http://127.0.0.1:3000/api/auth/me
+curl -fsS 'http://127.0.0.1:3000/api/catalog/public?locale=en'
 curl -I https://cvsolucion.com/
 curl -I https://cvsolucion.com/nonexistent-test-asset-xyz.png
 pm2 describe cvsolucion
@@ -186,8 +187,10 @@ pnpm run storage:health
 Expected:
 
 - `/api/auth/me` returns `{"user":null}` for anonymous requests.
+- `/api/catalog/public` returns the public catalog and confirms that the running Node process can load the SQLite native module.
 - Missing static assets return HTTP `404`.
 - PM2 status is `online`.
+- The executable behind the PM2 process matches the Node interpreter used to install the release dependencies.
 - `storage:health` prints the expected documents and structured table counts.
 
 ## Security Headers

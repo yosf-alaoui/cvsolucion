@@ -260,14 +260,28 @@ jobs:
           mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
           SWITCHED=1
           start_pm2_release "$CURRENT_LINK/ecosystem.config.cjs"
+
+          PM2_PID="$("$PM2_BIN" pid "$PM2_APP" | tr -d '[:space:]')"
+          if ! printf '%s' "$PM2_PID" | grep -Eq '^[1-9][0-9]*$'; then
+            echo "PM2 did not report a running application process." >&2
+            exit 1
+          fi
+          EXPECTED_NODE_EXE="$(readlink -f "$APP_NODE_INTERPRETER")"
+          ACTUAL_NODE_EXE="$(readlink -f "/proc/${PM2_PID}/exe")"
+          if [ "$ACTUAL_NODE_EXE" != "$EXPECTED_NODE_EXE" ]; then
+            echo "PM2 runtime mismatch: expected $EXPECTED_NODE_EXE but started $ACTUAL_NODE_EXE" >&2
+            exit 1
+          fi
+          echo "Verified PM2 runtime: $ACTUAL_NODE_EXE"
           "$PM2_BIN" save
 
           APP_PORT="$(grep -E '^PORT=' "$APP_DIR/.env" | cut -d= -f2- || true)"
           if [ -z "$APP_PORT" ]; then APP_PORT=3000; fi
           HEALTHY=0
           for attempt in 1 2 3 4 5; do
-            LIVE_INDEX="$(curl -fsS "http://127.0.0.1:${APP_PORT}/" || true)"
-            if curl -fsS "http://127.0.0.1:${APP_PORT}/api/auth/me" >/dev/null \
+            LIVE_INDEX="$(curl --max-time 5 -fsS "http://127.0.0.1:${APP_PORT}/" || true)"
+            if curl --max-time 5 -fsS "http://127.0.0.1:${APP_PORT}/api/auth/me" >/dev/null \
+              && curl --max-time 5 -fsS "http://127.0.0.1:${APP_PORT}/api/catalog/public?locale=en" >/dev/null \
               && [[ "$LIVE_INDEX" == *"$EXPECTED_INDEX_MARKER"* ]]; then
               HEALTHY=1
               break
