@@ -137,7 +137,13 @@ export default function AdminLogin() {
       window.location.href = getSafeNextPath();
     } catch (error: any) {
       const message = String(error?.message || "Unable to sign in.");
-      setError(message === "Please confirm your email before signing in." ? "Confirm this email before signing in." : message);
+      setError(
+        message === "AUTH_REQUEST_TIMEOUT"
+          ? "The sign-in request took too long. Please try again."
+          : message === "Please confirm your email before signing in."
+            ? "Confirm this email before signing in."
+            : message,
+      );
     } finally {
       setBusy(false);
     }

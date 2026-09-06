@@ -32,15 +32,42 @@ export type AdminLoginResponse =
       email: string;
     };
 
+export const AUTH_REQUEST_TIMEOUT_MS = 20_000;
+
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
-    ...init,
-    credentials: "include",
-    headers: withCsrfHeaders(init, {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    }),
-  });
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromCaller = () => controller.abort(init?.signal?.reason);
+  if (init?.signal?.aborted) {
+    abortFromCaller();
+  } else {
+    init?.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  }
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, AUTH_REQUEST_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(input, {
+      ...init,
+      signal: controller.signal,
+      credentials: "include",
+      headers: withCsrfHeaders(init, {
+        "Content-Type": "application/json",
+        ...(init?.headers || {}),
+      }),
+    });
+  } catch (error) {
+    if (timedOut) {
+      throw new Error("AUTH_REQUEST_TIMEOUT");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    init?.signal?.removeEventListener("abort", abortFromCaller);
+  }
 
   const data = (await response.json().catch(() => ({}))) as { error?: string } & T;
   if (!response.ok) {

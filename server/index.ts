@@ -6414,12 +6414,14 @@ async function startServer() {
 
       if (role === "admin" && isAdminEmailOtpEnabled()) {
         const code = createAdminLoginCode();
-        createToken(user.id, "admin_login", ADMIN_LOGIN_CODE_MS, code);
         try {
           await sendAdminLoginCodeEmail({ email: user.email, code });
         } catch (error) {
-          return next(error);
+          return res.status(503).json({
+            error: "Unable to send the admin sign-in code right now. Please try again.",
+          });
         }
+        createToken(user.id, "admin_login", ADMIN_LOGIN_CODE_MS, code);
         recordEvent({
           type: "admin_login_code_sent",
           userId: user.id,

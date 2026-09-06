@@ -239,11 +239,13 @@ export default function Login() {
       }
     } catch (err: any) {
       const rawMessage = String(err?.message || "");
-      const message = rawMessage === "Please confirm your email before signing in."
-        ? t("auth.unverifiedLogin")
-        : rawMessage
-          ? mapAuthError(rawMessage)
-          : t("auth.genericError");
+      const message = rawMessage === "AUTH_REQUEST_TIMEOUT"
+        ? t("auth.requestTimeout")
+        : rawMessage === "Please confirm your email before signing in."
+          ? t("auth.unverifiedLogin")
+          : rawMessage
+            ? mapAuthError(rawMessage)
+            : t("auth.genericError");
       setStatus(message);
       setStatusTone("error");
     } finally {

@@ -7,6 +7,8 @@ type MailOptions = {
   text: string;
 };
 
+export const AUTH_EMAIL_TIMEOUT_MS = 15_000;
+
 export class RecipientEmailRejectedError extends Error {
   constructor() {
     super("EMAIL_RECIPIENT_REJECTED");
@@ -72,7 +74,35 @@ function getTransporter() {
     port,
     secure: port === 465,
     auth: { user, pass },
+    connectionTimeout: 8_000,
+    greetingTimeout: 5_000,
+    socketTimeout: 10_000,
+    dnsTimeout: 8_000,
   });
+}
+
+async function sendMailWithTimeout(
+  transporter: ReturnType<typeof nodemailer.createTransport>,
+  options: Parameters<typeof transporter.sendMail>[0],
+) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      transporter.sendMail(options),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          try {
+            transporter.close();
+          } catch {
+            // Closing is best-effort; the timeout error still reaches the caller.
+          }
+          reject(new Error("SMTP send timed out."));
+        }, AUTH_EMAIL_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 function getPublicContactEmail() {
@@ -130,7 +160,7 @@ export async function sendAuthEmail(options: MailOptions) {
   const from = getVerifiedFromAddress();
   const replyTo = getPublicContactEmail();
   try {
-    const info = await transporter.sendMail({
+    const info = await sendMailWithTimeout(transporter, {
       from,
       replyTo,
       to: options.to,
