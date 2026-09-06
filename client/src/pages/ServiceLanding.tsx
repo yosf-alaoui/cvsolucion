@@ -4,10 +4,8 @@ import {
   Activity,
   ArrowRight,
   BookOpenCheck,
-  Boxes,
   CheckCircle2,
   ChevronDown,
-  Cpu,
   Database,
   FileSearch,
   Gauge,
@@ -15,10 +13,8 @@ import {
   Monitor,
   Network,
   Search,
-  Settings2,
-  ShieldCheck,
   Users,
-  Wrench,
+  type LucideIcon,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -28,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { buildWhatsAppLink, useI18n } from "@/i18n/i18n";
 import { WHATSAPP_PHONE, getBookingHref } from "@/lib/site";
 import { navigateToHomeSection } from "@/lib/sectionNavigation";
+import { SERVICE_ICON_BY_KEY } from "@/lib/serviceIcons";
 import {
   getSeoServicePageByCanonicalPath,
   type SeoServicePage,
@@ -40,16 +37,6 @@ import {
   getSeoKnowledgePageByCanonicalPath,
   getSeoKnowledgePageContent,
 } from "@shared/seoKnowledgePages";
-
-const serviceIcons: Record<SeoServicePageKey, typeof ShieldCheck> = {
-  support: ShieldCheck,
-  troubleshooting: Wrench,
-  "library-setup": Boxes,
-  "cnc-integration": Cpu,
-  "performance-optimization": Gauge,
-  "install-backup-restore": Settings2,
-  "custom-programming": BookOpenCheck,
-};
 
 const routeDetails = {
   en: {
@@ -210,7 +197,7 @@ function relatedLinkMeta(locale: "en" | "fr" | "ar", path: string) {
   );
 }
 
-function renderBlock(block: SeoServicePageBlock, icon: typeof ShieldCheck) {
+function renderBlock(block: SeoServicePageBlock, icon: LucideIcon) {
   if (block.type === "cards") {
     const Icon = icon;
     return (
@@ -396,7 +383,7 @@ function ServiceLandingContent({
   locale: "en" | "fr" | "ar";
 }) {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const Icon = serviceIcons[page.key];
+  const Icon = SERVICE_ICON_BY_KEY[page.key];
   const pageContent = getSeoServicePageContent(page, locale);
   const pageImages = getSeoServicePageImageSet(page.key);
   const copy = uiCopy[locale];

@@ -1,15 +1,14 @@
 import GlassCard from "@/components/GlassCard";
 import {
   Check,
-  Code2,
-  Cpu,
-  HardDriveDownload,
-  Headset,
-  Settings,
-  Shield,
-  Zap,
+  ClipboardCheck,
+  DatabaseBackup,
+  FileCog,
+  Gauge,
+  MonitorCog,
 } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
+import { CabinetLibraryIcon, CncRouterIcon } from "@/lib/serviceIcons";
 import { HOME_SERVICE_SEO_TARGETS } from "@shared/seoServicePages";
 
 /**
@@ -25,7 +24,15 @@ export default function ServicesSection() {
     description: string;
     included: string[];
   }[];
-  const icons = [Shield, Headset, HardDriveDownload, Zap, Code2, Cpu, Settings];
+  const icons = [
+    ClipboardCheck,
+    MonitorCog,
+    DatabaseBackup,
+    Gauge,
+    FileCog,
+    CncRouterIcon,
+    CabinetLibraryIcon,
+  ];
   const exploreLabel =
     locale === "ar" ? "تفاصيل الخدمة" : locale === "fr" ? "Voir la page" : "View service page";
 

@@ -1,6 +1,7 @@
 import GlassCard from "@/components/GlassCard";
-import { Check, Cpu, FileText, Package, Wrench, Zap } from "lucide-react";
+import { Check, Factory, FileChartColumn, Gauge } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
+import { CabinetLibraryIcon, CncRouterIcon } from "@/lib/serviceIcons";
 
 /**
  * Problems Section - CVsolucion
@@ -10,7 +11,7 @@ import { useI18n } from "@/i18n/i18n";
 export default function ProblemsSection() {
   const { t } = useI18n();
   const problems = t("problems.cards") as { title: string; items: string[] }[];
-  const icons = [Zap, Package, Wrench, Cpu, FileText];
+  const icons = [Gauge, CabinetLibraryIcon, Factory, CncRouterIcon, FileChartColumn];
 
   return (
     <section id="problems" className="py-20 bg-transparent">

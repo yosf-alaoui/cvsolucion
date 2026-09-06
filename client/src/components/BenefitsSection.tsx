@@ -1,12 +1,12 @@
 import GlassCard from "@/components/GlassCard";
-import { 
-  Brain, 
-  CheckCircle2, 
-  DollarSign, 
-  Headphones, 
-  Lightbulb, 
-  TrendingUp 
-} from 'lucide-react';
+import {
+  BadgeCheck,
+  BadgeDollarSign,
+  ChartNoAxesCombined,
+  Headset,
+  Lightbulb,
+  RefreshCw,
+} from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 
 /**
@@ -17,7 +17,14 @@ import { useI18n } from "@/i18n/i18n";
 export default function BenefitsSection() {
     const { t } = useI18n();
   const benefits = t("benefits.cards") as { title: string; description: string }[];
-  const icons = [Brain, CheckCircle2, DollarSign, Headphones, Lightbulb, TrendingUp];
+  const icons = [
+    BadgeCheck,
+    ChartNoAxesCombined,
+    BadgeDollarSign,
+    Headset,
+    Lightbulb,
+    RefreshCw,
+  ];
 
   return (
     <section className="py-20 bg-transparent">

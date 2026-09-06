@@ -6,8 +6,6 @@ import {
   Boxes,
   CalendarDays,
   ChevronDown,
-  Code2,
-  Cpu,
   FileText,
   Gauge,
   Globe2,
@@ -17,7 +15,6 @@ import {
   Menu,
   ShoppingCart,
   UserRound,
-  Wrench,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,6 +23,8 @@ import { useI18n } from "@/i18n/i18n";
 import { getAccountDashboardHref, getBookingHref } from "@/lib/site";
 import { getBookingCheckoutCount, getBookingCheckoutEventName } from "@/lib/bookingCheckout";
 import { navigateToHomeSection } from "@/lib/sectionNavigation";
+import { SERVICE_ICON_BY_KEY } from "@/lib/serviceIcons";
+import type { SeoServicePageKey } from "@shared/seoServicePages";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -185,35 +184,35 @@ export default function Header() {
   const languageAriaLabel = locale === "ar" ? "تغيير اللغة" : locale === "fr" ? "Changer de langue" : "Change language";
   const visibleCartCount = isAuthed ? cartCount : 0;
   const cartButtonLabel = visibleCartCount > 0 ? `${cartLabel} (${visibleCartCount})` : cartLabel;
-  const serviceMenuLinks =
+  const serviceMenuLinks: Array<{ key: SeoServicePageKey; href: string; label: string }> =
     locale === "ar"
       ? [
-          { href: localizeSitePath("/cabinet-vision-support"), label: "دعم Cabinet Vision" },
-          { href: localizeSitePath("/cabinet-vision-troubleshooting"), label: "تشخيص مشاكل Cabinet Vision" },
-          { href: localizeSitePath("/cabinet-vision-library-setup"), label: "إعداد مكتبة Cabinet Vision" },
-          { href: localizeSitePath("/cabinet-vision-cnc-integration"), label: "ربط Cabinet Vision مع CNC" },
-          { href: localizeSitePath("/cabinet-vision-performance-optimization"), label: "تحسين أداء Cabinet Vision" },
-          { href: localizeSitePath("/cabinet-vision-install-backup-restore"), label: "التثبيت والنسخ الاحتياطي والاسترجاع" },
-          { href: localizeSitePath("/cabinet-vision-custom-programming"), label: "برمجة Cabinet Vision المخصصة" },
+          { key: "support", href: localizeSitePath("/cabinet-vision-support"), label: "دعم Cabinet Vision" },
+          { key: "troubleshooting", href: localizeSitePath("/cabinet-vision-troubleshooting"), label: "تشخيص مشاكل Cabinet Vision" },
+          { key: "library-setup", href: localizeSitePath("/cabinet-vision-library-setup"), label: "إعداد مكتبة Cabinet Vision" },
+          { key: "cnc-integration", href: localizeSitePath("/cabinet-vision-cnc-integration"), label: "ربط Cabinet Vision مع CNC" },
+          { key: "performance-optimization", href: localizeSitePath("/cabinet-vision-performance-optimization"), label: "تحسين أداء Cabinet Vision" },
+          { key: "install-backup-restore", href: localizeSitePath("/cabinet-vision-install-backup-restore"), label: "التثبيت والنسخ الاحتياطي والاسترجاع" },
+          { key: "custom-programming", href: localizeSitePath("/cabinet-vision-custom-programming"), label: "برمجة Cabinet Vision المخصصة" },
         ]
       : locale === "fr"
         ? [
-            { href: localizeSitePath("/cabinet-vision-support"), label: "Support Cabinet Vision" },
-            { href: localizeSitePath("/cabinet-vision-troubleshooting"), label: "Depannage Cabinet Vision" },
-            { href: localizeSitePath("/cabinet-vision-library-setup"), label: "Configuration bibliotheque" },
-            { href: localizeSitePath("/cabinet-vision-cnc-integration"), label: "Integration CNC" },
-            { href: localizeSitePath("/cabinet-vision-performance-optimization"), label: "Optimisation des performances" },
-            { href: localizeSitePath("/cabinet-vision-install-backup-restore"), label: "Installation, sauvegarde et restauration" },
-            { href: localizeSitePath("/cabinet-vision-custom-programming"), label: "Programmation personnalisee" },
+            { key: "support", href: localizeSitePath("/cabinet-vision-support"), label: "Support Cabinet Vision" },
+            { key: "troubleshooting", href: localizeSitePath("/cabinet-vision-troubleshooting"), label: "Depannage Cabinet Vision" },
+            { key: "library-setup", href: localizeSitePath("/cabinet-vision-library-setup"), label: "Configuration bibliotheque" },
+            { key: "cnc-integration", href: localizeSitePath("/cabinet-vision-cnc-integration"), label: "Integration CNC" },
+            { key: "performance-optimization", href: localizeSitePath("/cabinet-vision-performance-optimization"), label: "Optimisation des performances" },
+            { key: "install-backup-restore", href: localizeSitePath("/cabinet-vision-install-backup-restore"), label: "Installation, sauvegarde et restauration" },
+            { key: "custom-programming", href: localizeSitePath("/cabinet-vision-custom-programming"), label: "Programmation personnalisee" },
           ]
         : [
-            { href: localizeSitePath("/cabinet-vision-support"), label: "Cabinet Vision Support" },
-            { href: localizeSitePath("/cabinet-vision-troubleshooting"), label: "Cabinet Vision Troubleshooting" },
-            { href: localizeSitePath("/cabinet-vision-library-setup"), label: "Cabinet Vision Library Setup" },
-            { href: localizeSitePath("/cabinet-vision-cnc-integration"), label: "Cabinet Vision CNC Integration" },
-            { href: localizeSitePath("/cabinet-vision-performance-optimization"), label: "Cabinet Vision Performance Optimization" },
-            { href: localizeSitePath("/cabinet-vision-install-backup-restore"), label: "Cabinet Vision Install, Backup & Restore" },
-            { href: localizeSitePath("/cabinet-vision-custom-programming"), label: "Cabinet Vision Custom Programming" },
+            { key: "support", href: localizeSitePath("/cabinet-vision-support"), label: "Cabinet Vision Support" },
+            { key: "troubleshooting", href: localizeSitePath("/cabinet-vision-troubleshooting"), label: "Cabinet Vision Troubleshooting" },
+            { key: "library-setup", href: localizeSitePath("/cabinet-vision-library-setup"), label: "Cabinet Vision Library Setup" },
+            { key: "cnc-integration", href: localizeSitePath("/cabinet-vision-cnc-integration"), label: "Cabinet Vision CNC Integration" },
+            { key: "performance-optimization", href: localizeSitePath("/cabinet-vision-performance-optimization"), label: "Cabinet Vision Performance Optimization" },
+            { key: "install-backup-restore", href: localizeSitePath("/cabinet-vision-install-backup-restore"), label: "Cabinet Vision Install, Backup & Restore" },
+            { key: "custom-programming", href: localizeSitePath("/cabinet-vision-custom-programming"), label: "Cabinet Vision Custom Programming" },
           ];
 
   const trainingMenu = [
@@ -268,7 +267,6 @@ export default function Header() {
     },
   ] as const;
 
-  const serviceIcons = [Wrench, Boxes, Cpu, Gauge, BookOpenCheck, Code2];
   const solutionsMenu = [
     {
       action: () => scrollToSection("services"),
@@ -282,7 +280,7 @@ export default function Header() {
       icon: BookOpenCheck,
       featured: true,
     },
-    ...serviceMenuLinks.map((link, index) => ({
+    ...serviceMenuLinks.map((link) => ({
       href: link.href,
       label: link.label,
       description:
@@ -291,7 +289,7 @@ export default function Header() {
           : locale === "fr"
             ? "Page detaillee pour ce service."
             : "Dedicated page for this service.",
-      icon: serviceIcons[index] ?? Wrench,
+      icon: SERVICE_ICON_BY_KEY[link.key],
     })),
   ] as const;
 
