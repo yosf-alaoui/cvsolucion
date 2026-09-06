@@ -90,8 +90,8 @@ export default function HeroSection() {
 
             <div className="relative">
               <h1
-                className="mb-5 text-balance whitespace-pre-line text-[clamp(2.3rem,8vw,4.2rem)] font-bold leading-[1.08] text-white drop-shadow-[0_18px_38px_rgba(0,0,0,0.88)]"
-                style={{ fontFamily: "Playfair Display" }}
+                className="mb-5 bg-transparent text-balance whitespace-pre-line text-[clamp(2.3rem,8vw,4.2rem)] font-bold leading-[1.08] text-white drop-shadow-none [text-shadow:none]"
+                style={{ backgroundColor: "transparent" }}
               >
                 {t("hero.title")}
               </h1>

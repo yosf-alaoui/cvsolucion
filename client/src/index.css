@@ -45,6 +45,7 @@
 :root {
   /* CV Solution - Modern Professional Design */
   /* Primary Colors: Deep Blue (#1e3a8a) + Vibrant Green (#10b981) */
+  --app-font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --primary: #1e3a8a;
   --primary-foreground: #ffffff;
   --sidebar-primary: #1e3a8a;
@@ -123,11 +124,16 @@
   body {
     @apply bg-background text-foreground;
     background-color: #ffffff;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: var(--app-font-family);
     overflow-x: hidden;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+  /* Keep every heading, control, and content block on the locale font.
+     The important flag intentionally neutralizes legacy inline font choices. */
+  body :where(*) {
+    font-family: var(--app-font-family) !important;
   }
   #root {
     isolation: isolate;
@@ -498,7 +504,7 @@
 
   .article-content {
     color: rgb(30 41 59);
-    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+    font-family: inherit;
     font-size: 1rem;
     line-height: 1.55;
   }
@@ -623,8 +629,8 @@
   }
 
 }
-/* Arabic font only */
-html[lang="ar"] body,
-html[dir="rtl"] body {
-  font-family: "Cairo", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+/* One typeface per locale across every page and component. */
+html[lang="ar"],
+html[dir="rtl"] {
+  --app-font-family: "Cairo", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }

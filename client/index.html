@@ -9,11 +9,18 @@
   <script>
     (() => {
       const path = window.location.pathname.replace(/\/+$/, "") || "/";
+      const locale = path === "/ar" || path.startsWith("/ar/")
+        ? "ar"
+        : path === "/fr" || path.startsWith("/fr/")
+          ? "fr"
+          : "en";
       const isHome = path === "/" || path === "/fr" || path === "/ar";
       const isCareer =
         path === "/training/career" ||
         path === "/fr/training/career" ||
         path === "/ar/training/career";
+      document.documentElement.lang = locale;
+      document.documentElement.dir = locale === "ar" ? "rtl" : "ltr";
       document.documentElement.classList.add(
         isHome ? "home-shell" : isCareer ? "career-shell" : "js",
       );
@@ -187,7 +194,7 @@
     html.home-shell #seo-fallback h1 {
       margin: 0;
       color: #ffffff;
-      font-family: Georgia, "Times New Roman", serif;
+      font-family: inherit;
       font-size: clamp(2.3rem, 10vw, 4.2rem);
       line-height: 1.08;
       white-space: pre-line;
