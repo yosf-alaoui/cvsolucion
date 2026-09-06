@@ -696,7 +696,11 @@ export default function Header() {
                   <Globe2 className="h-4 w-4" />
                 </button>
                 {isLangOpen ? (
-                  <div className="absolute right-0 mt-2 w-40 rounded-xl border border-border bg-white/95 p-1 shadow-lg backdrop-blur">
+                  <div
+                    className={`absolute mt-2 w-40 rounded-xl border border-border bg-white/95 p-1 shadow-lg backdrop-blur ${
+                      locale === "ar" ? "left-0" : "right-0"
+                    }`}
+                  >
                     <a
                       href={enHref}
                       className={`block rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
